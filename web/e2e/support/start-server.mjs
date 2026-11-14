@@ -57,6 +57,8 @@ Object.assign(env, {
   DOCK_VOICE_CALLS_PER_KITCHEN_DAY: "200",
   DOCK_VOICE_CALLS_PER_DAY: "2000",
   RADAR_POLL: "off",
+  // No sample activity (src/server/alive): the browser suite starts from an empty store.
+  DOCK_SAMPLE_ACTIVITY: "off",
   RADAR_STATE_FILE: "off",
   DOCK_RATE_LIMITS: "off",
   DOCK_OPS_PASSCODE: E2E_OPS_PASSCODE,

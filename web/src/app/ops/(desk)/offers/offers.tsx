@@ -10,6 +10,7 @@ import { num, when } from "../../_ui/format";
 import { Button, Empty, LoadError, Loading, Num, PageHead, Panel, Section, useNow, useOps } from "../../_ui/kit";
 import { Table } from "../../_ui/parts";
 import { OFFERS_TEXT } from "./offers.text";
+import { SamplePill, isSample } from "../../../_ui/sample";
 
 type Offer = OffersView["offers"][number];
 type Found = { productId: string; name: string; category: string; packSize: number; unit: string };
@@ -117,6 +118,7 @@ function Body({ v, now, refresh }: { v: OffersView; now: number; refresh: () => 
                   <li key={o.offerId} className="rounded-lg border border-line bg-paper px-3 py-2 text-[0.9rem]">
                     <p>
                       <span className="font-semibold">{o.kitchenName}</span> · {o.productName}
+                      {isSample(o) && <SamplePill />}
                     </p>
                     <p className="text-ink-soft">
                       <Badge tone="refused">{RULE[o.rule ?? ""] ?? o.rule}</Badge> {o.reason} <span className="tabular">({when(o.at, new Date(now))})</span>

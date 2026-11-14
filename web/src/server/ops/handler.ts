@@ -2,6 +2,7 @@ import type { Runtime } from "../runtime";
 import { handle } from "../http";
 import { requireOps, type OpsSession } from "./access";
 import { hidesSample, viewAs } from "../alive/clock";
+import { markRows } from "../alive/marks";
 
 /**
  * Every /ops-api route: the operations session is required (see access.ts), then the body runs against the shared
@@ -11,7 +12,13 @@ export function opsRoute(req: Request, fn: (rt: Runtime, staff: OpsSession) => P
   return handle(async (rt) => {
     const staff = requireOps(req);
     // The portal's "hide the sample" switch (server/alive): every read in this request leaves the sample out.
-    const res = await viewAs({ hideSample: hidesSample(req.headers.get("cookie")) }, () => fn(rt, staff));
+    const hide = hidesSample(req.headers.get("cookie"));
+    let res = await viewAs({ hideSample: hide }, () => fn(rt, staff));
+    // Rows that name sample records carry `sample: true` (or are left out for a viewer who hid the sample).
+    if (res.headers.get("content-type")?.includes("application/json") && res.status < 300) {
+      const body = markRows(rt.dock.ledger, await res.clone().json(), hide);
+      res = new Response(JSON.stringify(body), { status: res.status, headers: res.headers });
+    }
     // While staff look, the sample's "now" stays true (orders waiting, today's figures): at most once a minute.
     void import("../alive/start").then((m) => m.touchSample(rt)).catch(() => undefined);
     res.headers.set("cache-control", "no-store");

@@ -11,6 +11,7 @@ import { DoorGlyph, Empty, Licence, LiveMark, LoadError, Loading, Outcome, PageH
 import { Table } from "../_ui/parts";
 import { FilterBar, useUrlState } from "../_ui/filters";
 import { LIVE_TEXT } from "./live.text";
+import { StartHere } from "../_ui/sample-bar";
 
 const DOORS: Via[] = ["onsite", "mcp", "rest"];
 
@@ -25,6 +26,7 @@ export function LiveView() {
         purpose={LIVE_TEXT.en.purpose}
         right={o && <LiveMark at={whenSeconds(o.at)} error={live.error} />}
       />
+      <StartHere />
       <LoadError message={live.error} />
       {!o ? <Loading /> : <Body o={o} now={now ?? Date.parse(o.at)} />}
     </>

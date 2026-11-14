@@ -49,6 +49,8 @@ export { BASKET_PREFIX, BROWSE_TEXT };
 
 export type PortalOrder = {
   orderId: string;
+  /** Played by the sample activity (server/alive): the store shows its small "sample" mark. */
+  sample?: boolean;
   requestId?: string;
   status: PublicOrder["status"] | "history";
   totalCents: number;
@@ -164,7 +166,8 @@ export async function overview(k: Kitchen): Promise<Overview> {
   const profile = (await rt.kitchens.getProfile(k.info.orgId)) as KitchenProfile | undefined;
 
   const all = (await dock.listOrders({ orgId: k.info.orgId })).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  const orders = all.map(portalOrder);
+  const { isSampleOrder } = await import("./alive/marks");
+  const orders = all.map((o) => ({ ...portalOrder(o), ...(isSampleOrder(dock.ledger, o) ? { sample: true } : {}) }));
   const byRequest = new Map<string, PortalOrder>();
   for (const o of orders) if (o.requestId && !byRequest.has(o.requestId)) byRequest.set(o.requestId, o);
 

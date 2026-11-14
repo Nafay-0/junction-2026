@@ -183,6 +183,9 @@ export async function kitchens(c: Ctx): Promise<void> {
   await withSampleMail(rt, async () => {
     await beat(c, "mail: the test kitchens give an address (sample, nothing is sent)", ago(150), () => giveAddresses(c, TEST as string[]));
 
+    await beat(c, "watch: hotel lumo's milk renewed by itself", ago(146), () => watchRenewal(c, "hotel-lumo", false));
+    await beat(c, "watch: hotel lumo's breakfast cream crept up: renewal held", ago(144), () => heldRenewal(c, "hotel-lumo"));
+    await beat(c, "watch: metsola's milk cannot come (staged): a substitute ordered", ago(142), () => watchRenewal(c, "koulu-metsola", true));
     await beat(c, "hotel lumo: breakfast milk, placed alone", ago(140), async () => {
       const d = await intakeOrder(await lumo(), milkNeed(360, deliveryDay(sampleNow(), 1, LUMO_DAYS)), "Kitchen manager");
       if (d.order) ids.lumoAlone = d.order.orderId;
@@ -203,14 +206,11 @@ export async function kitchens(c: Ctx): Promise<void> {
     const sointu = async () => onsiteAgent(await credentialsFor(rt, "kahvila-sointu", sampleNow()), "kahvila-sointu", `sample-${c.setId}`);
     await beat(c, "kahvila sointu: milk for the coffee, alone", ago(100), async () => describe(await intakeOrder(await sointu(), milkNeed(36, deliveryDay(sampleNow(), 1, [2, 5])), "Owner")));
     await beat(c, "kahvila sointu: more milk the same day, to the owner", ago(8), async () => {
-      const d = await intakeOrder(await sointu(), milkNeed(30, deliveryDay(sampleNow(), 2, [2, 5])), "Owner");
+      const d = await intakeOrder(await sointu(), milkNeed(30, deliveryDay(sampleNow(), 1, [2, 5])), "Owner");
       if (d.order?.status === "pending_approval") ids.sointuWaiting = d.order.orderId;
       return describe(d);
     });
 
-    await beat(c, "watch: hotel lumo's milk renewed by itself", ago(75), () => watchRenewal(c, "hotel-lumo", false));
-    await beat(c, "watch: hotel lumo's breakfast cream crept up: renewal held", ago(72), () => heldRenewal(c, "hotel-lumo"));
-    await beat(c, "watch: metsola's milk cannot come (staged): a substitute ordered", ago(66), () => watchRenewal(c, "koulu-metsola", true));
     await beat(c, "watch: a product with a poor delivery record, its backup used", ago(58), () => backupUsed(c, ago(52)));
     await beat(c, "selling agent: a campaign and a run over the kitchens", ago(50), () => sellingAgent(c));
     await beat(c, "selling agent: the kitchens answer (accept, decline, mute)", ago(44), () => answerOffers(c));

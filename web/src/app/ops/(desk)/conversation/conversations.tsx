@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ConversationSummary, ConversationView } from "@/server/ops/conversation";
 import { Details, Empty, KV, LoadError, Loading, PageHead, Section, useOps } from "../../_ui/kit";
 import { CONVERSATIONS_TEXT } from "./conversations.text";
+import { SamplePill, isSample } from "../../../_ui/sample";
 
 const DOOR: Record<string, string> = { typed: "typed in the store", voice: "voice", photo: "photo" };
 const ms = (n?: number) => (n === undefined ? "–" : n < 1000 ? `${n} ms` : `${(n / 1000).toFixed(1)} s`);
@@ -33,6 +34,7 @@ export function Conversations() {
               <Link className="font-semibold underline decoration-1 underline-offset-4" href={`/ops/conversation/${c.threadId}`}>
                 {c.lastWords ? `“${c.lastWords}”` : c.threadId}
               </Link>
+              {isSample(c) && <SamplePill />}
               <p className="text-[0.86rem] text-ink-soft">
                 {c.turns} turns · {c.doors.map((d) => DOOR[d] ?? d).join(", ")} · last at {time(c.lastAt)}
               </p>

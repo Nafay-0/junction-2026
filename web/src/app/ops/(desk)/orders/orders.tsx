@@ -9,6 +9,7 @@ import { Button, Empty, LiveMark, LoadError, Loading, PageHead, useNow, useOps }
 import { useUrlState } from "../../_ui/filters";
 import { Table } from "../../_ui/parts";
 import { OPS_ORDERS_TEXT } from "./orders.text";
+import { SamplePill } from "../../../_ui/sample";
 
 const STATUS_TONE: Record<OrderRow["status"], "waiting" | "good" | "refused" | "neutral"> = { pending_approval: "waiting", committed: "good", rejected: "refused", declined: "neutral", withdrawn: "neutral", expired: "neutral", replaced: "neutral" };
 /** The source in a few words, for the list (the order's page says it in full). */
@@ -115,7 +116,10 @@ export function OrdersScreen() {
                     <Link href={`/ops/orders/${r.orderId}`} className="font-semibold text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol">
                       {whenSeconds(r.at)}
                     </Link>
-                    <span className="block text-[0.78rem] text-ink-soft">{r.orderId}</span>
+                    <span className="block text-[0.78rem] text-ink-soft">
+                      {r.orderId}
+                      {r.sample && <SamplePill />}
+                    </span>
                   </td>
                   <td className="min-w-[8rem]">{r.orgName}</td>
                   <td className="min-w-[10rem] max-w-[15rem]">

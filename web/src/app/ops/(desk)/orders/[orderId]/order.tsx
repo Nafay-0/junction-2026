@@ -7,6 +7,7 @@ import { Badge } from "../../../../_ui/kit";
 import { clockSeconds } from "../../../../_ui/plain";
 import { money, since, whenSeconds } from "../../../_ui/format";
 import { LiveMark, LoadError, Loading, PageHead, Panel, useNow, useOps } from "../../../_ui/kit";
+import { SamplePill, isSample } from "../../../../_ui/sample";
 
 const link = "font-medium text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol";
 const ACTOR_TONE: Record<TimelineStep["actor"]["kind"], "agent" | "info" | "neutral" | "good"> = { agent: "agent", person: "info", system: "neutral", wholesaler: "good" };
@@ -23,6 +24,11 @@ export function OrderScreen({ orderId }: { orderId: string }) {
           All orders
         </Link>
       </p>
+      {isSample(live.data) && (
+        <p className="mb-1">
+          <SamplePill className="ml-0" />
+        </p>
+      )}
       <PageHead
         title={t ? t.what : orderId}
         purpose={t ? `${t.orgName}, ${money(t.totalCents)}${t.deliveryDate ? `, for delivery ${t.deliveryDate}` : ""}. Placed by ${t.agentLabel} through ${t.sourceText}. Every step below, in order, with who or what did it and its ledger entry.` : "Reading the order…"}

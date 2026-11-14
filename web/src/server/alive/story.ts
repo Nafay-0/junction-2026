@@ -1,5 +1,7 @@
 import type { Product } from "@/core/catalog";
 import { localNow } from "@/core/kitchen";
+import { SEED_STOCK } from "@/core/seed";
+import { knownPrices, plausiblePriceCents } from "./live";
 import { newId } from "@/core/util";
 import type { Runtime } from "@/server/runtime";
 import type { Json, Reply } from "@/server/show/agent";
@@ -81,8 +83,14 @@ export async function castOf(rt: Runtime): Promise<Cast> {
   // Laakso's mandate forbids gluten and nuts: an oat drink (gluten) is what its partner agent keeps trying.
   const forbidden = drinks.find((p) => p.allergens.some((a) => a === "gluten" || a === "nuts") && p.attributes.includes("lactose_free")) ?? drinks.find((p) => p.allergens.some((a) => a === "gluten" || a === "nuts"));
   // A school's milk must keep milk's protein (3 g / 100 ml): a plant drink well below it.
-  const low = drinks.find((p) => (p.nutrition?.values.protein ?? 9) < 2 && !p.allergens.includes("nuts"));
+  const low = drinks.find((p) => (p.nutrition?.values.protein ?? 9) < 2 && !p.allergens.some((a) => ["nuts", "peanuts", "sesame", "fish"].includes(a)));
   return { milk: box, milkSmall: small, ...(forbidden ? { forbiddenForLaakso: forbidden } : {}), ...(low ? { lowProteinDrink: low } : {}) };
+}
+
+/** Packs of a product for about `cents`, at the price a sample beat is quoted (the seed's, the last live one, or the plausible level). */
+function packsFor(c: Ctx, p: Product, cents: number): number {
+  const unit = c.rt.catalogSource.kind === "seed" ? (SEED_STOCK[p.id]?.unitPriceCents ?? plausiblePriceCents(p)) : (knownPrices.get(p.id) ?? plausiblePriceCents(p));
+  return Math.max(1, Math.ceil(cents / unit));
 }
 
 // ---------- the intake, driven as a person would answer ----------
@@ -145,7 +153,7 @@ async function signOff(c: Ctx, orderId: string, decision: "approve" | "decline",
   return r.body.order;
 }
 
-const describe = (d: Driven) => (d.order ? `${d.order.orderId} ${d.order.status} €${(Number(d.order.totalCents) / 100).toFixed(2)}${d.order.status === "rejected" ? ` (${((d.order.decision?.rules ?? []) as Json[]).filter((r) => r.outcome === "fail").map((r) => r.rule).join(", ")})` : ""}` : `${d.state}${d.refused ? ` (${d.refused.rule ?? d.refused.code}: ${String(d.refused.message ?? "").slice(0, 120)})` : ""}`);
+const describe = (d: Driven) => (d.order ? `${d.order.orderId} ${d.order.status} €${(Number(d.order.totalCents) / 100).toFixed(2)}${d.order.status === "rejected" || d.order.status === "pending_approval" ? ` (${((d.order.decision?.rules ?? []) as Json[]).filter((r) => r.outcome === (d.order!.status === "rejected" ? "fail" : "escalate")).map((r) => r.rule).join(", ")})` : ""}` : `${d.state}${d.refused ? ` (${d.refused.rule ?? d.refused.code}: ${String(d.refused.message ?? "").slice(0, 120)})` : ""}`);
 
 function need<T>(v: T | undefined, what: string): T {
   if (v === undefined || v === null) throw new Error(what);
@@ -165,9 +173,9 @@ async function week(c: Ctx): Promise<void> {
 
   // The partner agent's trial week: a weekly budget of its own (€600), the first thing Laakso's organisation buys this week.
   const trial = () => ({ weeklyBudgetCents: 60_000, mandateId: `mnd_laakso_partner_trial_${localNow(sampleNow()).date.replaceAll("-", "")}` });
-  await beat(c, "the partner agent: a big order within its limit, placed alone", agoAt(now, 6, 7, 45), async () => describe(await directOrder(new RestAgent(await credentialsFor(c.rt, "partner", sampleNow(), trial())), `38 boxes of ${cast.milk.name}`, deliveryDay(sampleNow(), 2), [{ productId: cast.milk.id, quantity: 38 }])));
+  await beat(c, "the partner agent: a big order within its limit, placed alone", agoAt(now, 6, 7, 45), async () => describe(await directOrder(new RestAgent(await credentialsFor(c.rt, "partner", sampleNow(), trial())), `Milk for the week: ${cast.milk.name}`, deliveryDay(sampleNow(), 2), [{ productId: cast.milk.id, quantity: packsFor(c, cast.milk, 52_000) }])));
   await beat(c, "the partner agent: one more, over its weekly budget", agoAt(now, 6, 7, 58), async () => {
-    const d = await directOrder(new RestAgent(await credentialsFor(c.rt, "partner", sampleNow(), trial())), `16 boxes of ${cast.milk.name}`, deliveryDay(sampleNow(), 3), [{ productId: cast.milk.id, quantity: 16 }]);
+    const d = await directOrder(new RestAgent(await credentialsFor(c.rt, "partner", sampleNow(), trial())), `More milk: ${cast.milk.name}`, deliveryDay(sampleNow(), 3), [{ productId: cast.milk.id, quantity: packsFor(c, cast.milk, 21_000) }]);
     if (d.order) ids.budgetRefused = d.order.orderId;
     return describe(d);
   });

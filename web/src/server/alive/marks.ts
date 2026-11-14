@@ -35,13 +35,17 @@ type Index = {
   requests: Map<string, string>;
   orders: Map<string, string>;
   threads: Map<string, string>;
+  /** Other record ids a sample entry names (an offer, a watch finding or renewal, a backup, a mail's event), and the set. */
+  keys: Map<string, string>;
 };
+
+const KEY_FIELDS = ["offerId", "findingId", "renewalId", "backupId", "eventKey", "mailId", "campaignId", "stageId", "approvalId"] as const;
 
 const indexes = new WeakMap<Ledger, Index>();
 
 function indexOf(ledger: Ledger): Index {
   let ix = indexes.get(ledger);
-  if (!ix) indexes.set(ledger, (ix = { n: 0, sets: new Map(), requests: new Map(), orders: new Map(), threads: new Map() }));
+  if (!ix) indexes.set(ledger, (ix = { n: 0, sets: new Map(), requests: new Map(), orders: new Map(), threads: new Map(), keys: new Map() }));
   if (ix.n === ledger.length) return ix;
   const all = ledger.unfiltered();
   for (let i = ix.n; i < all.length; i++) {
@@ -64,14 +68,15 @@ function indexOf(ledger: Ledger): Index {
     if (e.orderId) ix.orders.set(e.orderId, tag.set);
     const thread = (d.thread as { threadId?: string } | undefined)?.threadId;
     if (thread) ix.threads.set(thread, tag.set);
+    for (const k of KEY_FIELDS) if (typeof d[k] === "string") ix.keys.set(d[k] as string, tag.set);
   }
   ix.n = all.length;
   return ix;
 }
 
-/** The sample sets in this ledger, oldest first. */
+/** The sample sets in this ledger, in the order they were played (first entry in the chain). */
 export function sampleSets(ledger: Ledger): { set: string; firstAt: string; lastAt: string; entries: number; superseded?: string; played: boolean }[] {
-  return [...indexOf(ledger).sets.entries()].map(([set, s]) => ({ set, ...s, played: !!s.played })).sort((a, b) => a.firstAt.localeCompare(b.firstAt));
+  return [...indexOf(ledger).sets.entries()].map(([set, s]) => ({ set, ...s, played: !!s.played }));
 }
 
 /** The set an entry belongs to: its own flag, or the request or order it is about. */
@@ -131,4 +136,46 @@ export function orderVisibility(ledger: () => Ledger | undefined): () => ((o: { 
     if (!ix.sets.size || (!viewingNow()?.hideSample && !anySuperseded(ix))) return undefined;
     return (o) => !hiddenSet(ix, ix.orders.get(o.orderId) ?? ix.requests.get(o.requestId));
   };
+}
+
+/** Whether a record named by one of its ids (an order, a request, a thread, an offer, a finding, a mail's event...) is sample. */
+export function isSampleId(ledger: Ledger, ...ids: (string | undefined | null)[]): boolean {
+  const ix = indexOf(ledger);
+  return ids.some((id) => !!id && (ix.orders.has(id) || ix.requests.has(id) || ix.threads.has(id) || ix.keys.has(id)));
+}
+
+const ROW_KEYS = ["orderId", "requestId", "threadId", "offerId", "findingId", "renewalId", "backupId", "mailId", "eventKey", "campaignId"] as const;
+
+/**
+ * An operations response, marked: every row (an object in a list) that names a sample record gets `sample: true`, so
+ * each page can show the same small "sample" mark; for a viewer who hides the sample, those rows are left out. Rows
+ * the ledger alone describes are already narrowed by the ledger's own read filter; this covers the lists kept in
+ * the engines' own records (offers, the watch, mail).
+ */
+export function markRows(ledger: Ledger, body: unknown, hide: boolean): unknown {
+  const ix = indexOf(ledger);
+  if (!ix.sets.size) return body;
+  const sampleRow = (o: Record<string, unknown>) => ROW_KEYS.some((k) => typeof o[k] === "string" && isSampleId(ledger, o[k] as string));
+  const walk = (v: unknown): unknown => {
+    if (Array.isArray(v)) {
+      const out: unknown[] = [];
+      for (const x of v) {
+        if (x && typeof x === "object" && !Array.isArray(x) && sampleRow(x as Record<string, unknown>)) {
+          if (hide) continue;
+          out.push({ ...(walk(x) as Record<string, unknown>), sample: true });
+        } else out.push(walk(x));
+      }
+      return out;
+    }
+    if (v && typeof v === "object") return Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([k, x]) => [k, walk(x)]));
+    return v;
+  };
+  const out = walk(body);
+  // One record on its own (an order's page): marked, never hidden (it was asked for by its id).
+  if (out && typeof out === "object" && !Array.isArray(out)) {
+    const o = out as Record<string, unknown>;
+    const inner = [o, o.order, o.timeline, o.view].find((x) => x && typeof x === "object" && !Array.isArray(x) && sampleRow(x as Record<string, unknown>));
+    if (inner) return { ...o, sample: true };
+  }
+  return out;
 }

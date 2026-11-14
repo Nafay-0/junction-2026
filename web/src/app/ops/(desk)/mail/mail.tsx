@@ -8,6 +8,7 @@ import { num, when } from "../../_ui/format";
 import { Button, Empty, LoadError, Loading, Num, PageHead, Panel, Section, useNow, useOps } from "../../_ui/kit";
 import { Table } from "../../_ui/parts";
 import { MAIL_TEXT } from "./mail.text";
+import { SamplePill, isSample } from "../../../_ui/sample";
 
 type Mail = MailView["mails"][number];
 
@@ -84,6 +85,7 @@ function Body({ v, now }: { v: MailView; now: number }) {
                       <td className="tabular whitespace-nowrap">{when(m.at, new Date(now))}</td>
                       <td>
                         <span className="font-semibold">{m.kitchenName}</span>
+                        {isSample(m) && <SamplePill />}
                         <span className="block text-[0.85rem] text-ink-soft">{m.maskedTo}</span>
                       </td>
                       <td>

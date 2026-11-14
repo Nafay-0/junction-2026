@@ -10,6 +10,7 @@ import { num, when } from "../../_ui/format";
 import { Button, Details, Empty, LoadError, Loading, Num, PageHead, Panel, Section, useNow, useOps } from "../../_ui/kit";
 import { Table } from "../../_ui/parts";
 import { WATCH_TEXT } from "./watch.text";
+import { SamplePill, isSample } from "../../../_ui/sample";
 
 type Kitchens = { slug: string; name: string; kind: string; standing: { family: string; productId: string; name: string; weekdays: number[] }[] }[];
 type View = WatchView & { kitchens: Kitchens };
@@ -146,6 +147,7 @@ function FindingCard({ f, now }: { f: Finding; now: number }) {
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className="font-semibold">
           {f.kitchenName} · {f.product.name}
+          {isSample(f) && <SamplePill />}
         </p>
         <span className="tabular text-[0.84rem] text-ink-soft">{when(f.at, new Date(now))}</span>
       </div>
@@ -229,6 +231,7 @@ function RenewalRow({ r, now }: { r: Renewal; now: number }) {
       <td>
         <p className="font-semibold">
           {r.product.name}, {r.deliveryDate}
+          {isSample(r) && <SamplePill />}
         </p>
         <p className="text-[0.84rem] text-ink-soft">
           Usually {r.amounts.usual} {r.amounts.unit}; learned from {r.basedOn.orders} orders over {r.basedOn.weeks.length} weeks
