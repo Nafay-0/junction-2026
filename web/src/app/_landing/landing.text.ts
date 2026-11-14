@@ -287,7 +287,7 @@ export const LANDING_TEXT = {
         { figure: "13", text: "everyday tasks done by a scripted first-timer in a phone-sized browser, counting taps, typed messages and questions." },
         { figure: "66", text: "probes against a running server: who may do what, hostile and malformed calls, boundaries, floods." },
       ],
-      browser: (n: number) => `${n} browser tests across Chromium, WebKit and Firefox at phone and desktop size, including the sign-off with a passkey, accessibility, reduced motion and a crowded room.`,
+      browser: (n: string) => `${n} browser tests across Chromium, WebKit and Firefox at phone and desktop size, including the sign-off with a passkey, accessibility, reduced motion and a crowded room.`,
     },
 
     business: {

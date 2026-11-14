@@ -12,8 +12,8 @@ import { Browser, Duo, Mail, Phone } from "./frames";
 import { LANDING_TEXT, type Source } from "./landing.text";
 import "./landing.css";
 
-/** The number of browser tests (`playwright test --list`), counted when the page was last changed. */
-const BROWSER_TESTS = 370;
+/** Browser tests (`pnpm exec playwright test --list`: 383 on 14 Nov), rounded down to the ten. */
+const BROWSER_TESTS = "380+";
 
 const LINK_BASE =
   "relative inline-flex items-center justify-center gap-2 rounded-full font-semibold leading-tight transition-[background-color,border-color,color] duration-150 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100";
