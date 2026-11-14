@@ -25,6 +25,8 @@ describe("a dish whose defining ingredient breaks a kitchen rule is refused, wit
     expect(allergenInName("Butternut squash soup with nutmeg", ["nuts"])).toBeUndefined();
     expect(allergenInName("Munakoisolasagne", ["eggs"])).toBeUndefined();
     expect(allergenInName("Satay chicken", ["peanuts"])).toBe("peanuts");
+    expect(allergenInName("Dry pasta fusilli", ["fish"])).toBeUndefined();
+    expect(allergenInName("Kirjolohifilee", ["fish"])).toBe("fish");
   });
 
   it("names the rule as the kitchen's people wrote it, else one made from the allergen", () => {

@@ -32,7 +32,8 @@ export function allergenInName(name: string, forbidden: readonly string[]): stri
     const w = ALLERGEN_WORDS[a === "tree_nuts" ? "nuts" : a];
     if (!w) continue;
     if (w.not?.some((x) => hay.includes(x))) continue;
-    if (w.words.some((x) => hay.includes(x))) return a;
+    // At the start of a word: "kalapuikot" is fish, "fusilli" is not herring ("sill"), "cod" is not in "coda".
+    if (w.words.some((x) => new RegExp(`(?<![a-zåäö])${x.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "u").test(hay))) return a;
   }
   return undefined;
 }

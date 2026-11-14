@@ -767,6 +767,14 @@ export function createPlanService(deps: PlanDeps) {
           const diet = withRequestRules(k.diet, p.draft);
           for (const spec of p.specs) {
             if (p.edits[spec.lineId]?.struck ?? spec.pantry) continue;
+            // Only what the rule touches: a line keeps its products that pass it (so the same one stays chosen); only a
+            // line left with none is searched again.
+            const set = p.candidates[spec.lineId];
+            const kept = (set?.candidates ?? []).filter((c) => checkSafety(c.product, diet).verdict === "ok");
+            if (set && kept.length) {
+              if (kept.length < set.candidates.length) p.candidates[spec.lineId] = { ...set, candidates: kept };
+              continue;
+            }
             p.candidates[spec.lineId] = await findCandidates(catalog, spec.ingredient, diet, allowedFor(k), 8);
             delete p.edits[spec.lineId]?.optionId;
           }

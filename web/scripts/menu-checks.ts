@@ -19,7 +19,8 @@ async function main() {
   const { menuKitchen } = await import("@/server/agent/menu/runtime");
   const { menuChecks } = await import("@/server/agent/menu/thread");
   const { dailyUsage } = await import("@/server/limits");
-  const show = async (slug: string, words: string, lang: "en" | "fi", covers?: number) => {
+  const { changeMenu } = await import("@/server/agent/menu/thread");
+  const show = async (slug: string, words: string, lang: "en" | "fi", covers?: number, change?: string) => {
     let { service, kitchen, rt } = await menuKitchen(slug);
     if (!kitchen) {
       await rt.accounts.resetTestAccounts("script");
@@ -49,12 +50,21 @@ async function main() {
       ({ record, view } = await service.edit(kitchen, record.planId, [{ op: "covers", covers }], "Tester (script)"));
       await print();
     }
+    if (change) {
+      const c = await changeMenu(slug, record.planId, change, "Tester (script)", lang);
+      console.log(`   -> "${change}": ${c.say}`);
+      for (const x of c.changed) console.log(`      changed: ${x}`);
+      ({ record, view } = await service.get(kitchen, record.planId));
+    }
   };
   if (!only || only === "metsola") {
     await show("koulu-metsola", "kalapuikot ja perunamuusi 120 oppilaalle perjantaiksi", "fi");
     await show("koulu-metsola", "we need pesto pasta with salmon for 120 kids on thursday", "en");
   }
-  if (!only || only === "lumo") await show("hotel-lumo", "chocolate cake for 10 portions", "en", 20);
+  if (!only || only === "lumo") {
+    await show("hotel-lumo", "chocolate cake for 10 portions", "en", 20);
+    await show("hotel-lumo", "chocolate cake", "en", 10, "make it lactose-free");
+  }
   console.log(`\nModel spend this run: ${JSON.stringify(dailyUsage().llm)}`);
 }
 
