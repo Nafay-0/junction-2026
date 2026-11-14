@@ -30,6 +30,7 @@ describe("the spoken form", () => {
     expect(t).toContain("1000 Valio Eila 1 litre");
     expect(t).toContain("1010 euros");
     expect(t).toContain("Monday the sixteenth of November");
+    expect(speakable("It arrives on Thursday 19 Nov.", "en")).toBe("It arrives on Thursday the nineteenth of November.");
     expect(speakable("Hinta on 11,40 € ja toimitus 16.11.", "fi")).toBe("Hinta on 11 euroa 40 senttiä ja toimitus 16. marraskuuta.");
     expect(sayEuros(101000, "en")).toBe("1010 euros");
     expect(sayDay("2026-11-16", "fi")).toBe("maanantaina 16. marraskuuta");

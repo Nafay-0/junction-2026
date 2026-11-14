@@ -73,6 +73,44 @@ where audio would have produced them) through the same engine with the same scri
 any difference in orders, gate decisions, cards shown or the ledger's records apart from the door. The browser states
 are `e2e/demo/call.spec.ts` (the Live socket answered by the test).
 
+**Parity with the real models** (`scripts/eval/voice-parity.ts`, 14 Nov late, Claude Opus 5.5 as the agent, reader and
+planner, the seed catalogue, kitchen Kaari; each conversation typed and then spoken on a fresh runtime; results in
+`eval/voice/results/parity.json`, about $4.29 US dollars of model calls). "End; orders; gate" is where the
+conversation ended. The last column is the voice door's own time on the spoken run, the slowest utterance: from the
+words reaching the door to its first words back (the acknowledgement; this run waited 600 ms for a quicker reply, now
+250 ms) and to the full reply being ready to say. Audio time (the provider's turn detection, the model's relay call,
+its speech) comes on top and is measured by `scripts/eval/eval-voice-caps.ts`.
+
+| Capability | Typed | Spoken | Same | First words / reply ready |
+|---|---|---|---|---|
+| a plain order | done; 1 order; placed_alone | done; 1 order; placed_alone | same | 604 ms / 3.9 s |
+| several items | waiting_approver; 1 order; waiting:per_order_limit | waiting_approver; 1 order; waiting:per_order_limit | same | 604 ms / 8.3 s |
+| a repeat (same as last week plus twenty percent) | waiting_approver; 1 order; waiting:per_order_limit | waiting_approver; 1 order; waiting:per_order_limit | same | 617 ms / 8.3 s |
+| a change of amount and day | done; 0 orders; no gate | done; 0 orders; no gate | same | 603 ms / 4.2 s |
+| a variant | waiting_buyer; 0 orders; no gate | waiting_buyer; 0 orders; no gate | same | 619 ms / 9.0 s |
+| the mistake check (reason, both figures) | waiting_approver; 1 order; waiting:per_order_limit | waiting_approver; 1 order; waiting:per_order_limit | same | 606 ms / 3.9 s |
+| over the limit to sign-off | waiting_approver; 1 order; waiting:per_order_limit | waiting_approver; 1 order; waiting:per_order_limit | same | 614 ms / 3.4 s |
+| a refusal with its rule | done; 0 orders; no gate | done; 0 orders; no gate | same | 602 ms / 4.0 s |
+| a rules change that needs the approver's passkey | done; 0 orders; no gate | done; 0 orders; no gate | same | 621 ms / 2.8 s |
+| planning a dish (question, ideas, have / order / can't get, we have butter) | done; 0 orders; no gate | done; 0 orders; no gate | same | 623 ms / 28.9 s |
+| a seasonal menu | done; 0 orders; no gate | done; 0 orders; no gate | same | 605 ms / 43.0 s |
+| a booking at short notice | done; 0 orders; no gate | done; 0 orders; no gate | same | 607 ms / 41.2 s |
+| changing a dish | waiting_buyer; 0 orders; no gate | waiting_buyer; 0 orders; no gate | same | 624 ms / 12.0 s |
+| a product that cannot come, and its substitute | waiting_buyer; 0 orders; no gate | waiting_buyer; 0 orders; no gate | same | 613 ms / 4.1 s |
+| auto-renew | done; 0 orders; no gate | done; 0 orders; no gate | same | 79 ms / 0.1 s |
+| an offer (no; don't suggest again) | done; 0 orders; no gate | done; 0 orders; no gate | same | 605 ms / 2.7 s |
+| the receipt by email | done; 0 orders; no gate | done; 0 orders; no gate | same | 604 ms / 4.6 s |
+| the demo guide | done; 0 orders; no gate | done; 0 orders; no gate | same | 604 ms / 3.3 s |
+| a question about orders | done; 0 orders; no gate | done; 0 orders; no gate | same | 604 ms / 3.8 s |
+| a question about cut-offs | done; 0 orders; no gate | done; 0 orders; no gate | same | 616 ms / 4.3 s |
+| a question about the budget | done; 0 orders; no gate | done; 0 orders; no gate | same | 617 ms / 4.7 s |
+| attempts to make it misbehave | done; 1 order; waiting:per_order_limit | done; 1 order; waiting:per_order_limit | same | 776 ms / 5.7 s |
+| Finnish: a plain order | done; 1 order; placed_alone | done; 1 order; placed_alone | same | 608 ms / 5.7 s |
+
+Every conversation reached the same end, the same orders and the same gate decisions typed and spoken; the agent's
+own words differ run to run on both doors. No conversation needed the spoken read-back here: none of these orders was
+one the agent places alone on this kitchen (Kaari may spend 100 € alone); the scripted test covers it (10 L of cream).
+
 ### Bounds on cost and time
 
 - A session is set up per call by our server, and both providers are bounded by it; no API key reaches the

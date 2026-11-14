@@ -73,7 +73,7 @@ export function speakable(text: string, lang: Lang, max = 45): string {
   t = t.replace(/€\s?(\d{1,3}(?:[,\s]\d{3})*|\d+)(?:\.(\d{1,2}))?/g, (_, w: string, f?: string) => sayEuros(cents(w, f), lang));
   // Days: ISO dates, "16.11." and "Mon 16 Nov".
   t = t.replace(/\b(20\d\d-\d\d-\d\d)\b/g, (_, iso: string) => sayDay(iso, lang));
-  t = t.replace(/\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b\.?/g, (_, wd: string, d: string, mo: string) => (lang === "en" ? `${SHORT_DAY[wd]} the ${ORDINAL[Number(d)]} of ${MONTH.en[SHORT_MONTH[mo] - 1]}` : `${d}. ${MONTH[lang][SHORT_MONTH[mo] - 1]}`));
+  t = t.replace(/\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*\s+(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\b/g, (_, wd: string, d: string, mo: string) => (lang === "en" ? `${SHORT_DAY[wd]} the ${ORDINAL[Number(d)]} of ${MONTH.en[SHORT_MONTH[mo] - 1]}` : `${d}. ${MONTH[lang][SHORT_MONTH[mo] - 1]}`));
   t = t.replace(/\b(\d{1,2})\.(\d{1,2})\.(?:(20\d\d)\.?)?/g, (m: string, d: string, mo: string, _y: string | undefined, at: number, all: string) => {
     if (!(Number(mo) >= 1 && Number(mo) <= 12 && Number(d) >= 1 && Number(d) <= 31)) return m;
     const said = lang === "en" ? `the ${ORDINAL[Number(d)]} of ${MONTH.en[Number(mo) - 1]}` : lang === "fi" ? `${d}. ${MONTH.fi[Number(mo) - 1]}` : `${d} ${MONTH.sv[Number(mo) - 1]}`;
