@@ -22,7 +22,8 @@ export function Story() {
     <>
       <PageHead
         title="The platform"
-        purpose="Everything AimoPilot runs on is an Aiven service, each with one job, chosen for a reason. Is each one alive, and what did it do in the last hour? Every number here is read live from the service itself or from Aiven's API."
+        purpose="The Aiven services AimoPilot runs on: is each alive, and what did it do in the last hour."
+        about="Everything AimoPilot runs on is an Aiven service, each with one job, chosen for a reason. Is each one alive, and what did it do in the last hour? Every number here is read live from the service itself or from Aiven's API."
         right={o && <LiveMark at={whenSeconds(o.at)} error={live.error} />}
       />
       <PlatformTabs />

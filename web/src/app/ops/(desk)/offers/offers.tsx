@@ -46,7 +46,8 @@ export function OffersScreen() {
     <>
       <PageHead
         title="Selling agent"
-        purpose="Our own agent, offering the buyers' agents what is genuinely worth it: new in the assortment, in season in Finland, or a like-for-like cheaper per litre, more reliable or lower in carbon than what a kitchen buys every week. Plain code picks from data and checks every guardrail; each offer is signed, open and never an order. Kitchens can mute it or turn it off."
+        purpose="Our own agent's offers to the buyers' agents: what, to whom, why, and what happened."
+        about="Our own agent, offering the buyers' agents what is genuinely worth it: new in the assortment, in season in Finland, or a like-for-like cheaper per litre, more reliable or lower in carbon than what a kitchen buys every week. Plain code picks from data and checks every guardrail; each offer is signed, open and never an order. Kitchens can mute it or turn it off."
         right={v ? <span className="tabular">{num(v.stats.liveCalls)} live price calls this process</span> : undefined}
       />
       <LoadError message={live.error} />

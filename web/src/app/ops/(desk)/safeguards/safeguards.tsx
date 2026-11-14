@@ -23,7 +23,8 @@ export function SafeguardsView() {
     <>
       <PageHead
         title="Safeguards"
-        purpose="What an agent may decide alone, what needs a person, and what is refused outright: the rule book exactly as the code runs it, grouped by what each rule protects, with how often it fired and its latest cases."
+        purpose="What an agent may do alone, what needs a person, and what is refused, as the code runs it."
+        about="What an agent may decide alone, what needs a person, and what is refused outright: the rule book exactly as the code runs it, grouped by what each rule protects, with how often it fired and its latest cases."
         right={s && <LiveMark at={whenSeconds(s.at)} error={live.error} />}
       />
       <LoadError message={live.error} />
