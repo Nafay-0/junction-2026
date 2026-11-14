@@ -1,7 +1,15 @@
 # The second reader
 
-Every request a model reads into a structured need is read a second time, at the same moment, by NVIDIA's
-open-weights **Nemotron 3 Nano** (30B, 3B active; through Featherless, and runnable on a wholesaler's own hardware).
+**Status: built, evaluated, and switched off in the deployed demo since 14 Nov 2026.** On the evaluation below it
+caught injected misreadings but no real one in 127 requests, so it adds cost and an occasional extra question
+without a measured benefit; the plain-code checks (the mistake check, the mandate, the gate) carry the safety. It is
+one setting to switch on, with any `provider:model-id`, including a model on a wholesaler's own hardware.
+
+When it is on, every request a model reads into a structured need is read a second time, at the same moment, by a
+separate call that uses a different method (a short transcription into closed lists, not the interpreter's schema).
+The evaluation below was run with NVIDIA's open-weights Nemotron 3 Nano through Featherless; with the first
+reader's own model (Claude Opus 5.5) it works too, in about 2.5 to 4 s a reading, but the two readings are then less
+independent.
 Plain code compares the two readings on the fields that change the order. When they agree, nothing is asked and the
 request card says it was read twice. When they differ on something material, the buyer gets one question about exactly
 that field, showing both readings, before any price is fixed.
@@ -17,8 +25,9 @@ settles a difference by choosing a reading or writing the request again; the gat
 | The one call site | `interpretRequest` in `src/server/agent/interpret.ts` |
 | The evaluation | `scripts/eval/eval-second-reader.ts`, `eval/second-reader/` (sets, recorded readings, results) |
 
-**Configuration.** `DOCK_SECOND_READER_MODEL`, as `provider:model-id`; empty turns it off. Recommended:
-`featherless:nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16` (needs `FEATHERLESS_API_KEY`).
+**Configuration.** `DOCK_SECOND_READER_MODEL`, as `provider:model-id`; empty turns it off (the deployed
+setting). To switch it on: `anthropic:claude-opus-5-5` (inside the 8 s deadline), or a reader of another family such
+as `featherless:nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16` (needs `FEATHERLESS_API_KEY`).
 
 ## How it reads
 
