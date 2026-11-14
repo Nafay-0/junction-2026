@@ -88,7 +88,7 @@ export function StationStrip({ states, label }: { states: Record<Station, Statio
                     {st === "done" ? "✓" : i + 1}
                   </span>
                 )}
-                <span title={word.length > 9 ? word : undefined} className={`display truncate text-[0.95rem] ${word.length > 9 ? "sm:text-[1rem] lg:text-[1.25rem]" : "sm:text-[1.25rem]"} ${st === "skipped" ? "line-through decoration-1" : ""}`}>{word}</span>
+                <span title={word.length > 9 ? word : undefined} className={`display truncate text-[0.95rem] ${word.length > 9 ? "sm:text-[1rem] lg:text-[1.08rem] 2xl:text-[1.25rem]" : "sm:text-[1.25rem]"} ${st === "skipped" ? "line-through decoration-1" : ""}`}>{word}</span>
               </span>
               <span className="sr-only">{tx.srStep(i + 1, st)}</span>
             </li>
