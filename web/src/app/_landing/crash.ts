@@ -24,7 +24,9 @@ export type CrashRow = {
 type Agent = (typeof summary.agents)[number];
 
 export function crashRows(): CrashRow[] {
-  const own = summary.ownAgent.crashAgent;
+  // The model the kitchen's agent runs on today (AGENT_MODEL_DEFAULT in server/thread/agent.ts, and the deployed
+  // DOCK_AGENT_MODEL). The summary's own `ownAgent` records the model at the time the suite ran, which has changed.
+  const own = "model:anthropic:claude-opus-5-5";
   return (summary.agents as Agent[])
     .map((a) => {
       const n = nameOf(a.agent, a.model ?? null);
