@@ -29,7 +29,7 @@ export type Refusal =
   | { code: "recall"; what: string }
   | { code: "no_such_kind"; what: string }
   | { code: "claim_missing"; what: string; claims: string[]; products?: string[] }
-  | { code: "nothing_fits"; what: string };
+  | { code: "nothing_fits"; what: string; detail?: string; noOffer?: boolean };
 
 const DATA = generated as { departments: Record<string, string>; categories: Record<string, { label: string }> };
 
@@ -152,9 +152,15 @@ export function sayRefusal(r: Refusal, lang: Lang): string {
       if (sv) return `Sortimentet har inte just ${r.what} för den dagen; det jag hittade är andra sorter. Ska jag visa de närmaste?`;
       return `I couldn't find ${r.what} as such for that day; what the assortment has are other kinds. Shall I show the closest?`;
     case "nothing_fits":
-      if (fi) return `En löytänyt tuotetta ${r.what}, jonka voisin tilata sille päivälle. Katsonko toisen päivän?`;
-      if (sv) return `Jag hittade inget ${r.what} som kan beställas för den dagen. Ska jag titta på en annan dag?`;
-      return `I couldn't find ${r.what} that can be ordered for that day. Shall I look at another day?`;
+      // Never "another day" without why: the wholesaler not offering it now, or the first reason the products were left.
+      if (r.noOffer) {
+        if (fi) return `Tukku ei tarjoa nyt tuotetta ${r.what}. Etsinkö toisen tuotteen?`;
+        if (sv) return `Grossisten erbjuder inte ${r.what} just nu. Ska jag leta efter en annan produkt?`;
+        return `The wholesaler isn't offering ${r.what} right now. Shall I look for another product?`;
+      }
+      if (fi) return `En löytänyt tuotetta ${r.what}, jonka voisin tilata sille päivälle${r.detail ? `: ${r.detail.replace(/\.$/, "")}` : ""}. Katsonko toisen päivän?`;
+      if (sv) return `Jag hittade inget ${r.what} som kan beställas för den dagen${r.detail ? `: ${r.detail.replace(/\.$/, "")}` : ""}. Ska jag titta på en annan dag?`;
+      return `I couldn't find ${r.what} that can be ordered for that day${r.detail ? `: ${r.detail.replace(/\.$/, "").replace(/^./, (c) => c.toLowerCase())}` : ""}. Shall I look at another day?`;
   }
 }
 
@@ -196,7 +202,10 @@ export function refusalOfStep(run: TurnRun, step: IntakeView, lang: Lang): Refus
   if (kinds > 0 && kinds >= step.excluded.length / 2) return { code: "no_such_kind", what };
   const allergens = step.excluded.flatMap((e) => /contains ([a-z_, ]+)/i.exec(e.reason)?.[1]?.split(/,\s*/) ?? []).filter((a) => m.forbiddenAllergens.includes(a.trim()));
   if (allergens.length) return { code: "forbidden_allergen", what, allergens: [...new Set(allergens.map((a) => a.trim()))].slice(0, 3) };
-  return { code: "nothing_fits", what };
+  if (top === "no_offer") return { code: "nothing_fits", what, noOffer: true };
+  const first = step.excluded.find((e) => e.code && e.code !== "compromise") ?? step.excluded[0];
+  // The reason is the store's own English words: said in English only (Finnish and Swedish keep the plain sentence).
+  return { code: "nothing_fits", what, ...(first && lang === "en" ? { detail: plainDetail(first.reason) } : {}) };
 }
 
 /** A gate rule that refused or stopped an order, as a refusal. */

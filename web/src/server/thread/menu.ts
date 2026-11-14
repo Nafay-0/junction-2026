@@ -667,7 +667,22 @@ export async function dishesCard(run: TurnRun, planId: string, before?: Dishes, 
   }
   const covers = p.settings.covers;
   const total = view.totals.totalCents;
+  // One dish: the planner's three groups (you have, I'll order, can't get), each ingredient with its amount and why.
+  let groups: Dishes["groups"];
+  if (p.draft.dishes.length === 1 && covers) {
+    const { dishGroups } = await import("@/server/agent/menu/thread");
+    const g = await dishGroups(run.k.info.slug, planId, run.lang ?? "en").catch(() => undefined);
+    if (g)
+      groups = {
+        have: g.onHand.map((x) => ({ name: x.ingredient, ...(x.need ? { need: x.need } : {}), ...(x.basis ? { basis: x.basis } : {}) })),
+        order: g.toOrder.map((x) => ({ name: x.ingredient, ...(x.need ? { need: x.need } : {}), ...(x.standIn ? { instead: x.standIn } : {}) })),
+        cannot: g.cannotGet.map((x) => ({ name: x.ingredient, ...(x.need ? { need: x.need } : {}), why: x.words })),
+        totalToOrderCents: g.totalToOrderCents,
+        complete: g.complete,
+      };
+  }
   return {
+    ...(groups ? { groups } : {}),
     type: "dishes",
     cardId: cardId("dishes", run.turnId),
     planId,
@@ -739,4 +754,19 @@ export async function planDifferences(run: TurnRun, planId: string, lang: "en" |
   // Packs are bought whole for a dish: rounding up to a pack is how a recipe is bought, not a difference to say.
   const diffs = differencesOf(wanted, got, { roundingCounts: false });
   return { diffs, toBuy: wanted.length, buyable, totalCents: view.totals.totalCents, buyableCents, deliverBy, allowed: svc.kitchen.mandate.allowedCategories };
+}
+
+/**
+ * A plan the planner made outside this conversation's own menu builder (a dish picked from ideas): taken into the
+ * thread as its menu card, so every later word works on it (portions, "we have butter", the order sheet, the gate).
+ */
+export async function adoptPlan(run: TurnRun, planId: string): Promise<MenuCard> {
+  const svc = await planner(run);
+  const planned = await svc.service.get(svc.kitchen, planId);
+  const profile = await run.rt.kitchens.getProfile(svc.kitchen.mandate.issuer.orgId).catch(() => undefined);
+  const m: MenuState = { key: cardId("menu", run.turnId), words: planned.record.draft.dishes.map((d) => d.name).join(", "), planId, proposals: [], stage: "ready", dishes: {}, timings: { startedAt: Date.now() }, ...(profile?.deliveryWeekdays?.length ? { weekdays: profile.deliveryWeekdays } : {}), maxLeadDays: svc.kitchen.mandate.delivery.maxLeadDays };
+  menusOf(run)[m.key] = m;
+  const card = await fullCard(run, svc, m, planned);
+  show(run, card);
+  return card;
 }

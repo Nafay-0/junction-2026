@@ -79,11 +79,16 @@ describe("quantity against the kitchen's own pattern", () => {
     expect(concerns[0].corrections[0].patch).toEqual({ quantity: { amount: 100, unit: "L" } });
   });
 
-  it("reads 10 L as possibly 10 boxes when the kitchen usually takes 10 boxes", () => {
-    const [c, ...rest] = checkQuantity(need(L(10)), ctx());
-    expect(rest).toHaveLength(0);
-    expect(c.code).toBe("unit_confusion");
-    expect(c.corrections[0].patch).toEqual({ quantity: { amount: 10, unit: "pack" } });
+  it("never questions a unit the product is sold in: 10 L of milk is litres, even where the kitchen usually takes 10 boxes", () => {
+    expect(checkQuantity(need(L(10)), ctx()).filter((c) => c.code === "unit_confusion")).toEqual([]);
+  });
+
+  it("a count of packs with the pack size in the words is not unclear (\"5 packs of blue cheese 400 g\")", () => {
+    const n = need({ quantity: { amount: 5, unit: "pack" } });
+    const cheese = { ...n, item: { ...n.item, text: "Peltolan blue cheese 400 g" } };
+    const cheeses = [{ ...milkProducts[0], id: "c1", unit: "kg" as const, packSize: 0.4 }, { ...milkProducts[0], id: "c2", unit: "kg" as const, packSize: 1 }];
+    expect(checkQuantity(n, ctx(kitchen([]), { family: "cheese", candidates: cheeses })).map((c) => c.code)).toContain("unit_unclear"); // without the size: unclear
+    expect(checkQuantity(cheese, ctx(kitchen([]), { family: "cheese", candidates: cheeses })).filter((c) => c.code === "unit_unclear")).toEqual([]);
   });
 
   it("treats pieces of milk as packs", () => {
