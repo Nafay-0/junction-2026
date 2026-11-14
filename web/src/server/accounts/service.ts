@@ -72,7 +72,12 @@ export type AccountView = {
   demo: boolean;
   /** What it chose at the end of onboarding; undefined until it chose. */
   start?: "sample" | "empty";
+  /** A fresh kitchen (store.ts `free`): when it expires without use, unless kept with a sign-in name. */
+  free?: { expiresAt: string; kept: boolean; login?: string };
 };
+
+/** A fresh kitchen not used for this long is deleted (its ledger entries stay). */
+export const FREE_KITCHEN_HOURS = 24;
 
 export type SignedIn = { account: AccountView; token: string; expiresAt: string };
 
@@ -202,13 +207,19 @@ export class AccountService {
         throw new DockError(429, "sign_in_attempts_exceeded", `Too many failed sign-ins. Try again in ${wait} min.`, "account", { retryAfterSeconds: this.limiter.retryAfter(rule, key, t) });
       }
     }
-    const account = username && password.length <= 200 ? await this.deps.store.get(username) : undefined;
+    // A kept fresh kitchen signs in with the name its person chose; its username (the kitchen's address) stays generated.
+    const account = username && password.length <= 200 ? ((await this.deps.store.get(username)) ?? (await this.byLogin(username))) : undefined;
     const ok = await verifyPassword(password, account?.passwordHash && account.passwordHash !== "-" ? account.passwordHash : await dummyHash());
     if (!account || !ok) {
       for (const [rule, key] of blocked) this.limiter.hit(rule, key, t);
       throw signInFailed();
     }
     return this.openSession(account);
+  }
+
+  /** The account a kept fresh kitchen's chosen sign-in name names. */
+  async byLogin(login: string): Promise<Account | undefined> {
+    return (await this.deps.store.list()).find((a) => a.login === login);
   }
 
   private async openSession(a: Account, scope?: AccountSession["scope"]): Promise<SignedIn> {
@@ -230,6 +241,11 @@ export class AccountService {
       return undefined;
     }
     const account = await this.deps.store.get(s.username);
+    // A fresh kitchen lives while it is used: its last use is noted (at most every ten minutes).
+    if (account?.free && !account.free.kept && this.now().getTime() - Date.parse(account.free.lastUsedAt) > 10 * 60_000) {
+      account.free = { ...account.free, lastUsedAt: this.now().toISOString() };
+      await this.deps.store.put(account);
+    }
     return account ? { account, session: s } : undefined;
   }
 
@@ -251,6 +267,7 @@ export class AccountService {
       shared: a.kind === "test",
       demo: !!a.demo,
       ...(a.demo?.start ? { start: a.demo.start } : {}),
+      ...(a.free ? { free: { expiresAt: new Date(Date.parse(a.free.lastUsedAt) + FREE_KITCHEN_HOURS * 3_600_000).toISOString(), kept: !!a.free.kept, ...(a.login ? { login: a.login } : {}) } } : {}),
     };
   }
 

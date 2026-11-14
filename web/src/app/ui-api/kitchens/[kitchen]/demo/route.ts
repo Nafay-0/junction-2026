@@ -4,7 +4,8 @@ import { requireKitchenPerson } from "@/server/authz";
 import { readJson } from "@/server/http";
 import { noStore, portalRoute } from "@/server/kitchen-portal-http";
 import { getRuntime } from "@/server/runtime";
-import { STAGE_KINDS, chooseStart, deleteAccount, guideFor, restartAccount, stageForAccount, type StageKind } from "@/server/demo/service";
+import { giveFreeKitchenLimit, keepFreeKitchen, renameFreeKitchen } from "@/server/demo/fresh";
+import { STAGE_KINDS, addSampleHistory, chooseStart, deleteAccount, guideFor, restartAccount, stageForAccount, type StageKind } from "@/server/demo/service";
 import type { Kitchen } from "@/server/kitchen-portal";
 
 /**
@@ -16,6 +17,10 @@ import type { Kitchen } from "@/server/kitchen-portal";
  * POST { action: "stage", kind }               stock_out | drift | offer | poor_record, for this kitchen, staged for the demo
  * POST { action: "restart" }                   back to how the kitchen was after onboarding (a ledger entry)
  * POST { action: "delete", confirm: <username> } the account goes (the ledger keeps its entries)
+ * POST { action: "sample" }                    add a sample history now (a fresh kitchen, or one that started empty)
+ * POST { action: "rename", name }              a fresh kitchen's name
+ * POST { action: "keep", login, password }     keep a fresh kitchen: a sign-in name and password of its person's own
+ * POST { action: "limit" }                     give a fresh kitchen a 250 € per-order limit (its passkey signs above)
  */
 async function own(k: Kitchen, what: string) {
   requireKitchenPerson(k, what);
@@ -51,8 +56,16 @@ export async function POST(req: Request, ctx: RouteContext<"/ui-api/kitchens/[ki
         const r = await deleteAccount(rt, a);
         return Response.json(r, { headers: { ...noStore.headers, "set-cookie": clearAccountCookie(req) } });
       }
+      case "sample":
+        return Response.json(await addSampleHistory(rt, a), noStore);
+      case "rename":
+        return Response.json(await renameFreeKitchen(rt, a, body.name), noStore);
+      case "keep":
+        return Response.json(await keepFreeKitchen(rt, a, { login: body.login, password: body.password }), noStore);
+      case "limit":
+        return Response.json(await giveFreeKitchenLimit(rt, a), noStore);
       default:
-        throw new DockError(400, "invalid_request", 'Send { action: "start" | "stage" | "restart" | "delete" }.');
+        throw new DockError(400, "invalid_request", 'Send { action: "start" | "stage" | "restart" | "delete" | "sample" | "rename" | "keep" | "limit" }.');
     }
   });
 }

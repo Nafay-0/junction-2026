@@ -6,7 +6,7 @@ import { Suspense } from "react";
 import { DEMO_NOTES } from "../_ui/brand";
 import { Wordmark } from "../_ui/wordmark";
 import { moneyShort } from "../_ui/plain";
-import { ArrowRight, BedDouble, ChevronRight, Coffee, QrCode, School, Store, UserRoundPlus } from "lucide-react";
+import { ArrowRight, BedDouble, ChevronRight, Coffee, QrCode, School, Sparkles, Store, UserRoundPlus } from "lucide-react";
 import { Art } from "../_ui/art";
 import { Avatar, IconDisc } from "../_ui/kit";
 import { LINK_GO, LINK_SECONDARY } from "./_account/links";
@@ -24,6 +24,7 @@ import { ENTRY_TEXT } from "./entry.text";
 import { PORTAL_TEXT } from "./[kitchen]/portal.text";
 import { DOOR_TEXT } from "./door.text";
 import { SignInForm, SignOutButton, TestSignIn } from "./_account/forms";
+import { FreshStart } from "./_account/fresh";
 
 export async function generateMetadata(): Promise<Metadata> {
   return { title: DOOR_TEXT[await requestLang()].title };
@@ -100,46 +101,100 @@ async function Door({ lang, searchParams }: { lang: Lang; searchParams: PageProp
   const prefill = typeof as === "string" && /^[a-z0-9][a-z0-9_-]{2,31}$/.test(as) ? as : undefined;
   return (
     <>
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,34rem)_minmax(0,1fr)] lg:gap-10">
-        <section aria-labelledby="signin" className="rounded-2xl bg-paper p-5 shadow-lg sm:p-8">
-          <h2 id="signin" className="display text-[1.75rem] leading-tight">
-            {tx.signInTitle}
-          </h2>
-          {me ? (
-            <div className="mt-4 space-y-5">
-              <p className="flex items-center gap-3 leading-snug">
-                <Avatar name={me.restaurant} size={44} />
-                <span className="min-w-0">{tx.signedInAs(me.username, me.restaurant)}</span>
-              </p>
-              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-                <Link href={me.kitchen ? `/k/${me.kitchen}` : "/k/signup?step=rules"} className={`${LINK_GO} min-h-13 text-[1.05rem]`}>
-                  {me.kitchen ? tx.openShop : tx.finishSignUp}
-                  <ArrowRight aria-hidden size={18} />
-                </Link>
-                <SignOutButton kind="secondary" />
+      {/* Three ways in, the easiest first (server/demo/fresh.ts): a fresh kitchen of one's own, a kitchen with rules,
+          the full onboarding. Then, quietly, the ordinary sign-in. */}
+      <section aria-labelledby="ways" className="space-y-4">
+        <h2 id="ways" className="sr-only">
+          {tx.chooseTitle}
+        </h2>
+        {me && !me.free && (
+          <div className="flex flex-col gap-3 rounded-2xl bg-paper p-5 shadow-lg sm:flex-row sm:items-center sm:p-6">
+            <p className="flex min-w-0 flex-1 items-center gap-3 leading-snug">
+              <Avatar name={me.restaurant} size={44} />
+              <span className="min-w-0">{tx.signedInAs(me.username, me.restaurant)}</span>
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <Link href={me.kitchen ? `/k/${me.kitchen}` : "/k/signup?step=rules"} className={`${LINK_GO} min-h-12`}>
+                {me.kitchen ? tx.openShop : tx.finishSignUp}
+                <ArrowRight aria-hidden size={18} />
+              </Link>
+              <SignOutButton kind="secondary" />
+            </div>
+          </div>
+        )}
+        <section aria-labelledby="fresh" className="rounded-2xl bg-paper p-5 shadow-lg sm:p-8" data-testid="way-fresh">
+          <div className="flex items-start gap-4">
+            <IconDisc tone="good">
+              <Sparkles size={21} />
+            </IconDisc>
+            <div className="min-w-0 flex-1">
+              <h3 id="fresh" className="display text-[1.75rem] leading-tight">
+                {tx.freshTitle}
+              </h3>
+              <p className="mt-1.5 max-w-[56ch] leading-relaxed text-ink-soft">{tx.freshLine}</p>
+              <div className="mt-4">
+                <FreshStart {...(me?.free && me.kitchen ? { mine: { slug: me.kitchen, name: me.restaurant } } : {})} />
               </div>
+              <p className="mt-3 text-[0.85rem] leading-snug text-ink-faint">{tx.freshNote}</p>
             </div>
-          ) : (
-            <div className="mt-5">
-              <SignInForm prefill={prefill} />
-            </div>
-          )}
-        </section>
-        <section aria-labelledby="new" className="flex items-start gap-4 rounded-xl border border-line bg-paper/70 p-5 sm:p-6 lg:mt-36">
-          <IconDisc>
-            <UserRoundPlus size={21} />
-          </IconDisc>
-          <div className="min-w-0">
-            <h2 id="new" className="display text-[1.35rem] leading-tight">
-              {tx.newTitle}
-            </h2>
-            <p className="mt-1.5 max-w-[56ch] leading-relaxed text-ink-soft">{tx.newBody}</p>
-            <Link href="/k/signup" className={`${LINK_SECONDARY} mt-4`}>
-              {tx.newButton}
-            </Link>
           </div>
         </section>
-      </div>
+        <div className="grid items-start gap-4 lg:grid-cols-2">
+          {shown && (
+            <section aria-labelledby="with-rules" className="rounded-xl border border-line bg-paper p-5 sm:p-6" data-testid="way-rules">
+              <h3 id="with-rules" className="display text-[1.35rem] leading-tight">
+                {tx.withRulesTitle}
+              </h3>
+              <p className="mt-1.5 max-w-[60ch] text-[0.95rem] leading-relaxed text-ink-soft">{tx.rulesLine(testResetMinutes() || 60)}</p>
+              <ul className="mt-4 divide-y divide-line">
+                {TEST_ACCOUNTS.map((t) => {
+                  const Icon = TEST_ICON[t.username] ?? Store;
+                  return (
+                    <li key={t.username} className="flex flex-col gap-2.5 py-3.5 sm:flex-row sm:items-center">
+                      <div className="flex min-w-0 flex-1 items-start gap-3">
+                        <IconDisc size={36}>
+                          <Icon size={17} />
+                        </IconDisc>
+                        <p className="min-w-0 leading-snug">
+                          <span className="block font-semibold">{t.restaurant}</span>
+                          <span className="block text-[0.9rem] text-ink-soft">{tx.rulesShort[t.username] ?? tx.testAbout[t.username]}</span>
+                        </p>
+                      </div>
+                      <div className="sm:w-56">
+                        <TestSignIn username={t.username} password={t.password} name={t.restaurant} />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
+          <section aria-labelledby="new" className="flex items-start gap-4 rounded-xl border border-line bg-paper p-5 sm:p-6" data-testid="way-account">
+            <IconDisc>
+              <UserRoundPlus size={21} />
+            </IconDisc>
+            <div className="min-w-0">
+              <h3 id="new" className="display text-[1.35rem] leading-tight">
+                {tx.accountTitle}
+              </h3>
+              <p className="mt-1.5 max-w-[56ch] leading-relaxed text-ink-soft">{tx.accountLine}</p>
+              <Link href="/k/signup" className={`${LINK_SECONDARY} mt-4`}>
+                {tx.newButton}
+              </Link>
+            </div>
+          </section>
+        </div>
+        {!me && (
+          <details className="rounded-xl border border-line bg-paper/70 p-5 sm:p-6" {...(prefill ? { open: true } : {})}>
+            <summary className="flex min-h-11 cursor-pointer items-center font-semibold text-petrol">
+              {tx.signInQuiet} {tx.signInButton}
+            </summary>
+            <div className="mt-4 max-w-[34rem]">
+              <SignInForm prefill={prefill} />
+            </div>
+          </details>
+        )}
+      </section>
 
       {mine && (
         <Link href={`/k/${mine.sandboxId}`} className="lift flex items-center gap-4 rounded-xl border border-line bg-paper p-5">
@@ -153,44 +208,6 @@ async function Door({ lang, searchParams }: { lang: Lang; searchParams: PageProp
           </span>
           <ChevronRight aria-hidden size={22} className="shrink-0 text-petrol" />
         </Link>
-      )}
-
-      {shown && (
-        <section aria-labelledby="test">
-          <h2 id="test" className="display text-[1.6rem] leading-tight sm:text-[1.8rem]">
-            {tx.testTitle}
-          </h2>
-          <p className="mt-2 max-w-[68ch] leading-relaxed text-ink-soft">{tx.testIntro(testResetMinutes() || 60)}</p>
-          <ul className="mt-6 grid gap-4 md:grid-cols-3">
-            {TEST_ACCOUNTS.map((t) => {
-              const Icon = TEST_ICON[t.username] ?? Store;
-              return (
-                <li key={t.username} className="flex flex-col rounded-xl border border-line bg-paper p-5">
-                  <div className="flex items-center gap-3">
-                    <IconDisc size={40}>
-                      <Icon size={19} />
-                    </IconDisc>
-                    <h3 className="display min-w-0 text-[1.25rem] leading-tight">{t.restaurant}</h3>
-                  </div>
-                  <p className="mt-3 flex-1 text-[0.95rem] leading-relaxed text-ink-soft">{tx.testAbout[t.username]}</p>
-                  <dl className="mt-4 divide-y divide-line rounded-lg bg-surface px-3.5 text-[0.9rem]">
-                    <div className="flex items-baseline justify-between gap-3 py-2">
-                      <dt className="shrink-0 text-ink-soft">{tx.username}</dt>
-                      <dd className="min-w-0 select-all break-all text-right font-semibold">{t.username}</dd>
-                    </div>
-                    <div className="flex items-baseline justify-between gap-3 py-2">
-                      <dt className="shrink-0 text-ink-soft">{tx.password}</dt>
-                      <dd className="min-w-0 select-all break-all text-right font-semibold">{t.password}</dd>
-                    </div>
-                  </dl>
-                  <div className="mt-4">
-                    <TestSignIn username={t.username} password={t.password} name={t.restaurant} />
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
       )}
 
       <section aria-labelledby="scan" className="grid items-center gap-6 rounded-2xl bg-surface p-5 sm:grid-cols-[11rem_minmax(0,1fr)] sm:p-8 lg:grid-cols-[13rem_minmax(0,1fr)]">

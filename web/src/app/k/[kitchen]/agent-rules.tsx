@@ -14,6 +14,7 @@ import { usePortal, weekdaysText } from "./portal";
 import { MemoryBook } from "./memory-book";
 import { MailPanel } from "./mail-panel";
 import { StartOver } from "./start-over";
+import { FreshPanel } from "./fresh-panel";
 import { ACCOUNT_TEXT } from "./account.text";
 import { DevicePanel, MandateForm } from "../_account/forms";
 import { mandateWords } from "./rules";
@@ -40,6 +41,7 @@ export function AgentRules() {
   return (
     <div className="mt-6 space-y-10 sm:mt-8 sm:space-y-12">
       <PageHeader title={tx.title} lead={tx.intro(kitchen.agentName, kitchen.name, until)} />
+      {own && account?.free && <FreshPanel />}
 
       <section aria-labelledby="may" className="space-y-4">
         <h2 id="may" className="sr-only">

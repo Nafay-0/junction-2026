@@ -53,6 +53,14 @@ export function TryEverything() {
     setStaged((s) => ({ ...s, [row.id]: r.data.staged }));
     void load();
   }
+  async function addSample() {
+    if (busy) return;
+    setBusy("sample");
+    const r = await api("POST", `/ui-api/kitchens/${encodeURIComponent(kitchen.slug)}/demo`, { action: "sample" });
+    setBusy(undefined);
+    if (!r.ok) return setError(r.error.message);
+    void load();
+  }
   async function copy(key: string, text: string) {
     try {
       await navigator.clipboard.writeText(text);
@@ -126,12 +134,35 @@ export function TryEverything() {
                         {busy === row.id ? tx.settingUp : tx.setUp}
                       </Button>
                     ) : (
-                      <p className="text-[0.88rem] leading-snug text-ink-soft">{row.setup!.why === "not_demo" ? tx.notDemo : tx.needsRecurring}</p>
+                      row.setup!.why === "not_demo" ? <p className="text-[0.88rem] leading-snug text-ink-soft">{tx.notDemo}</p> : fx.sample ? <p className="text-[0.88rem] leading-snug text-ink-soft">{tx.needsRecurring}</p> : null
                     )}
                     {result && <p role="status" className="text-[0.88rem] leading-snug text-ink">{result.summary}</p>}
                   </div>
                 )}
-                {row.needs === "history" && <p className="pl-11 text-[0.88rem] leading-snug text-ink-soft">{tx.needsHistory}</p>}
+                {(row.needs === "history" || row.setup?.why === "no_recurring" || (row.id === "offer" && !fx.sample)) && !fx.sample && (
+                  <div className="flex flex-wrap items-center gap-2.5 pl-11">
+                    <Button kind="secondary" size="sm" busy={busy === "sample"} disabled={!!busy} onClick={() => void addSample()}>
+                      {busy !== "sample" && <Sparkles aria-hidden size={15} />}
+                      {busy === "sample" ? tx.addingSample : tx.addSample}
+                    </Button>
+                    {row.needs === "history" && <p className="text-[0.88rem] leading-snug text-ink-soft">{tx.needsHistory}</p>}
+                  </div>
+                )}
+                {fx.noLimit && (row.id === "signoff" || row.id === "widen" || row.id === "refusal") && (
+                  <div className="space-y-1 pl-11">
+                    <p className="text-[0.88rem] leading-snug text-ink-soft">{tx.freeNoLimit}</p>
+                    <p className="flex flex-wrap gap-x-4">
+                      {row.id !== "refusal" && (
+                        <Link href={`${base}/agent#fresh`} className="inline-flex min-h-11 items-center font-semibold text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol">
+                          {tx.giveLimit}
+                        </Link>
+                      )}
+                      <Link href="/k" className="inline-flex min-h-11 items-center font-semibold text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol">
+                        {tx.withRules}
+                      </Link>
+                    </p>
+                  </div>
+                )}
                 {say.length > 0 && (
                   <div className="space-y-1.5 pl-11">
                     <p className="text-[0.8rem] font-medium uppercase tracking-wide text-ink-faint">{tx.say}</p>
