@@ -118,14 +118,19 @@ async function offerOne(rt: Runtime, s: State, session: AgentSession, k: Awaited
   const requestId = input.requestId ?? (await rt.dock.openRequest(session, { text: `Backups for ${p.name}` })).requestId;
   const subs = await w.substitutesFor(rt, k, session, requestId, p, { productId: p.id, name: p.name, family: p.category, source: "order", date: l.deliveryDate, amount: Math.round(l.quantity * p.packSize * 100) / 100, unit: p.unit, ...(input.orderId ? { orderId: input.orderId } : {}) }, usual);
   const byId = new Map((await rt.catalog.searchProducts({ ids: subs.ranked.map((r) => r.productId), limit: 20 })).map((x) => [x.id, x]));
-  const alts: BackupAlternative[] = backupCandidates(record, subs.ranked, (id) => (byId.get(id) ? deliveryRecordOf(byId.get(id)!, warn) : undefined));
+  const ranked: BackupAlternative[] = backupCandidates(record, subs.ranked, (id) => (byId.get(id) ? deliveryRecordOf(byId.get(id)!, warn) : undefined));
   // The gate's preview of each, as it would decide the backup ordered in this order's place.
-  for (const a of alts) {
+  for (const a of ranked) {
     const offer: LiveOffer | undefined = subs.offers.get(a.productId);
     if (!offer) continue;
-    const d = await rt.dock.previewDecision(session, requestId, [{ productId: a.productId, quantity: a.tradeOff.packs, substituteFor: p.id }], [offer]).catch(() => undefined);
+    // The product it replaces lends its price from this order's own line, so the gate checks the price increase too.
+    const reference: LiveOffer[] = l.unitPriceCents ? [{ productId: p.id, unitPriceCents: l.unitPriceCents, availablePacks: 0, deliveryDate: l.deliveryDate }] : [];
+    const d = await rt.dock.previewDecision(session, requestId, [{ productId: a.productId, quantity: a.tradeOff.packs, substituteFor: p.id }], [offer, ...reference]).catch(() => undefined);
     if (d) a.gate = { outcome: d.outcome, reasons: d.reasons.filter((x) => !x.startsWith("Sent to ")) };
   }
+  // Verified: only what the gate would accept (alone or with a sign-off); what it would refuse is never offered.
+  const ranks = ["best", "better", "good"] as const;
+  const alts = ranked.filter((a) => a.gate?.outcome !== "reject").map((a, i) => ({ ...a, rank: ranks[i] }));
   const b: Backup = {
     backupId: newId("bk"),
     orgId: session.mandate.issuer.orgId,
@@ -219,7 +224,8 @@ export async function useBackup(rt: Runtime, finding: import("../watch/service")
     used: { at, findingId: finding.findingId, staged: finding.staged, ...(placed.requestId ? { requestId: placed.requestId } : {}), ...(placed.order ? { orderId: placed.order.orderId, status: placed.order.status, totalCents: placed.order.totalCents, ...(placed.order.approval ? { approver: `${placed.order.approval.approver.name}` } : {}) } : {}), ...(placed.refused ? { refused: placed.refused } : {}) },
   };
   save(s, used);
-  w.decideFinding(rt, finding, { at, by: `the agent (the backup ${b.chosen.by} lined up)`, via: "backup", action: placed.order ? (placed.order.status === "committed" ? "ordered_alone" : placed.order.status === "pending_approval" ? "sent_for_sign_off" : "refused") : "refused", productId: b.chosen.productId, ...w.findingOutcome(placed) });
+  // Refused by the gate after all (the mandate or a price changed since): the finding stays open and is asked as usual.
+  if (placed.order && placed.order.status !== "rejected") w.decideFinding(rt, finding, { at, by: `the agent (the backup ${b.chosen.by} lined up)`, via: "backup", action: placed.order ? (placed.order.status === "committed" ? "ordered_alone" : placed.order.status === "pending_approval" ? "sent_for_sign_off" : "refused") : "refused", productId: b.chosen.productId, ...w.findingOutcome(placed) });
   ledger(rt, {
     actor: `agent:${session.agentId}`,
     ...(placed.requestId ? { requestId: placed.requestId } : {}),

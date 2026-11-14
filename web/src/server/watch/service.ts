@@ -389,7 +389,9 @@ export async function substitutesFor(rt: Runtime, k: WatchKitchen, session: Agen
   }
   // The family at large, with the same diet claims (master data): what the search's words did not reach.
   for (const p of await rt.catalog.searchProducts({ category: original.category, attributes: claims, ...(forbidden.length ? { forbiddenAllergens: forbidden } : {}), limit: 30 }).catch(() => [] as Product[])) {
-    if (p.id !== original.id && !candidates.has(p.id)) candidates.set(p.id, { product: p, ...(p.attributes.filter(isMaterialAttribute).join() === original.attributes.filter(isMaterialAttribute).join() ? {} : { label: "variant" as const }) });
+    // Not judged: only the same kind by its words counts as close (a cucumber is no butternut squash, though both are vegetables).
+    const sameWords = kindWords(original).toLowerCase().split(/\s+/).filter((w) => w.length > 3).some((w) => p.name.toLowerCase().includes(w));
+    if (p.id !== original.id && !candidates.has(p.id)) candidates.set(p.id, { product: p, label: !sameWords ? ("standin" as const) : p.attributes.filter(isMaterialAttribute).join() === original.attributes.filter(isMaterialAttribute).join() ? ("exact" as const) : ("variant" as const) });
   }
   // One live call for the closest few: the map's first, then the search's matches before its stand-ins.
   const close = (c: SubstituteCandidate) => (c.label === "exact" ? 0 : c.label === "variant" ? 2 : c.label ? 3 : likeForLike(original, c.product) ? 1 : 2);

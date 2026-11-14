@@ -12,7 +12,11 @@ import { setAutoRenew, watchForOrg } from "@/server/watch/service";
  * person only, recorded with their name (the same choice the conversation and set_auto_renew make).
  */
 export async function GET(req: Request, ctx: RouteContext<"/ui-api/kitchens/[kitchen]/watch">) {
-  return portalRoute(req, ctx.params, async (k) => Response.json(await watchForOrg(await getRuntime(), k.info.orgId), noStore));
+  return portalRoute(req, ctx.params, async (k) => {
+    const rt = await getRuntime();
+    const { backupsForOrg } = await import("@/server/reliability/service");
+    return Response.json({ ...(await watchForOrg(rt, k.info.orgId)), backups: await backupsForOrg(rt, k.info.orgId) }, noStore);
+  });
 }
 
 export async function POST(req: Request, ctx: RouteContext<"/ui-api/kitchens/[kitchen]/watch">) {
