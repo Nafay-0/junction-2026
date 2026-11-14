@@ -401,7 +401,8 @@ export async function changeMenu(slug: KitchenRef, planId: string, words: string
   const p = before.record;
   // The dish a "… instead" replaces: a refused one, else the one whose defining ingredient cannot be had.
   const target = before.view.totals.missing.find((m) => m.defining)?.dishId;
-  const edits = changeEditsOf(words, p, target ? { target } : {});
+  const missingLines = before.view.totals.missing.filter((m) => m.lineId && m.code !== "refused_dish").map((m) => m.lineId!);
+  const edits = changeEditsOf(words, p, { ...(target ? { target } : {}), missing: missingLines });
   const t = MENU_SAY_TEXT[lang];
   if (!edits.length) {
     const { checksOf } = await import("./scenarios");
@@ -419,7 +420,9 @@ export async function changeMenu(slug: KitchenRef, planId: string, words: string
   // An event plan's ways out are worked out again for the changed plan (no model call), so a yes acts on this plan.
   const { scenarios } = await kit(slug);
   if (scenarios.cached(planId)) await scenarios.event(kitchen, p.text, by, { planId }).catch(() => undefined);
-  const what = edits.map((e) => (e.op === "replaceDish" ? t.changedDish(e.name, dishL(p.draft.dishes.find((d) => d.id === e.dishId) ?? { name: "the dish" }, lang)) : e.op === "rules" ? t.changedRules([...(e.requiredClaims ?? []).map((c) => t.claim[c] ?? c), ...(e.forbiddenAllergens ?? []).map((x) => t.noAllergen(t.allergen[x] ?? x))].join(", ")) : e.op === "covers" ? t.changedCovers(e.covers) : e.op === "ingredient" ? t.changedIngredient(e.name) : e.op === "dropDish" ? t.changedDrop(dishL(p.draft.dishes.find((d) => d.id === e.dishId)!, lang)) : "")).filter(Boolean);
+  const left = edits.filter((e): e is Extract<typeof e, { op: "strike" }> => e.op === "strike" && e.struck);
+  const leftNames = left.map((e) => before.view.lines.find((l) => l.lineId === e.lineId)?.name).filter((x): x is string => !!x);
+  const what = (leftNames.length ? [t.leftOutNow(list(leftNames.map(lower), lang))] : []).concat(edits.filter((e) => e.op !== "strike").map((e) => (e.op === "replaceDish" ? t.changedDish(e.name, dishL(p.draft.dishes.find((d) => d.id === e.dishId) ?? { name: "the dish" }, lang)) : e.op === "rules" ? t.changedRules([...(e.requiredClaims ?? []).map((c) => t.claim[c] ?? c), ...(e.forbiddenAllergens ?? []).map((x) => t.noAllergen(t.allergen[x] ?? x))].join(", ")) : e.op === "covers" ? t.changedCovers(e.covers) : e.op === "ingredient" ? t.changedIngredient(e.name) : e.op === "dropDish" ? t.changedDrop(dishL(p.draft.dishes.find((d) => d.id === e.dishId)!, lang)) : ""))).filter(Boolean);
   const checks = checksOf(after.view);
   const lines = changed.length ? t.changedLines(changed.length) : t.nothingElse;
   const refused = checks.refusedDish ? ` ${t.refused(checks.refusedDish.name, "", t.allergen[checks.refusedDish.allergen] ?? checks.refusedDish.allergen, checks.refusedDish.rule.text)}` : "";
@@ -433,7 +436,7 @@ export async function changeMenu(slug: KitchenRef, planId: string, words: string
 
 
 /** The buyer's words as the planner's edits on this plan (plain code): a constraint, the portions, a swap, a dish dropped. */
-export function changeEditsOf(words: string, p: Pick<import("./service").PlanRecord, "settings" | "specs" | "draft"> & Partial<Pick<import("./service").PlanRecord, "refused" | "instead">>, opts: { target?: string } = {}): import("./service").PlanEdit[] {
+export function changeEditsOf(words: string, p: Pick<import("./service").PlanRecord, "settings" | "specs" | "draft"> & Partial<Pick<import("./service").PlanRecord, "refused" | "instead">>, opts: { target?: string; missing?: string[] } = {}): import("./service").PlanEdit[] {
   const edits: import("./service").PlanEdit[] = [];
   // A dish offered instead of a refused one, named ("the chicken strips"): it takes the refused dish's place in this plan.
   const refusedId = p.refused?.[0]?.dishId;
@@ -477,6 +480,10 @@ export function changeEditsOf(words: string, p: Pick<import("./service").PlanRec
     if (target) edits.push({ op: "onHand", lineId: target, onHand: null }, { op: "strike", lineId: target, struck: false });
   }
   if (partialAnswerOf(words)) edits.push({ op: "acceptPartial" });
+  // "Plan it without that ingredient", "leave them out": every ingredient the plan cannot cover is taken off, by the buyer.
+  if (/\bwithout (that|the|those|these|it|them|anything)\b|\bleave (it|that|them|those) out\b|\bleaving out\b|\bilman (sitä|niitä|tätä)\b|\bjätä (se|ne) pois\b|\butan (den|dem|det)\b/i.test(words) && opts.missing?.length) {
+    for (const lineId of [...new Set(opts.missing)]) edits.push({ op: "strike", lineId, struck: true });
+  }
   return edits;
 }
 

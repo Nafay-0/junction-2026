@@ -124,6 +124,18 @@ describe("the café's meatballs: a plan that is not the dish says so, and is not
     expect(g.say).toMatch(/That is 2 of the 5 ingredients, not the whole dish\./);
   });
 
+  it("'plan it without those' takes off what cannot be covered, said, and the plan is then complete as decided", async () => {
+    const { service, kaari } = await setup({ meatballs: MEATBALLS });
+    const cafe = outsideMenuKitchen({ mandate: { ...kaari.mandate, allowedCategories: kaari.mandate.allowedCategories.filter((x) => /^(milk|cream|butter|yoghurt|quark|cat_10|cat_22)/.test(x)) }, agentId: kaari.agentId, door: "menu" }, undefined, MENU_NOW);
+    const { record, view } = await service.plan(cafe, "meatballs", "Owner");
+    const missing = view.totals.missing.map((m) => m.lineId!);
+    const edits = changeEditsOf("plan it without those", record, { missing });
+    expect(edits).toEqual(missing.map((lineId) => ({ op: "strike", lineId, struck: true })));
+    const { view: v } = await service.edit(cafe, record.planId, edits, "Owner");
+    expect(v.totals.complete).toBe(true);
+    expect(v.totals.coverage.filter((c) => c.code === "struck_by_buyer").map((c) => c.ingredient).sort()).toEqual(["Minced meat", "Onion", "Potato"]);
+  });
+
   it("a correction in words moves an ingredient between groups: 'we have potatoes', 'we're out of salt'", async () => {
     const { service, kaari } = await setup({ meatballs: MEATBALLS });
     const { record } = await service.plan(kaari, "meatballs", "chef");

@@ -657,6 +657,22 @@ export function createPlanService(deps: PlanDeps) {
       const room = dock.liveAllowance.remaining(agentKeyOf(s.mandate.issuer.orgId, s.agentId)).newProductsLeft;
       await price(p, s, more.slice(0, Math.min(10, room)));
     }
+    // A line whose only products cannot show a kitchen rule is met (no allergen data under "always lactose-free"): a
+    // wider search for one that can, priced, before the line is called not covered.
+    const held = computePlan(input(p, k, 0)).lines.filter((l) => l.doubts.some((d) => d.kind === "allergen_unknown" && !d.accepted)).map((l) => l.lineId);
+    if (held.length) {
+      const diet = withRequestRules(k.diet, p.draft);
+      const found = await Promise.all(held.map(async (id) => ({ id, set: await findCandidates(catalog, { ...p.specs.find((x) => x.lineId === id)!.ingredient, avoid: [] }, diet, allowed, 16) })));
+      const ids: string[] = [];
+      for (const { id, set } of found) {
+        const ok = set.candidates.filter((c) => c.safety.verdict === "ok" && !(p.candidates[id]?.candidates ?? []).some((x) => x.product.id === c.product.id));
+        if (!ok.length) continue;
+        p.candidates[id] = { ...(p.candidates[id] ?? { rejected: [], searched: [] }), candidates: [...ok.slice(0, 4), ...(p.candidates[id]?.candidates ?? [])] };
+        ids.push(...ok.slice(0, 2).map((c) => c.product.id));
+      }
+      const room = dock.liveAllowance.remaining(agentKeyOf(s.mandate.issuer.orgId, s.agentId)).newProductsLeft;
+      if (ids.length) await price(p, s, ids.slice(0, Math.min(10, room)));
+    }
     p.timings.totalMs = Date.now() - t0;
     p.pending = true;
     await store.save(p);

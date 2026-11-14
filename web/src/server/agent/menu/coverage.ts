@@ -152,7 +152,8 @@ export function completeness(dishes: readonly DraftDish[], specs: readonly LineS
       coverage.push({ ...base, lineId: spec?.lineId ?? null, need, ...c });
     }
   }
-  const covered = coverage.filter((c) => c.status !== "not_covered").length;
-  const missing = coverage.filter((c) => c.status === "not_covered");
+  // What the buyer took off themselves is decided, not missing: listed with its code, not counted against the dish.
+  const covered = coverage.filter((c) => c.status !== "not_covered" || c.code === "struck_by_buyer").length;
+  const missing = coverage.filter((c) => c.status === "not_covered" && c.code !== "struck_by_buyer");
   return { coverage, complete: missing.length === 0 && coverage.length > 0, ingredients: coverage.length, covered, missing, definingMissing: missing.some((c) => c.defining) };
 }
