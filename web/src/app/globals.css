@@ -650,7 +650,8 @@
 @keyframes tl-draw { from { transform: scaleY(0); } }
 @keyframes tl-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgb(192 224 33 / 0.55); } 50% { box-shadow: 0 0 0 7px rgb(192 224 33 / 0); } }
 .tl-in { animation: tl-in 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-.tl-sheen { background: linear-gradient(90deg, currentColor 0%, currentColor 40%, rgb(255 255 255 / 0.9) 50%, currentColor 60%, currentColor 100%); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: tl-sheen 2.4s linear infinite; }
+/* The working line: the text keeps its colour; only the glyph fill is the gradient, a lighter tint of that colour moving through. */
+.tl-sheen { background: linear-gradient(90deg, currentColor 0%, currentColor 40%, color-mix(in oklab, currentColor 35%, transparent) 50%, currentColor 60%, currentColor 100%); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; animation: tl-sheen 2.4s linear infinite; }
 .tl-draw { transform-origin: top; animation: tl-draw 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .tl-pulse { animation: tl-pulse 1.6s ease-in-out infinite; }
-@media (prefers-reduced-motion: reduce) { .tl-in, .tl-draw, .tl-pulse, .tl-sheen { animation: none !important; } .tl-sheen { color: inherit; background: none; } }
+@media (prefers-reduced-motion: reduce) { .tl-in, .tl-draw, .tl-pulse, .tl-sheen { animation: none !important; } .tl-sheen { -webkit-text-fill-color: currentColor; background: none; } }
