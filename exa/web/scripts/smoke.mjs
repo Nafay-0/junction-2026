@@ -6,7 +6,7 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogle } from "@ai-sdk/google";
 import { z } from "zod";
 // Plain TypeScript with no runtime imports: Node strips the types when it loads them.
-import { MODELS } from "../src/lib/agent/models.ts";
+import { MODELS, MODE_MODEL } from "../src/lib/agent/models.ts";
 import { MODEL_JOBS, modelOptions } from "../src/lib/agent/options.ts";
 
 process.loadEnvFile(new URL("../../.env.local", import.meta.url));
@@ -117,10 +117,12 @@ if (which === "all" || which === "options") {
   const runs = [];
   for (const info of MODELS.filter((m) => !only || m.id === only)) {
     const model = info.provider === "claude" ? aws(info.id) : google(info.id);
-    for (const job of MODEL_JOBS) {
-      const providerOptions = modelOptions(info, job);
+    // A model that stands behind a mode is sent every step of the effort dial as the agent; the others only the first.
+    const dial = Object.values(MODE_MODEL).includes(info.id) ? [1, 2, 3, 4] : [1];
+    for (const [job, effort] of MODEL_JOBS.flatMap((j) => (j === "agent" ? dial.map((e) => [j, e]) : [[j, 1]]))) {
+      const providerOptions = modelOptions(info, job, effort);
       runs.push(
-        timed(`${info.id} as ${job} ${JSON.stringify(providerOptions)}`, async () => {
+        timed(`${info.id} as ${job}${job === "agent" ? ` at effort ${effort}` : ""} ${JSON.stringify(providerOptions)}`, async () => {
           if (job === "extraction") {
             const r = await generateText({ model, providerOptions, output: Output.object({ schema: z.object({ city: z.string(), country: z.string() }) }), prompt: "Espoo is a city in Finland. Extract the city and the country." });
             return `${JSON.stringify(r.output)} reasoning=${r.usage.outputTokenDetails?.reasoningTokens ?? 0}`;

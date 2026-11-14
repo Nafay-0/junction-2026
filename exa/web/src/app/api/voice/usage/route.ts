@@ -24,9 +24,10 @@ export async function POST(req: Request) {
     userId: user.id,
     conversationId: validConversationId(body.conversationId) ? body.conversationId : undefined,
     client: clientKindOf(req),
+    model: { id: model.id, label: model.label },
+    kind: "voice",
     stats: {
-      modelId: model.id,
-      modelLabel: model.label,
+      mode: "voice",
       startedAt: count(body.startedAt) || Date.now(),
       durationMs: count(body.durationMs),
       steps: count(body.turns),

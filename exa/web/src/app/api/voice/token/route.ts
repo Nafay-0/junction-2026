@@ -1,11 +1,14 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 import { RunMeter } from "@/lib/agent/meter";
-import { getModel } from "@/lib/agent/models";
+import { researchDepth } from "@/lib/agent/depth";
+import { cleanEffort, pickMode } from "@/lib/agent/modes";
+import { modelForMode } from "@/lib/agent/models";
 import { languageModel, workerModelFor } from "@/lib/agent/providers";
 import { createTools } from "@/lib/agent/tools";
 import type { ToolContext } from "@/lib/agent/tools/context";
 import { requireUser } from "@/lib/auth/server";
 import { clientKindOf } from "@/lib/client-kind";
+import { capFor, capRefusal } from "@/lib/db/cap";
 import { conversationOrigin, validConversationId } from "@/lib/db/conversations";
 import { readOnlyReason } from "@/lib/db/origin";
 import { LIVE_MODEL, TRANSCRIBE_MODEL, type VoiceGrant } from "@/lib/voice/models";
@@ -19,7 +22,9 @@ const TOKEN_MINUTES = 30;
 type TokenRequest = {
   purpose?: "live" | "dictation";
   conversationId?: string;
-  modelId?: string;
+  /** The mode and effort chosen for typed conversations: they decide how far the tools go in a call, not the voice. */
+  mode?: string;
+  effort?: number;
   place?: string;
   country?: string;
   timeZone?: string;
@@ -38,8 +43,13 @@ type TokenRequest = {
 export async function POST(req: Request) {
   const user = await requireUser();
   if (user instanceof Response) return user;
+  // An account at its usage limit can neither start a call nor run a tool in one.
+  if ((await capFor(user)).reached) return capRefusal();
   const apiKey = process.env.GOOGLE_API_KEY;
-  if (!apiKey) return Response.json({ error: "Voice needs a Gemini key (GOOGLE_API_KEY) on the server." }, { status: 503 });
+  if (!apiKey) {
+    console.error("[voice] GOOGLE_API_KEY is not set: voice cannot start.");
+    return Response.json({ error: "Voice is not set up on the server yet. Ask your administrator." }, { status: 503 });
+  }
 
   const body = ((await req.json().catch(() => ({}))) ?? {}) as TokenRequest;
   const client = clientKindOf(req);
@@ -67,13 +77,15 @@ export async function POST(req: Request) {
       if (origin && origin !== client) return Response.json({ error: readOnlyReason(origin) }, { status: 409 });
     }
 
-    const info = getModel(body.modelId);
+    const mode = pickMode(body.mode, user.modes);
+    const effort = cleanEffort(body.effort);
+    const info = modelForMode(mode);
     const timeZone = safeTimeZone(body.timeZone);
     const now = new Date();
     const today = now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone });
     const time = `${now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone })} (${timeZone})`;
     const coords = validCoords(body.coords);
-    const ctx: ToolContext = { meter: new RunMeter(), model: info, worker: workerModelFor(info), today, client };
+    const ctx: ToolContext = { meter: new RunMeter(), mode, effort, depth: researchDepth(mode, effort), model: info, worker: workerModelFor(info), today, client };
     const tools = createTools(ctx, languageModel(info));
     const browser = client === "desktop" && typeof body.browser?.status === "string" ? { status: body.browser.status.slice(0, 20), url: String(body.browser.url ?? "").slice(0, 300), title: String(body.browser.title ?? "").slice(0, 120), control: String(body.browser.control ?? "").slice(0, 10) } : undefined;
 

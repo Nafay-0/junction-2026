@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { and, eq, gt, lt } from "drizzle-orm";
+import { MODE_IDS, cleanModes } from "@/lib/agent/modes";
 import type { ClientKind } from "@/lib/client-kind";
 import { database } from "@/lib/db/client";
 import { sessions, users } from "@/lib/db/schema";
@@ -41,7 +42,18 @@ export async function userForToken(token: string | undefined): Promise<SessionUs
   const db = database();
   const now = new Date();
   const [row] = await db
-    .select({ sessionId: sessions.id, seenAt: sessions.lastSeenAt, id: users.id, email: users.email, name: users.name, role: users.role, status: users.status })
+    .select({
+      sessionId: sessions.id,
+      seenAt: sessions.lastSeenAt,
+      id: users.id,
+      email: users.email,
+      name: users.name,
+      role: users.role,
+      status: users.status,
+      modes: users.modes,
+      showUsage: users.showUsage,
+      usageCapUsd: users.usageCapUsd,
+    })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.userId))
     .where(and(eq(sessions.tokenHash, hashOf(token)), gt(sessions.expiresAt, now)))
@@ -55,7 +67,17 @@ export async function userForToken(token: string | undefined): Promise<SessionUs
     await db.update(sessions).set({ lastSeenAt: now, expiresAt: later() }).where(eq(sessions.id, row.sessionId));
     await db.update(users).set({ lastSeenAt: now }).where(eq(users.id, row.id));
   }
-  return { id: row.id, email: row.email, name: row.name, role: row.role };
+  return { id: row.id, email: row.email, name: row.name, role: row.role, ...permissionsOf(row) };
+}
+
+/**
+ * What an account may do, from its row: the modes it may use, whether it sees usage, and its
+ * spending limit. The admin has every mode, always sees usage and has no limit, whatever is stored.
+ */
+export function permissionsOf(row: { role: string; modes: unknown; showUsage: boolean; usageCapUsd: number | null }): Pick<SessionUser, "modes" | "showUsage" | "usageCapUsd"> {
+  if (row.role === "admin") return { modes: [...MODE_IDS], showUsage: true, usageCapUsd: null };
+  const cap = typeof row.usageCapUsd === "number" && row.usageCapUsd > 0 ? row.usageCapUsd : null;
+  return { modes: cleanModes(row.modes), showUsage: row.showUsage === true, usageCapUsd: cap };
 }
 
 export async function endSession(token: string | undefined): Promise<void> {

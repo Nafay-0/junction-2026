@@ -1,7 +1,8 @@
 import type { LanguageModelUsage } from "ai";
 import type { DecisionMeter } from "@/lib/decisions/client";
 import type { ExaMeter } from "@/lib/exa/client";
-import { costOf, EMPTY_USAGE, type RunStats, type TokenUsage } from "./models";
+import { costOf } from "./models";
+import { EMPTY_USAGE, type RunStats, type TokenUsage } from "./stats";
 
 /** Convert the AI SDK's usage object to our flat shape. */
 export function toTokenUsage(usage: LanguageModelUsage | undefined): TokenUsage {
@@ -26,8 +27,8 @@ export function addUsage(a: TokenUsage, b: TokenUsage): TokenUsage {
 }
 
 /**
- * Tracks what one user request costs: Exa calls, plus the tokens spent by helper model
- * calls and sub-agents that run inside tools. The main agent's own usage comes from the
+ * Tracks what one user request costs: Exa calls, the decision model, plus the tokens spent by
+ * helper model calls and sub-agents that run inside tools. The main agent's own usage comes from the
  * AI SDK when the stream finishes and is added in the route.
  */
 export class RunMeter implements ExaMeter, DecisionMeter {
@@ -36,6 +37,8 @@ export class RunMeter implements ExaMeter, DecisionMeter {
   exaCalls = { search: 0, contents: 0, agent: 0, answer: 0 };
   workerUsage: TokenUsage = { ...EMPTY_USAGE };
   workerCostUsd = 0;
+  decisionCostUsd = 0;
+  decisionCalls = 0;
   contextTrimmed = false;
 
   addExa(costUsd: number, kind: "search" | "contents" | "agent" | "answer") {
@@ -50,18 +53,20 @@ export class RunMeter implements ExaMeter, DecisionMeter {
     this.workerCostUsd += costOf(modelId, flat);
   }
 
-  /** Record a request to the decision model. It writes nothing, so only its input is counted. */
-  addJudge(inputTokens: number, costUsd: number) {
-    this.workerUsage = addUsage(this.workerUsage, { ...EMPTY_USAGE, inputTokens });
-    this.workerCostUsd += costUsd;
+  /** Record a request to the decision model. It writes nothing, so only its input costs anything. */
+  addJudge(_inputTokens: number, costUsd: number) {
+    this.decisionCostUsd += costUsd;
+    this.decisionCalls += 1;
   }
 
-  snapshot(): Pick<RunStats, "exaCostUsd" | "exaCalls" | "workerUsage" | "workerCostUsd" | "contextTrimmed"> {
+  snapshot(): Pick<RunStats, "exaCostUsd" | "exaCalls" | "workerUsage" | "workerCostUsd" | "decisionCostUsd" | "decisionCalls" | "contextTrimmed"> {
     return {
       exaCostUsd: round(this.exaCostUsd),
       exaCalls: { ...this.exaCalls },
       workerUsage: { ...this.workerUsage },
       workerCostUsd: round(this.workerCostUsd),
+      decisionCostUsd: this.decisionCalls ? round(this.decisionCostUsd) : undefined,
+      decisionCalls: this.decisionCalls || undefined,
       contextTrimmed: this.contextTrimmed || undefined,
     };
   }

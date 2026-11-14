@@ -2,17 +2,17 @@
 
 import * as React from "react";
 import type { FileUIPart } from "ai";
-import { ArrowUp, AudioLines, Check, ChevronDown, ImagePlus, LoaderCircle, LocateFixed, MapPin, Mic, Square, X } from "lucide-react";
+import { ArrowUp, AudioLines, ImagePlus, LoaderCircle, LocateFixed, MapPin, Mic, Square, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useClientValue } from "@/lib/use-client";
 import { voiceSupported } from "@/lib/voice/audio";
 import { startDictation, type Dictation } from "@/lib/voice/dictation";
-import { MODELS, getModel, type ModelInfo } from "@/lib/agent/models";
+import type { Effort, ModeId } from "@/lib/agent/modes";
 import { formatAccuracy, type LocateResult } from "@/lib/location";
 import type { ExactLocation } from "@/lib/widgets/types";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ModePicker } from "./mode-picker";
 
 const MAX_IMAGES = 3;
 const MAX_EDGE = 1568;
@@ -36,8 +36,11 @@ export function Composer({
   onSend,
   onStop,
   busy,
-  modelId,
-  onModelChange,
+  mode,
+  effort,
+  modes,
+  onModeChange,
+  onEffortChange,
   where,
   autoFocus,
   onTalk,
@@ -51,8 +54,12 @@ export function Composer({
   onStop: () => void;
   /** True while the agent is working. */
   busy: boolean;
-  modelId: string;
-  onModelChange: (id: string) => void;
+  /** The mode the work is done in, how far the effort dial is turned, and the modes this account may use. */
+  mode: ModeId;
+  effort: Effort;
+  modes: ModeId[];
+  onModeChange: (mode: ModeId) => void;
+  onEffortChange: (effort: Effort) => void;
   /** Where the user is: an exact position if they shared one, otherwise a place name. */
   where: WhereProps;
   autoFocus?: boolean;
@@ -240,7 +247,7 @@ export function Composer({
           <ImagePlus className="size-[1.1rem]" />
         </button>
 
-        <ModelPicker modelId={modelId} onChange={onModelChange} />
+        <ModePicker mode={mode} effort={effort} modes={modes} onModeChange={onModeChange} onEffortChange={onEffortChange} />
         <PlaceChip {...where} />
 
         <div className="flex-1" />
@@ -305,55 +312,6 @@ export function Composer({
         )}
       </div>
     </form>
-  );
-}
-
-/** "Claude Opus 5.5" is "Opus 5.5" where room is short: the dot beside it already says which family. */
-const shortModel = (label: string) => label.replace(/^Claude\s+/, "").replace(/^Gemini\s+\d+\s+/, "");
-
-function ModelPicker({ modelId, onChange }: { modelId: string; onChange: (id: string) => void }) {
-  const current = getModel(modelId);
-  const groups: Array<[string, ModelInfo[]]> = [
-    ["Claude, on AWS", MODELS.filter((m) => m.provider === "claude")],
-    ["Gemini", MODELS.filter((m) => m.provider === "gemini")],
-  ];
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        className="flex h-9 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[0.8rem] whitespace-nowrap text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-[state=open]:bg-muted data-[state=open]:text-foreground"
-        aria-label={`Choose model. Now: ${current.label}`}
-      >
-        <span className={cn("size-1.5 shrink-0 rounded-full", current.provider === "claude" ? "bg-brass" : "bg-chart-3")} />
-        {/* Never cut off mid-word: the short name in a narrow column, the full one where it fits. */}
-        <span className="@min-[560px]/chat:hidden">{shortModel(current.label)}</span>
-        <span className="hidden @min-[560px]/chat:inline">{current.label}</span>
-        <ChevronDown className="size-3.5 shrink-0 opacity-60" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" side="top" className="w-72">
-        {groups.map(([label, models], g) => (
-          <React.Fragment key={label}>
-            {g > 0 ? <DropdownMenuSeparator /> : null}
-            <DropdownMenuLabel className="text-[0.7rem] font-medium tracking-wide text-subtle uppercase">{label}</DropdownMenuLabel>
-            {models.map((m) => (
-              <DropdownMenuItem key={m.id} onSelect={() => onChange(m.id)} className="flex items-start gap-2.5 py-2">
-                <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center">{m.id === current.id ? <Check className="size-4 text-brand" /> : null}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-baseline justify-between gap-2">
-                    <span className="font-medium">{m.label}</span>
-                    <span className="nums shrink-0 text-[0.7rem] text-subtle">
-                      ${m.price.input} / ${m.price.output}
-                    </span>
-                  </span>
-                  <span className="block text-[0.75rem] leading-snug text-muted-foreground">{m.blurb}</span>
-                </span>
-              </DropdownMenuItem>
-            ))}
-          </React.Fragment>
-        ))}
-        <DropdownMenuSeparator />
-        <p className="px-2 py-1.5 text-[0.7rem] leading-snug text-subtle">Prices are US dollars per million tokens, input / output. You can switch model mid-conversation.</p>
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }
 

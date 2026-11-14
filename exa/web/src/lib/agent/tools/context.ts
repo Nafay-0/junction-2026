@@ -1,7 +1,9 @@
 import "server-only";
 
 import type { LanguageModel } from "ai";
+import type { ResearchDepth } from "../depth";
 import type { RunMeter } from "../meter";
+import type { Effort, ModeId } from "../modes";
 import type { ModelInfo } from "../models";
 import type { ClientKind } from "@/lib/client-kind";
 import type { Source } from "@/lib/widgets/types";
@@ -9,7 +11,12 @@ import type { Source } from "@/lib/widgets/types";
 /** What every tool needs from the request it runs in. */
 export type ToolContext = {
   meter: RunMeter;
-  /** The model the user picked. */
+  /** The mode the user picked and how far the effort dial is turned. */
+  mode: ModeId;
+  effort: Effort;
+  /** How far research goes at this mode and effort: team size, searches, sources, report length. */
+  depth: ResearchDepth;
+  /** The model behind the mode. */
   model: ModelInfo;
   /** The fast model for sub-agents and extraction, same family as `model`. */
   worker: { info: ModelInfo; model: LanguageModel };

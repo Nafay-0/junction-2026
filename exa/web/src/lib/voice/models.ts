@@ -1,7 +1,8 @@
 /**
  * The models behind voice. Shared by the server and the interface: no keys, no imports.
  *
- * Voice runs on Gemini's Live API, whatever model is picked for typed conversations:
+ * Voice runs on Gemini's Live API, whatever mode is picked for typed conversations. The labels
+ * here are for the server's records and the admin; the interface never shows them.
  * - `gemini-3.8-live` holds the spoken conversation: it hears audio, speaks audio, and calls tools.
  * - `gemini-3.5-transcribe-live` turns speech into text as it is spoken, for voice input.
  * Prices are US dollars per million tokens (read 14 Nov 2026). One second of audio is 25 tokens.
@@ -50,5 +51,5 @@ export const ANSWERED_BY_APP = ["requestLocation", "requestUserAction", "browser
 export type VoiceToolEvent =
   | { type: "progress"; output: unknown }
   /** `spent`: what the tool itself cost (Exa calls, sub-agents), for the answer's figures. */
-  | { type: "result"; output: unknown; text: string; spent?: { exaCostUsd?: number; workerCostUsd?: number; exaCalls?: { search: number; contents: number; agent: number; answer: number } } }
+  | { type: "result"; output: unknown; text: string; spent?: { exaCostUsd?: number; workerCostUsd?: number; decisionCostUsd?: number; decisionCalls?: number; exaCalls?: { search: number; contents: number; agent: number; answer: number } } }
   | { type: "error"; error: string };

@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { InferUITools, LanguageModel, UIMessage } from "ai";
-import type { RunStats } from "../models";
+import type { RunStats } from "../stats";
 import { browserActTool, browserCloseTool, browserLookTool, browserOpenTool, browserReadTool, requestUserActionTool } from "./browser";
 import { askUserTool, requestLocationTool, showActionsTool, showComparisonTool, showKeyFactsTool, showWidgetTool, updatePlanTool } from "./compose";
 import type { ToolContext } from "./context";

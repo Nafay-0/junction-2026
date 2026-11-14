@@ -132,20 +132,57 @@ function apiKey(): string {
   return key;
 }
 
+/**
+ * Requests take turns. Exa allows ten searches a second and a hundred content fetches a second
+ * for the whole key, and a research team of twelve asks for far more than that at once. A gate
+ * lets at most `concurrent` requests be in flight and starts at most `perSecond` in any second;
+ * the rest wait in line, in the order they came. One gate serves the whole server, because the
+ * limit is the key's, not the request's.
+ */
+function gate(concurrent: number, perSecond: number) {
+  let inFlight = 0;
+  let nextStart = 0;
+  const line: Array<() => void> = [];
+  return async function turn<T>(run: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+    if (inFlight >= concurrent) await new Promise<void>((resolve) => line.push(resolve));
+    inFlight += 1;
+    try {
+      const now = Date.now();
+      const at = Math.max(now, nextStart);
+      nextStart = at + 1000 / perSecond;
+      if (at > now) await new Promise((resolve) => setTimeout(resolve, at - now));
+      // Whoever asked may have given up while waiting: do not spend a request on them.
+      signal?.throwIfAborted();
+      return await run();
+    } finally {
+      inFlight -= 1;
+      line.shift()?.();
+    }
+  };
+}
+
+/** Kept a little under Exa's limits, so a retry or another server on the same key still has room. */
+const searchTurn = gate(8, 8);
+const contentsTurn = gate(24, 60);
+const noWait = <T,>(run: () => Promise<T>) => run();
+
 async function request<T>(
   path: string,
   init: { method: "GET" | "POST"; body?: unknown; signal?: AbortSignal; timeoutMs?: number },
 ): Promise<T> {
-  const attempt = async (): Promise<Response> => {
-    const timeout = AbortSignal.timeout(init.timeoutMs ?? 30_000);
-    const signal = init.signal ? AbortSignal.any([init.signal, timeout]) : timeout;
-    return fetch(BASE_URL + path, {
-      method: init.method,
-      headers: { "x-api-key": apiKey(), "content-type": "application/json" },
-      body: init.body === undefined ? undefined : JSON.stringify(init.body),
-      signal,
-    });
-  };
+  const turn = path === "/search" || path === "/answer" ? searchTurn : path === "/contents" ? contentsTurn : noWait;
+  const attempt = (): Promise<Response> =>
+    turn(() => {
+      // The clock starts when the request is sent, not while it waits its turn.
+      const timeout = AbortSignal.timeout(init.timeoutMs ?? 30_000);
+      const signal = init.signal ? AbortSignal.any([init.signal, timeout]) : timeout;
+      return fetch(BASE_URL + path, {
+        method: init.method,
+        headers: { "x-api-key": apiKey(), "content-type": "application/json" },
+        body: init.body === undefined ? undefined : JSON.stringify(init.body),
+        signal,
+      });
+    }, init.signal);
 
   let res = await attempt();
   // 429 (rate limit) and 503 (overloaded, not billed) are worth one polite retry.

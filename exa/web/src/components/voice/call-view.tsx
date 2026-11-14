@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { APP_NAME } from "@/lib/brand";
 import type { ButlerMessage } from "@/lib/agent/tools";
 import { spokenSoFar, type CallSnapshot } from "@/lib/voice/live-call";
-import { LIVE_MODEL } from "@/lib/voice/models";
+import { isVoice } from "@/lib/agent/stats";
 import { liveCall } from "@/lib/voice/use-call";
 import { AssistantMessage } from "@/components/butler/message";
 import type { WidgetHandlers } from "@/components/butler/tool-part";
@@ -88,7 +88,7 @@ export function CallView({
 
   // What the agent has put on screen during this call: its answers that carry more than words.
   const shown = React.useMemo(
-    () => messages.filter((m) => m.role === "assistant" && m.metadata?.modelId === LIVE_MODEL.id && (m.metadata?.startedAt ?? 0) >= call.startedAt - 1000 && m.parts.some((p) => p.type.startsWith("tool-"))),
+    () => messages.filter((m) => m.role === "assistant" && isVoice(m.metadata) && (m.metadata?.startedAt ?? 0) >= call.startedAt - 1000 && m.parts.some((p) => p.type.startsWith("tool-"))),
     [messages, call.startedAt],
   );
   // The stone keeps the stage while the agent is only searching or reading: a line that says

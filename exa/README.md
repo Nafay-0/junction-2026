@@ -8,7 +8,7 @@ Dock, the Valio Aimo project, is a separate project in this repo, owned by Nafay
 
 ## The plan, in three steps
 
-1. **Agent with live widgets (built).** Exa is read-only: search, read, structured data. Widgets, sub-agents, parallel tools, a visible plan, clarifying questions, model switching, usage and cost tracking.
+1. **Agent with live widgets (built).** Exa is read-only: search, read, structured data. Widgets, sub-agents, parallel tools, a visible plan, clarifying questions, modes and an effort dial in place of a model picker, usage and cost tracking by kind.
 2. **Live web actions (built, in the desktop app).** The agent acts in a real browser inside the app that the user watches, hands the page over for sign-ins and human checks, asks for approval before anything that commits the user, and never pays.
 3. **Phone and voice (built).** The web version can be installed on a phone (it has a web app manifest and icons). Voice input and live calls work on both web and desktop. More autonomy (Exa Monitors that keep watching) is still to do.
 
@@ -75,7 +75,49 @@ The model can also show a comparison table, key facts, a plan, clarifying questi
 
 **Custom widget.** When none of the fixed widgets fits, the agent composes its own with the `showWidget` tool, block by block: charts (pie, donut, bar, stacked bar, horizontal bar, line, area, scatter, radar), stat tiles, tables, lists and timelines, progress bars, images, callouts and buttons. A button can open a link, copy text, or send a follow-up to the agent, so the widget can continue the task. For something no block can express (a calculator, a custom diagram) there is an `html` block: a self-contained fragment that runs in a sandboxed frame with no network access and the app's colours passed in. Blocks appear as the model writes them. The block shapes are in `web/src/lib/widgets/types.ts` ("Custom widget"), the tool in `web/src/lib/agent/tools/compose.ts`.
 
-Every widget shows its sources. Every answer shows the model, the time, the number of Exa calls and the cost; the top bar adds them up for the conversation.
+Every widget shows its sources. Every answer shows the mode it ran in and the time. An account the admin lets see usage also gets the number of Exa calls and the cost, split by kind, and the bar above the conversation adds them up; the bar also carries the conversation's name.
+
+## Modes and effort
+
+The user does not pick a model. They pick a **mode**, from the quickest to the most capable, and turn an **effort** dial. Both sit in one control in the message box, with an icon per mode (lightning for the quickest, a brain for the ones that think longest).
+
+| Mode | For | Model behind it (server only) |
+|---|---|---|
+| Ultra fast | The quickest answers, everyday tasks | Gemini 4 Hydrogen |
+| Fast | Quick, with more care over the details | Claude Sonnet 5.5 |
+| Smart | Thinks things through; the default | Claude Opus 5.5 |
+| Expert | The deepest reasoning, hard questions | Gemini 4 Carbon |
+
+- **Effort** has four steps: Quick (the default), Balanced, Thorough, Max. On the server a step becomes the model's own thinking setting (`effort` for Claude: low, medium, high, xhigh; `thinkingLevel` for Gemini, where Carbon stops at high). `pnpm smoke options` sends every model behind a mode every step of the dial; all are accepted (14 November).
+- **Nothing in the interface names a model or a thinking setting.** The interface imports `lib/agent/modes.ts` (names, blurbs, the dial) and `lib/agent/stats.ts` (what an answer used), never `lib/agent/models.ts`, where the one table that ties a mode to a model lives. The request carries `mode` and `effort`; the server picks the model; what comes back with an answer names the mode. Conversations saved before modes existed carried model names in their figures: the server exchanges them for the mode on the way out (`lib/db/conversations.ts`). Errors about a missing key say "this mode is not set up", and the detail goes to the server's log.
+- **Voice and sift are not modes.** Live calls, voice input and the decision model run on their own models whatever is picked. The mode and effort still decide how far the tools go when a call runs them.
+- **Which modes an account has is the admin's choice** (see Accounts). The server checks it on every request: a mode the account does not have becomes the best one it has (`pickMode`).
+
+## Research depth
+
+How far research goes follows the mode and the effort dial together (`web/src/lib/agent/depth.ts`). The same table decides the size of the deep research team, how much each sub-agent searches and reads, how long the report is, and how widely the main agent searches on its own.
+
+| Mode | Quick | Balanced | Thorough | Max |
+|---|---|---|---|---|
+| Ultra fast | Standard | Standard | Deep | Deep |
+| Fast | Standard | Deep | Deep | Deeper |
+| Smart | Standard | Deep | Deeper | Exhaustive |
+| Expert | Deep | Deeper | Deeper | Exhaustive |
+
+What each level did in a real run (research and report; the main agent's own steps come on top; measured 14 November):
+
+| Level | Team | Exa searches | Pages checked | Sources kept | Report | Time | Cost |
+|---|---|---|---|---|---|---|---|
+| Standard | 3 | 9 | not counted | 24 | 394 words | 25 s | $0.12 |
+| Deep | 6 | 36 | 234 | 101 | 786 words | 58 s | $0.42 |
+| Deeper | 6, then 3 more | 92 | 681 | 239 | 1,337 words | 130 s | $1.05 |
+| Exhaustive | 12, then 4 more | about 137 | 988 | 480 | 1,745 words | 149 s | about $1.50 |
+
+- **Standard** is what it was before: two to four sub-agents, a 200 to 350 word report, 30 to 60 seconds.
+- **From Deep up**, each search carries two or three wordings, and the decision model checks every page a search returns against the sub-agent's angle before the sub-agent sees it, so the hundreds of pages are filtered, not just counted. Sub-agents read their key pages in full.
+- **Deeper and Exhaustive** run a second round: the main model reads the first round's findings and sends a few more sub-agents to close gaps and settle contradictions (in the Exhaustive test it caught two researchers reporting different figures for the same tax and sent one to settle it).
+- **Limits.** Every level has a time budget; when it runs low the sub-agents are told to write up, and one that is cut short has its findings written from its notes. Exa requests go through a gate (8 searches in flight, 8 starts a second) so a team of twelve stays inside Exa's limit. About two thirds of the cost is Exa.
+- **The main agent** also asks for more results per search and reads more pages at higher levels, and is told to call deep research once and build on its report.
 
 ## Sift: find the ones that fit
 
@@ -89,7 +131,7 @@ Most requests to a butler are "find me one that…": a dinner that is quick, veg
 
 ## Voice
 
-Voice runs on Gemini's Live API, whatever model is picked for typed conversations. It works on the web, on a phone and in the desktop app, in any language, and it is built so that most tasks can be done by talking.
+Voice runs on Gemini's Live API, whatever mode is picked for typed conversations. It works on the web, on a phone and in the desktop app, in any language, and it is built so that most tasks can be done by talking.
 
 **Voice input.** A microphone button in the message box. Tap it and speak: the words appear in the box as they are spoken (the first ones in about a second and a half), and nothing is sent until the user presses Send, so they can read and correct what was heard. It uses `gemini-3.5-transcribe-live`, which sends its best guess while the user is still speaking and the finished sentence when they pause. Escape or a second tap stops it.
 
@@ -139,9 +181,16 @@ Reading, navigating, searching, filling in a form, adding to a basket and refusi
 
 **Report export.** A finished research report has its own copy and download buttons in the card's header. Copy puts markdown and a formatted version on the clipboard, so it pastes with headings, tables and links into a document or an email. Download offers markdown, a self-contained web page, or the print dialog for a PDF; each holds only that report and its numbered sources (`web/src/lib/export.ts`).
 
-**Accounts.** Sign-in is email and password, the same on web and desktop. There are two kinds of account. A user chats and runs tasks, and their conversations and browser sign-ins are theirs alone. The admin has all of that plus `/admin`: an overview (accounts, who was active, conversations, requests, tokens, cost split into model, sub-agents and Exa, day by day, by model and by web or desktop) and the accounts page (add an account, block and unblock, set a new password, delete). There is exactly one admin, named in `ADMIN_EMAIL` and `ADMIN_PASSWORD`; it is created when the server starts and nobody can be made admin through the interface. There is no public sign-up. Passwords are hashed with scrypt; a session is a random token in an httpOnly cookie, stored hashed, checked against the database on every request, so signing out, blocking or deleting takes effect at once.
+**Accounts.** Sign-in is email and password, the same on web and desktop. There are two kinds of account. A user chats and runs tasks, and their conversations and browser sign-ins are theirs alone. The admin has all of that plus `/admin`: an overview (accounts, who was active, conversations, requests, tokens, cost split into LLMs, Exa, voice and decisions, day by day, by mode, by model and by web or desktop) and the accounts page (add an account, block and unblock, set a new password, delete). There is exactly one admin, named in `ADMIN_EMAIL` and `ADMIN_PASSWORD`; it is created when the server starts and nobody can be made admin through the interface. There is no public sign-up. Passwords are hashed with scrypt; a session is a random token in an httpOnly cookie, stored hashed, checked against the database on every request, so signing out, blocking or deleting takes effect at once.
 
-**Saved conversations.** Every conversation is saved to the account in Postgres as it happens, marked with where it was started (web or desktop), and listed in a sidebar on the left (a drawer on phones) that can be closed. Conversations can be reopened, renamed and deleted from either kind of client, and continued only where they were started. Preferences (theme, model, the sidebar, the place) stay in the browser.
+**What an account may do, and see.** On the accounts page the admin sets three things per account, and they take effect on the account's next request:
+- **Modes.** One or more of the four. A new account starts with only the quickest, Ultra fast. The mode picker offers only the account's modes.
+- **Sees usage and cost.** Off for a new account. When it is off, the account sees the mode and the time under each answer and nothing else, and the server does not send the figures at all. When it is on, each answer shows its Exa calls and cost, and the bar above the conversation shows the conversation's total; both open a breakdown by kind: LLMs (the answering model and its helpers), Exa, Voice, Decisions (the checks sift makes). No model is named.
+- **Usage limit.** An amount in US dollars, or none. It is compared with everything the account has used since it was made. Once that reaches the limit, new requests are refused (chat, calls and the tools of a call answer 402), a task that is running stops at its next step with its figures recorded, the message box gives way to a note, and a dialog says why and offers to email the administrator. Raising or removing the limit lets the account carry on ("Check again" in the dialog, or the next page load). The admin has every mode, sees usage and has no limit.
+
+**What the admin sees.** Nothing is hidden on the admin's side. The overview splits spending into the same four kinds, day by day, and lists it by mode and by model. From the accounts page, pressing an account's cost opens that account's usage by kind, by mode and by model.
+
+**Saved conversations.** Every conversation is saved to the account in Postgres as it happens, marked with where it was started (web or desktop), and listed in a sidebar on the left (a drawer on phones) that can be closed. Conversations can be reopened, renamed and deleted from either kind of client, and continued only where they were started. Preferences (theme, mode and effort, the sidebar, the place) stay in the browser.
 
 **Exact location.** When a task depends on where the user is ("near me", "the closest"), the agent shows a card asking to share their location. Accepting triggers the browser's own permission prompt; the position is saved in the browser, named through a reverse lookup (`/api/geo/reverse`, coordinates rounded to about 100 m), sent with later messages, and used by Exa's "near me" search. The map then shows the user's position, each place's distance and directions from where they are. If the browser blocks it or the user says no, the agent carries on with the approximate place or one the user types, and does not ask again. The location button in the message box turns it on and off at any time. Places also show whether they are open right now, worked out in the place's own time zone.
 
@@ -150,12 +199,14 @@ Reading, navigating, searching, filling in a form, adding to a basket and refusi
 - **Stack:** Next.js 16, React 19, Tailwind 4, shadcn/ui, Vercel AI SDK 7, Postgres through Drizzle. One server for web and desktop; the desktop shell is Electron.
 - **Sift:** Gemini's Decisions API (`gemini-decision-1`) called over HTTP from the server, with the same key as the other Gemini models.
 - **Voice:** Gemini's Live API straight from the browser, with short-lived tokens from the server (`@google/genai` on the server only). `gemini-3.8-live` for calls, `gemini-3.5-transcribe-live` for voice input.
-- **Models:** Claude (Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable 5.2) through Claude Platform on AWS (`@ai-sdk/anthropic-aws`) and Gemini (4 Carbon, 4 Hydrogen) through Google AI Studio, switchable per message. Sub-agents and extraction run on the fast model of the same family (Haiku 5.5 or Gemini 4 Hydrogen). The thinking settings differ by family and by model (Gemini 4 rejects the "minimal" level; only Haiku lets Claude's thinking be switched off), so they are decided per model and job in one file, `web/src/lib/agent/options.ts`. Prices are in `web/src/lib/agent/models.ts`; Gemini 4 Carbon's list price doubles on 1 Dec 2026.
+- **Models:** Claude (Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable 5.2) through Claude Platform on AWS (`@ai-sdk/anthropic-aws`) and Gemini (4 Carbon, 4 Hydrogen) through Google AI Studio. Four of them stand behind the four modes (`MODE_MODEL` in `lib/agent/models.ts`); the user switches mode, per message if they like, never model. Sub-agents and extraction run on the fast model of the same family (Haiku 5.5 or Gemini 4 Hydrogen). The thinking settings differ by family and by model (Gemini 4 rejects the "minimal" level; only Haiku lets Claude's thinking be switched off), so they are decided per model and job in one file, `web/src/lib/agent/options.ts`. Prices are in `web/src/lib/agent/models.ts`; Gemini 4 Carbon's list price doubles on 1 Dec 2026.
 - **Why the AI SDK and not Pydantic AI or a hand-written loop:** see `research_notes/Agent runtime choice/`. Short version: one codebase, and each tool's output type is the widget's input type.
 - **Code map** (all under `web/src`):
   - `lib/widgets/types.ts`: the contract between tools and widgets.
   - `lib/exa/client.ts`: the Exa client (search, contents, agent runs), with cost tracking and a 5-minute cache.
   - `lib/decisions/client.ts`: the client for Gemini's Decisions API (many closed questions about one input, answered with probabilities).
+  - `lib/agent/modes.ts`: the modes and the effort dial, as the interface knows them. `lib/agent/models.ts`: the models and which one stands behind each mode (server side). `lib/agent/options.ts`: what each model is sent at each step of the dial. `lib/agent/depth.ts`: how far research goes at each mode and effort. `lib/agent/stats.ts`: what an answer used, by kind.
+  - `lib/db/cap.ts`, `lib/usage-cap.ts`, `lib/usage-cap-client.ts`, `app/api/usage`: the usage limit, on the server and as the interface learns of it.
   - `lib/agent/tools/`: the 25 tools. `lib/agent/instructions.ts`: the system prompt.
   - `app/api/chat/route.ts`: the agent loop, usage metadata, context trimming, prompt caching.
   - `lib/client-kind.ts`: web or desktop, and the header that tells the server which is asking.
@@ -164,7 +215,7 @@ Reading, navigating, searching, filling in a form, adding to a basket and refusi
   - `desktop/` (beside `src`): the desktop app. `main.cjs` is the window and the wiring, `relay.cjs` the bridge between the engine and the browser view, `preload.cjs` everything the interface may ask of the app, `offline.html` the page shown when the server cannot be reached, `build.mjs`, `run.mjs` and `pack.mjs` build, start and package it.
   - `lib/db/`: the schema (`schema.ts`), the connection, migrations at start, conversations, usage and the admin's figures. `drizzle/`: the SQL migrations. `lib/auth/`: passwords, sessions, the cookie, `requireUser()` and `requireAdmin()`. `proxy.ts`: sends signed-out visitors to `/login`.
   - `app/login`, `app/admin`, `components/account/`, `components/admin/`: the sign-in screen, the account menu and the admin's pages.
-  - `components/butler/`: the chat interface. `components/widgets/`: the widgets. `WIDGETS.md` at the app root is the guide for building one.
+  - `components/butler/`: the chat interface (`mode-picker.tsx` the mode and effort control, `usage.tsx` what an answer and a conversation used, `cap.tsx` the usage limit's dialog and note, `top-bar.tsx` the bar with the conversation's name). `components/widgets/`: the widgets. `WIDGETS.md` at the app root is the guide for building one.
 
 ## Research
 

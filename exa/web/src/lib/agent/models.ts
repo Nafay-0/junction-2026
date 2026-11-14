@@ -1,11 +1,18 @@
 /**
- * The models a user can pick, with prices. Shared by the server and the browser:
- * nothing here reads environment variables or imports a provider.
+ * The models behind the modes, with prices. Server only in practice: the interface knows modes
+ * (`modes.ts`) and never imports this file, so no model's name reaches the browser.
+ * Nothing here reads environment variables or imports a provider, and there are no runtime
+ * imports, so the smoke script can load the file directly.
  *
  * Prices are US dollars per million tokens at list price (read 14 Nov 2026).
  * Claude runs through Claude Platform on AWS, where the bill comes through AWS, so treat the
  * dollar figures as an estimate.
  */
+
+import type { ModeId } from "./modes";
+import type { TokenUsage } from "./stats";
+
+export type { RunStats, TokenUsage } from "./stats";
 
 export type ModelProvider = "claude" | "gemini";
 
@@ -65,7 +72,28 @@ export const MODELS: ModelInfo[] = [
   },
 ];
 
-export const DEFAULT_MODEL_ID = "claude-opus-5-5";
+/**
+ * Which model answers in each mode, from the quickest to the most capable. This is the only place
+ * that ties a mode to a model. Voice and the decision model are not modes and are not chosen here.
+ */
+export const MODE_MODEL: Record<ModeId, string> = {
+  ultrafast: "gemini-4-hydrogen",
+  fast: "claude-sonnet-5-5",
+  smart: "claude-opus-5-5",
+  expert: "gemini-4-carbon",
+};
+
+export const DEFAULT_MODEL_ID = MODE_MODEL.smart;
+
+/** The model behind a mode. */
+export function modelForMode(mode: ModeId): ModelInfo {
+  return getModel(MODE_MODEL[mode]);
+}
+
+/** The mode a model stands behind, if any: for figures recorded before modes existed. */
+export function modeOfModel(modelId: string | undefined | null): ModeId | undefined {
+  return (Object.keys(MODE_MODEL) as ModeId[]).find((mode) => MODE_MODEL[mode] === modelId);
+}
 
 /** The model sub-agents and small extraction jobs run on, per provider family: fast and cheap. */
 export const WORKER_MODEL: Record<ModelProvider, string> = {
@@ -77,16 +105,6 @@ export function getModel(id: string | undefined | null): ModelInfo {
   return MODELS.find((m) => m.id === id) ?? MODELS.find((m) => m.id === DEFAULT_MODEL_ID)!;
 }
 
-export type TokenUsage = {
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadTokens: number;
-  cacheWriteTokens: number;
-  reasoningTokens: number;
-};
-
-export const EMPTY_USAGE: TokenUsage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0 };
-
 /** Dollar cost of a model call. `inputTokens` is the total input including cached tokens. */
 export function costOf(modelId: string, usage: TokenUsage): number {
   const { price } = getModel(modelId);
@@ -96,24 +114,3 @@ export function costOf(modelId: string, usage: TokenUsage): number {
     1_000_000
   );
 }
-
-/** What each assistant message reports about itself. Sent as message metadata and shown in the UI. */
-export type RunStats = {
-  modelId: string;
-  modelLabel: string;
-  startedAt: number;
-  durationMs?: number;
-  steps?: number;
-  usage?: TokenUsage;
-  /** Model cost for the main agent, in US dollars. */
-  llmCostUsd?: number;
-  /** Tokens and cost of sub-agents and helper calls made inside tools. */
-  workerUsage?: TokenUsage;
-  workerCostUsd?: number;
-  /** Exa spend and call counts. */
-  exaCostUsd?: number;
-  exaCalls?: { search: number; contents: number; agent: number; answer: number };
-  /** Set when older tool results were trimmed to keep the conversation inside the context window. */
-  contextTrimmed?: boolean;
-  finishReason?: string;
-};

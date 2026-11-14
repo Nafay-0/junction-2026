@@ -1,11 +1,12 @@
 // End-to-end test of accounts, sign-in and saved conversations, over HTTP against a running server.
 // Needs the dev server and its database. Run: pnpm test:auth [port]
 //
-// It signs in as the admin from exa/.env.local, makes two throwaway accounts, and checks what must
-// hold: wrong passwords are refused, each account sees only its own conversations, a conversation
-// can only be added to from the kind of client it was started in, the admin's routes are the
-// admin's alone, and blocking, a new password and deleting take effect at once. It removes the
-// accounts it made. No password is ever printed.
+// It signs in as the admin from exa/.env.local, makes a few throwaway accounts, and checks what
+// must hold: wrong passwords are refused, each account sees only its own conversations, a
+// conversation can only be added to from the kind of client it was started in, the admin's routes
+// are the admin's alone, the admin decides each account's modes, whether it sees usage and how
+// much it may spend, and blocking, a new password and deleting take effect at once. It removes
+// the accounts it made. No password is ever printed.
 import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import path from "node:path";
@@ -148,6 +149,64 @@ try {
   r = await admin.patch(`/api/admin/users/${ada.id}`, { role: "admin" });
   check("nobody can be made admin through the API", r.status === 400, say(r));
 
+  /* What an account may use: its modes, whether it sees usage, and its spending limit. */
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const ALL_MODES = ["ultrafast", "fast", "smart", "expert"];
+  const inList = async (id) => ((await admin.get("/api/admin/users")).json?.accounts ?? []).find((a) => a.id === id);
+  const meOf = async (client) => (await client.get("/api/auth/me")).json?.user;
+  check(
+    "a new account starts with only the quickest mode, usage hidden and no limit",
+    listed.every((a) => same(a.modes, ["ultrafast"]) && a.showUsage === false && a.usageCapUsd === null),
+    JSON.stringify(listed.map((a) => [a.modes, a.showUsage, a.usageCapUsd])),
+  );
+  let who = await meOf(adaWeb);
+  check("and is told so when it asks who it is", same(who?.modes, ["ultrafast"]) && who?.showUsage === false && who?.usageCapUsd === null, JSON.stringify(who));
+  who = await meOf(admin);
+  check("the admin has every mode, sees usage and has no limit", same(who?.modes, ALL_MODES) && who?.showUsage === true && who?.usageCapUsd === null, JSON.stringify(who));
+
+  r = await admin.patch(`/api/admin/users/${ada.id}`, { modes: ["expert", "ultrafast"], showUsage: true });
+  check("the admin switches modes on and lets an account see its usage", r.status === 200, say(r));
+  who = await meOf(adaWeb);
+  check("which holds from the account's next request, without signing it out, modes in order", same(who?.modes, ["ultrafast", "expert"]) && who?.showUsage === true, JSON.stringify(who));
+  r = await admin.patch(`/api/admin/users/${ada.id}`, { modes: [] });
+  const r6 = await admin.patch(`/api/admin/users/${ada.id}`, { modes: ["fast", "telepathy"] });
+  check("an account always keeps at least one mode, and only real ones", r.status === 400 && r6.status === 400 && same((await inList(ada.id))?.modes, ["ultrafast", "expert"]), `${say(r)} | ${say(r6)}`);
+  r = await admin.patch(`/api/admin/users/${ada.id}`, { modes: ["fast"], showUsage: false });
+  who = await meOf(adaWeb);
+  check("modes can be taken away again, the quickest included", r.status === 200 && same(who?.modes, ["fast"]) && who?.showUsage === false, JSON.stringify(who));
+
+  r = await admin.patch(`/api/admin/users/${ada.id}`, { usageCapUsd: 10 });
+  const capped = await inList(ada.id);
+  who = await meOf(adaWeb);
+  check("the admin sets a usage limit", r.status === 200 && capped?.usageCapUsd === 10 && typeof capped?.costUsd === "number", say(r));
+  check("and the account is told its limit", who?.usageCapUsd === 10, JSON.stringify(who));
+  const bad = [];
+  for (const amount of [0, -5, 200000, "ten"]) bad.push((await admin.patch(`/api/admin/users/${ada.id}`, { usageCapUsd: amount })).status);
+  check("a limit is a positive amount, within reason", bad.every((status) => status === 400) && (await inList(ada.id))?.usageCapUsd === 10, bad.join(" "));
+  r = await admin.patch(`/api/admin/users/${ada.id}`, { usageCapUsd: null });
+  who = await meOf(adaWeb);
+  check("the admin removes the limit", r.status === 200 && (await inList(ada.id))?.usageCapUsd === null && who?.usageCapUsd === null, say(r));
+
+  const cy = { name: "Cy Test", email: `cy-${tag}@beryl.test`, password: secret(), modes: ["smart", "ultrafast"], showUsage: true, usageCapUsd: 2.5 };
+  r = await admin.post("/api/admin/users", cy);
+  if (r.json?.id) made.push(r.json.id);
+  const cyListed = await inList(r.json?.id);
+  check("an account can be added with its modes, usage in view and a limit", r.status === 201 && same(cyListed?.modes, ["ultrafast", "smart"]) && cyListed?.showUsage === true && cyListed?.usageCapUsd === 2.5, JSON.stringify(cyListed ?? say(r)));
+  r = await admin.post("/api/admin/users", { name: "No Modes", email: `none-${tag}@beryl.test`, password: secret(), modes: [] });
+  check("but not with no mode at all", r.status === 400, say(r));
+
+  r = await adaWeb.get(`/api/admin/users/${bo.id}/usage`);
+  check("one account's usage is the admin's to see, nobody else's", r.status === 403, say(r));
+  r = await admin.get(`/api/admin/users/${ada.id}/usage?days=30`);
+  const kinds = ["llm", "exa", "voice", "decisions"];
+  check(
+    "the admin sees it by kind of cost, by mode and by model",
+    r.status === 200 && r.json?.days === 30 && kinds.every((k) => typeof r.json?.period?.[k] === "number" && typeof r.json?.allTime?.[k] === "number") && Array.isArray(r.json?.byMode) && Array.isArray(r.json?.byModel),
+    say(r),
+  );
+  r = await admin.get(`/api/admin/users/00000000-0000-4000-8000-000000000000/usage`);
+  check("and an account that is not there has none", r.status === 404, say(r));
+
   /* Conversations belong to one account. */
   const first = `conv-${tag}-one`;
   r = await adaWeb.put(`/api/conversations/${first}`, { title: "Ada's first", modelLabel: "Test model", messages: [message("u1", "user", "hello"), message("a1", "assistant", "hi Ada")] });
@@ -224,6 +283,10 @@ try {
   check("or delete themselves", r.status === 400, say(r));
   r = await admin.patch(`/api/admin/users/${me}`, { password: secret() });
   check("and the admin's password is not changed through the API", r.status === 400, say(r));
+  const fixed = [];
+  for (const change of [{ modes: ["ultrafast"] }, { showUsage: false }, { usageCapUsd: 5 }]) fixed.push((await admin.patch(`/api/admin/users/${me}`, change)).status);
+  who = await meOf(admin);
+  check("nor are the admin's modes, usage or limit: they are fixed", fixed.every((status) => status === 400) && same(who?.modes, ALL_MODES) && who?.showUsage === true && who?.usageCapUsd === null, fixed.join(" "));
 
   /* Too many wrong passwords. */
   const guessed = `guess-${tag}@beryl.test`;
@@ -235,6 +298,11 @@ try {
   r = await admin.get("/api/admin/overview");
   const before = r.json?.conversations?.total;
   check("the admin's overview answers", r.status === 200 && typeof before === "number" && Array.isArray(r.json?.daily) && r.json.daily.length === 14, say(r));
+  check(
+    "with the cost by kind (LLMs, Exa, voice, decisions), by mode and by model",
+    kinds.every((k) => typeof r.json?.period?.[k] === "number" && typeof r.json?.allTime?.[k] === "number" && typeof r.json?.daily?.[0]?.[k] === "number") && Array.isArray(r.json?.byMode) && Array.isArray(r.json?.byModel),
+    JSON.stringify(r.json?.period),
+  );
   const mine = (await adaAgain.get("/api/conversations")).json?.conversations?.length ?? 0;
   r = await admin.del(`/api/admin/users/${ada.id}`);
   check("the admin deletes an account", r.status === 200, say(r));

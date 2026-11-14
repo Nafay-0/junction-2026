@@ -4,8 +4,8 @@
  * nowhere else.
  *
  * Three jobs:
- * - "agent": the main agent, and the writer of a research report. Light thinking, with a
- *   readable summary so the interface can show it.
+ * - "agent": the main agent, and the writer of a research report. How hard it thinks is the
+ *   user's effort dial (1 to 4), with a readable summary so the interface can show it.
  * - "worker": a research sub-agent. Light thinking: it still has to decide what to search.
  * - "extraction": text in, structured data out. Thinking off where the model allows it.
  *
@@ -17,13 +17,18 @@
  * - Gemini 4 Hydrogen: thinkingLevel "low" to "xhigh". "minimal" is rejected.
  * - Both Gemini 4 models: thinkingBudget 0 switches thinking off.
  *
- * `pnpm smoke options` sends one small request per model and job with exactly these options.
+ * The effort dial maps to Claude's `effort` (low, medium, high, xhigh) and Gemini's thinkingLevel
+ * (the same four names; Carbon has no "xhigh", so its top two steps are both "high").
+ *
+ * `pnpm smoke options` sends one small request per model and job with exactly these options,
+ * and one per step of the dial for each model that stands behind a mode.
  * Run it after changing this file or adding a model.
  *
  * No runtime imports, so the smoke script can load this file directly.
  */
 
 import type { generateText } from "ai";
+import type { Effort } from "./modes";
 import type { ModelInfo } from "./models";
 
 export type ProviderOptions = NonNullable<Parameters<typeof generateText>[0]["providerOptions"]>;
@@ -32,14 +37,18 @@ export type ModelJob = "agent" | "worker" | "extraction";
 
 export const MODEL_JOBS: ModelJob[] = ["agent", "worker", "extraction"];
 
-function claudeOptions(id: string, job: ModelJob): ProviderOptions {
+/** The effort dial, as each family names it. 1 is what answers start quickest with. */
+const CLAUDE_EFFORT: Record<Effort, "low" | "medium" | "high" | "xhigh"> = { 1: "low", 2: "medium", 3: "high", 4: "xhigh" };
+const GEMINI_LEVEL: Record<Effort, "low" | "medium" | "high" | "xhigh"> = { 1: "low", 2: "medium", 3: "high", 4: "xhigh" };
+
+function claudeOptions(id: string, job: ModelJob, effort: Effort): ProviderOptions {
   switch (job) {
     case "agent":
       return {
         anthropic: {
           thinking: { type: "adaptive", display: "summarized" },
-          // Low effort so answers start quickly; Fable is picked for hard questions, so it gets more room.
-          effort: id === "claude-fable-5-2" ? "medium" : "low",
+          // The dial sets the depth. Fable stands behind no mode; it keeps the room it had.
+          effort: id === "claude-fable-5-2" ? "medium" : CLAUDE_EFFORT[effort],
         },
       };
     case "worker":
@@ -51,10 +60,13 @@ function claudeOptions(id: string, job: ModelJob): ProviderOptions {
   }
 }
 
-function geminiOptions(_id: string, job: ModelJob): ProviderOptions {
+function geminiOptions(id: string, job: ModelJob, effort: Effort): ProviderOptions {
   switch (job) {
-    case "agent":
-      return { google: { thinkingConfig: { thinkingLevel: "low", includeThoughts: true } } };
+    case "agent": {
+      // Carbon stops at "high": the top of the dial is the same as the step below it there.
+      const level = id === "gemini-4-carbon" && effort === 4 ? "high" : GEMINI_LEVEL[effort];
+      return { google: { thinkingConfig: { thinkingLevel: level, includeThoughts: true } } };
+    }
     case "worker":
       // "low" is the lowest level either Gemini 4 model accepts.
       return { google: { thinkingConfig: { thinkingLevel: "low" } } };
@@ -63,6 +75,7 @@ function geminiOptions(_id: string, job: ModelJob): ProviderOptions {
   }
 }
 
-export function modelOptions(info: Pick<ModelInfo, "id" | "provider">, job: ModelJob): ProviderOptions {
-  return info.provider === "claude" ? claudeOptions(info.id, job) : geminiOptions(info.id, job);
+/** What a model is sent for a job. `effort` is the user's dial and only changes the "agent" job. */
+export function modelOptions(info: Pick<ModelInfo, "id" | "provider">, job: ModelJob, effort: Effort = 1): ProviderOptions {
+  return info.provider === "claude" ? claudeOptions(info.id, job, effort) : geminiOptions(info.id, job, effort);
 }

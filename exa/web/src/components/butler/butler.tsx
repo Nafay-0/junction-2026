@@ -6,7 +6,7 @@ import { DefaultChatTransport, type FileUIPart } from "ai";
 import { ArrowDown, AudioLines, Eye, MessagesSquare, Plus, RotateCw } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { DEFAULT_MODEL_ID, getModel } from "@/lib/agent/models";
+import { DEFAULT_EFFORT, cleanEffort, getMode, pickMode, type Effort, type ModeId } from "@/lib/agent/modes";
 import type { ButlerMessage } from "@/lib/agent/tools";
 import { useUser } from "@/lib/auth/client";
 import { APP_NAME } from "@/lib/brand";
@@ -26,15 +26,18 @@ import {
 } from "@/lib/conversations";
 import { describe, locate, useExactLocation, type LocateResult } from "@/lib/location";
 import { useClientValue, useMediaQuery, useStored } from "@/lib/use-client";
+import { USAGE_CAP_SENTENCE } from "@/lib/usage-cap";
+import { isCapRefusal, markCapReached, refreshCap, useCap } from "@/lib/usage-cap-client";
 import type { ClarifyAnswer, ExactLocation, LocationAnswer } from "@/lib/widgets/types";
 import { liveCall, useCall } from "@/lib/voice/use-call";
 import { BrowserWorkspace, useBrowserLayout } from "@/components/browser/workspace";
 import { CallBar, CallView } from "@/components/voice/call-view";
+import { CapDialog, CapNote } from "./cap";
 import { Composer } from "./composer";
 import { AssistantMessage, UserMessage, WorkingLine } from "./message";
 import { Sidebar } from "./sidebar";
 import type { WidgetHandlers } from "./tool-part";
-import { TopBar, sumStats } from "./top-bar";
+import { TopBar, sumUsage } from "./top-bar";
 import { Welcome } from "./welcome";
 
 /** A sensible default place from the browser's time zone, until the user names one or shares their position. */
@@ -68,11 +71,12 @@ type Coords = Pick<ExactLocation, "lat" | "lng" | "accuracyM" | "label" | "count
 
 /**
  * What each request sends along with the messages. Kept outside React so the transport, which is
- * created once, always reads the latest choice: switching model mid-conversation just works,
+ * created once, always reads the latest choice: switching mode mid-conversation just works,
  * including when the chat resumes on its own after the user answers a question or shares a location.
  */
-const live: { modelId: string; place: string; timeZone: string; coords?: Coords; locationDeclined: boolean } = {
-  modelId: DEFAULT_MODEL_ID,
+const live: { mode: ModeId; effort: Effort; place: string; timeZone: string; coords?: Coords; locationDeclined: boolean } = {
+  mode: "smart",
+  effort: DEFAULT_EFFORT,
   place: "",
   timeZone: "Europe/Helsinki",
   locationDeclined: false,
@@ -90,7 +94,9 @@ const transport = new DefaultChatTransport<ButlerMessage>({
   // Which kind of client is asking decides what the agent can do: only the desktop app has a live browser.
   headers: () => ({ [CLIENT_HEADER]: clientKind() }),
   body: () => ({
-    modelId: live.modelId,
+    // The mode and the effort, never a model: the server decides what stands behind them.
+    mode: live.mode,
+    effort: live.effort,
     place: live.place,
     timeZone: live.timeZone,
     country: ZONES[live.timeZone]?.[1],
@@ -266,6 +272,7 @@ export function Butler() {
             onBrowserGone={giveRoomBack}
             handoverRef={handover}
             startedIn={startedIn}
+            title={conversations.find((c) => c.id === active.id)?.title}
           />
         ) : null}
         </BrowserWorkspace>
@@ -284,7 +291,10 @@ function ChatView({
   onBrowserGone,
   handoverRef,
   startedIn,
+  title,
 }: {
+  /** The conversation's name, once it has been saved under one. */
+  title?: string;
   conversationId: string;
   initialMessages: ButlerMessage[];
   sidebarOpen: boolean;
@@ -299,23 +309,29 @@ function ChatView({
   /** Where the browser pane finds this conversation's way of answering a hand-over. */
   handoverRef: React.RefObject<((answer: HandoverAnswer, toolCallId?: string) => void) | null>;
 }) {
-  const [modelId, setModelId] = useStored("hovi.model", DEFAULT_MODEL_ID);
+  const user = useUser();
+  const [storedMode, setStoredMode] = useStored("hovi.mode", "");
+  const [storedEffort, setStoredEffort] = useStored("hovi.effort", String(DEFAULT_EFFORT));
+  // The mode chosen last, if the account still has it; otherwise the best it has, up to Smart.
+  const mode = pickMode(storedMode || "smart", user.modes);
+  const effort = cleanEffort(storedEffort);
   const [place, setPlace] = useStored("hovi.place", "");
   const timeZone = useClientValue(browserTimeZone, "Europe/Helsinki");
   const { location, declined, save: saveLocation, setDeclined } = useExactLocation();
   const approximatePlace = place || defaultPlace(timeZone);
-  const modelLabel = getModel(modelId).label;
+  const modeLabel = getMode(mode).label;
   const desktop = useDesktopApp();
   const here: ClientKind = desktop ? "desktop" : "web";
   const readOnly = startedIn !== undefined && startedIn !== here;
 
   React.useEffect(() => {
-    live.modelId = getModel(modelId).id;
+    live.mode = mode;
+    live.effort = effort;
     live.place = approximatePlace;
     live.timeZone = timeZone;
     live.coords = location ? { lat: location.lat, lng: location.lng, accuracyM: location.accuracyM, label: location.label, country: location.country } : undefined;
     live.locationDeclined = declined;
-  }, [modelId, approximatePlace, timeZone, location, declined]);
+  }, [mode, effort, approximatePlace, timeZone, location, declined]);
 
   const [seed] = React.useState(() => liveMessages.get(conversationId) ?? initialMessages);
   /** The user pressed Stop (or left): what arrives after that is kept, but does not start the agent again. */
@@ -380,12 +396,12 @@ function ChatView({
   const latest = React.useRef(messages);
   const dirty = React.useRef(false);
   const lastSaved = React.useRef(0);
-  const labelRef = React.useRef(modelLabel);
+  const labelRef = React.useRef(modeLabel);
   const stopRef = React.useRef(stop);
   React.useEffect(() => {
-    labelRef.current = modelLabel;
+    labelRef.current = modeLabel;
     stopRef.current = stop;
-  }, [modelLabel, stop]);
+  }, [modeLabel, stop]);
   React.useEffect(() => {
     latest.current = messages;
     liveMessages.set(conversationId, messages);
@@ -532,15 +548,17 @@ function ChatView({
     setCallView("live");
     void liveCall.start({
       conversationId,
-      context: () => ({ modelId: live.modelId, place: live.place, timeZone: live.timeZone, country: ZONES[live.timeZone]?.[1], coords: live.coords, locationDeclined: live.locationDeclined, browser: browserNote() }),
+      context: () => ({ mode: live.mode, effort: live.effort, place: live.place, timeZone: live.timeZone, country: ZONES[live.timeZone]?.[1], coords: live.coords, locationDeclined: live.locationDeclined, browser: browserNote() }),
       getMessages: () => latest.current,
       setMessages: (update) => setMessages(update),
       locate: locateNow,
     });
   }, [conversationId, stop, clearError, setMessages, locateNow]);
-  // A call that could not start, or ended by itself, says why.
+  // A call that could not start, or ended by itself, says why. The usage limit has its own dialog.
   React.useEffect(() => {
-    if (call.problem) toast.error(call.problem);
+    if (!call.problem) return;
+    if (call.problem === USAGE_CAP_SENTENCE) markCapReached();
+    else toast.error(call.problem);
   }, [call.problem]);
 
   /* The live browser. The pane's own buttons and the cards in the chat end up in the same place. */
@@ -613,14 +631,59 @@ function ChatView({
   // Read-only: the cards show what was asked and answered, and none of them talks back.
   const shown = React.useMemo<WidgetHandlers>(() => (readOnly ? { approximatePlace, savedLocation: location } : handlers), [readOnly, handlers, approximatePlace, location]);
 
-  const stats = React.useMemo(() => sumStats(messages.filter((m) => m.role === "assistant").map((m) => m.metadata)), [messages]);
+  const usage = React.useMemo(() => sumUsage(messages.filter((m) => m.role === "assistant").map((m) => m.metadata)), [messages]);
+
+  /* The usage limit. The server refuses and stops; here the interface finds out, stops asking, and says why once.
+     Only an account that has a limit ever asks where it stands. */
+  const cap = useCap();
+  const capped = cap.reached;
+  // The dialog opens by itself each time the limit is reached, and closes if the admin raises it.
+  const [capOpen, setCapOpen] = React.useState(capped);
+  const [wasCapped, setWasCapped] = React.useState(capped);
+  if (wasCapped !== capped) {
+    setWasCapped(capped);
+    setCapOpen(capped);
+  }
+  const hasCap = user.usageCapUsd !== null;
+  React.useEffect(() => {
+    if (hasCap) void refreshCap();
+  }, [hasCap]);
+  // A request the server refused for the limit is not an error to retry.
+  const refused = Boolean(error && isCapRefusal(error));
+  React.useEffect(() => {
+    if (!refused) return;
+    halted.current = true;
+    stopBrowserTools();
+    markCapReached();
+    clearError();
+  }, [refused, clearError]);
+  // An answer the limit stopped half-way says so in its figures. After any answer, a capped account checks where it stands.
+  const wasBusy = React.useRef(false);
+  React.useEffect(() => {
+    if (busy) {
+      wasBusy.current = true;
+      return;
+    }
+    if (!wasBusy.current) return;
+    wasBusy.current = false;
+    if (latest.current.at(-1)?.metadata?.capReached) {
+      halted.current = true;
+      stopBrowserTools();
+      markCapReached();
+    } else if (hasCap) void refreshCap();
+  }, [busy, hasCap]);
+  // Reaching the limit ends a call too.
+  React.useEffect(() => {
+    if (capped && liveCall.conversationId === conversationId) liveCall.end();
+  }, [capped, conversationId]);
   const last = messages.at(-1);
   const waitingForFirstToken = status === "submitted" && last?.role === "user";
 
   return (
     <>
       <LayoutBridge target={openBrowser} onBeside={onBrowserBeside} onGone={onBrowserGone} />
-      <TopBar stats={stats} onNewChat={onNewTask} showNew={!empty} sidebarOpen={sidebarOpen} onToggleSidebar={onToggleSidebar} />
+      <TopBar usage={usage} title={empty ? undefined : title} onNewChat={onNewTask} showNew={!empty} sidebarOpen={sidebarOpen} onToggleSidebar={onToggleSidebar} />
+      <CapDialog open={capOpen} onOpenChange={setCapOpen} />
 
       {calling ? (
         <div className="flex shrink-0 justify-center px-3 pb-1">
@@ -671,7 +734,7 @@ function ChatView({
               ),
             )}
             {waitingForFirstToken ? <WorkingLine /> : null}
-            {error && !readOnly ? (
+            {error && !readOnly && !refused ? (
               <div className="flex animate-rise items-center justify-between gap-3 rounded-xl border border-destructive/25 bg-destructive/5 px-4 py-3 text-[0.85rem]">
                 <span className="text-destructive">{readable(error)}</span>
                 <button
@@ -710,6 +773,8 @@ function ChatView({
           {calling ? <CallBar call={call} onShowCall={() => setCallView("live")} /> : null}
           {readOnly ? (
             <ReadOnlyNote startedIn={startedIn ?? "web"} onNewTask={onNewTask} />
+          ) : capped ? (
+            <CapNote onDetails={() => setCapOpen(true)} />
           ) : (
           <Composer
             onSend={send}
@@ -722,8 +787,11 @@ function ChatView({
               void stop();
             }}
             busy={busy}
-            modelId={modelId}
-            onModelChange={setModelId}
+            mode={mode}
+            effort={effort}
+            modes={user.modes}
+            onModeChange={setStoredMode}
+            onEffortChange={(next) => setStoredEffort(String(next))}
             where={{
               place: approximatePlace,
               onPlaceChange: setPlace,

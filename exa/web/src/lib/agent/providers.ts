@@ -3,6 +3,7 @@ import "server-only";
 import { createAnthropicAws } from "@ai-sdk/anthropic-aws";
 import { createGoogle } from "@ai-sdk/google";
 import type { LanguageModel } from "ai";
+import type { Effort } from "./modes";
 import { getModel, WORKER_MODEL, type ModelInfo } from "./models";
 import { modelOptions, type ProviderOptions } from "./options";
 
@@ -14,6 +15,19 @@ import { modelOptions, type ProviderOptions } from "./options";
 
 export type { ProviderOptions };
 
+/**
+ * A key is missing on the server. The message names the provider for the server's log; what the
+ * user is told (`MODE_UNAVAILABLE`) does not.
+ */
+export class ProviderNotConfigured extends Error {
+  constructor(detail: string) {
+    super(`A model provider is not configured (${detail})`);
+    this.name = "ProviderNotConfigured";
+  }
+}
+
+export const MODE_UNAVAILABLE = "This mode is not set up on the server yet. Pick another mode, or ask your administrator.";
+
 let claude: ReturnType<typeof createAnthropicAws> | undefined;
 let gemini: ReturnType<typeof createGoogle> | undefined;
 
@@ -23,7 +37,7 @@ function claudeProvider() {
     const workspaceId = process.env.ANTHROPIC_AWS_WORKSPACE_ID;
     const apiKey = process.env.ANTHROPIC_AWS_API_KEY;
     if (!region || !workspaceId || !apiKey) {
-      throw new Error("Claude is not configured. Set AWS_REGION, ANTHROPIC_AWS_WORKSPACE_ID and ANTHROPIC_AWS_API_KEY in exa/.env.local.");
+      throw new ProviderNotConfigured("claude: set AWS_REGION, ANTHROPIC_AWS_WORKSPACE_ID and ANTHROPIC_AWS_API_KEY in exa/.env.local.");
     }
     claude = createAnthropicAws({ region, workspaceId, apiKey });
   }
@@ -33,7 +47,7 @@ function claudeProvider() {
 function geminiProvider() {
   if (!gemini) {
     const apiKey = process.env.GOOGLE_API_KEY;
-    if (!apiKey) throw new Error("Gemini is not configured. Set GOOGLE_API_KEY in exa/.env.local.");
+    if (!apiKey) throw new ProviderNotConfigured("gemini: set GOOGLE_API_KEY in exa/.env.local.");
     gemini = createGoogle({ apiKey });
   }
   return gemini;
@@ -49,8 +63,8 @@ export function workerModelFor(info: ModelInfo): { info: ModelInfo; model: Langu
   return { info: worker, model: languageModel(worker) };
 }
 
-/** The main agent, and the writer of a research report. See `options.ts` for what each model is sent. */
-export const agentProviderOptions = (info: ModelInfo): ProviderOptions => modelOptions(info, "agent");
+/** The main agent, and the writer of a research report, at the user's effort. See `options.ts` for what each model is sent. */
+export const agentProviderOptions = (info: ModelInfo, effort: Effort = 1): ProviderOptions => modelOptions(info, "agent", effort);
 
 /** Research sub-agents: light thinking, since they still have to decide what to search and read. */
 export const workerProviderOptions = (info: ModelInfo): ProviderOptions => modelOptions(info, "worker");

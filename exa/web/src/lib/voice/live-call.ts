@@ -5,6 +5,7 @@ import { browserState, requestHandover, runBrowserTool, stopBrowserTools } from 
 import { BROWSER_TOOL_NAMES, type BrowserStepData, type BrowserToolName, type HandoverAnswer } from "@/lib/browser/protocol";
 import { CLIENT_HEADER, clientKind } from "@/lib/client-kind";
 import type { LocateResult } from "@/lib/location";
+import { USAGE_CAP_CODE, USAGE_CAP_SENTENCE } from "@/lib/usage-cap";
 import type { LocationAnswer } from "@/lib/widgets/types";
 import { Microphone, Speaker, microphoneProblem } from "./audio";
 import { LiveSocket, requestVoiceGrant, type FunctionCall } from "./live-socket";
@@ -545,7 +546,7 @@ export class LiveCall {
       id = newId();
       this.assistantId = id;
       if (!this.userId) this.answeredFirst = true;
-      const made = { id, role: "assistant", parts: change([]), metadata: { modelId: LIVE_MODEL.id, modelLabel: LIVE_MODEL.label, startedAt: Date.now() } } as ButlerMessage;
+      const made = { id, role: "assistant", parts: change([]), metadata: { mode: "voice", startedAt: Date.now() } } as ButlerMessage;
       host.setMessages((messages) => [...messages, made]);
       return;
     }
@@ -673,8 +674,12 @@ export class LiveCall {
       body: JSON.stringify({ ...host.context(), name: call.name, input: call.args, toolCallId: call.id, conversationId: host.conversationId }),
     });
     if (!response.ok || !response.body) {
-      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      const body = (await response.json().catch(() => ({}))) as { error?: string; code?: string };
       failed(body.error || "That did not work.");
+      // The account has reached its usage limit: the call cannot go on. The interface says why.
+      if (response.status === 402 && body.code === USAGE_CAP_CODE) {
+        this.finish(USAGE_CAP_SENTENCE);
+      }
       return;
     }
     const reader = response.body.getReader();
@@ -700,6 +705,8 @@ export class LiveCall {
               ...stats,
               exaCostUsd: (stats.exaCostUsd ?? 0) + (spent.exaCostUsd ?? 0),
               workerCostUsd: (stats.workerCostUsd ?? 0) + (spent.workerCostUsd ?? 0),
+              decisionCostUsd: spent.decisionCalls ? (stats.decisionCostUsd ?? 0) + (spent.decisionCostUsd ?? 0) : stats.decisionCostUsd,
+              decisionCalls: spent.decisionCalls ? (stats.decisionCalls ?? 0) + spent.decisionCalls : stats.decisionCalls,
               exaCalls: spent.exaCalls
                 ? {
                     search: (stats.exaCalls?.search ?? 0) + spent.exaCalls.search,

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { bigserial, check, doublePrecision, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigserial, boolean, check, doublePrecision, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 /*
  * Everything Beryl keeps on the server: accounts, their sign-ins, their conversations, and what
@@ -24,6 +24,19 @@ export const users = pgTable(
     passwordHash: text("password_hash").notNull(),
     role: text("role", { enum: ["user", "admin"] }).notNull().default("user"),
     status: text("status", { enum: ["active", "blocked"] }).notNull().default("active"),
+    /**
+     * The modes this account may use (the ids in src/lib/agent/modes.ts). A new account has only
+     * the quickest one; the admin switches the others on. The admin's own account has every mode
+     * whatever is stored here.
+     */
+    modes: text("modes").array().notNull().default(sql`'{ultrafast}'::text[]`),
+    /** Whether the account sees what its conversations and answers cost and used. Off for a new account. */
+    showUsage: boolean("show_usage").notNull().default(false),
+    /**
+     * The most the account may spend in all, in US dollars. Null is no limit. When what it has
+     * used reaches this, nothing more runs for it until the admin raises or removes the limit.
+     */
+    usageCapUsd: doublePrecision("usage_cap_usd"),
     createdAt: at("created_at").notNull().defaultNow(),
     updatedAt: at("updated_at").notNull().defaultNow(),
     lastLoginAt: at("last_login_at"),
@@ -34,6 +47,8 @@ export const users = pgTable(
     uniqueIndex("users_email_unique").on(t.email),
     check("users_role_check", sql`${t.role} in ('user', 'admin')`),
     check("users_status_check", sql`${t.status} in ('active', 'blocked')`),
+    check("users_modes_check", sql`cardinality(${t.modes}) >= 1`),
+    check("users_usage_cap_check", sql`${t.usageCapUsd} is null or ${t.usageCapUsd} > 0`),
   ],
 );
 
@@ -93,6 +108,10 @@ export const conversations = pgTable(
  * What one request to a model used and cost. A request is one round of the agent: an answer that
  * pauses for a question or an approval is several. Rows outlive the account (the user becomes
  * null), so past spend still adds up after an account is deleted.
+ *
+ * The cost of a row falls into four kinds: LLMs (`llm_cost_usd` of a typed request, and
+ * `worker_cost_usd` of any row), Exa (`exa_cost_usd`), voice (`llm_cost_usd` of a voice row) and
+ * decisions (`decision_cost_usd`). The total is the four columns added up.
  */
 export const usageEvents = pgTable(
   "usage_events",
@@ -101,6 +120,14 @@ export const usageEvents = pgTable(
     userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
     conversationId: text("conversation_id"),
     client: text("client", { enum: ["web", "desktop"] }).notNull().default("web"),
+    /**
+     * "chat": a typed request. "voice": the voice of a live call, or voice input. "tool": a tool
+     * that ran on behalf of a live call (it has no model cost of its own, only what the tool spent).
+     */
+    kind: text("kind", { enum: ["chat", "voice", "tool"] }).notNull().default("chat"),
+    /** The mode the user had picked and where the effort dial stood. Null for voice, and for rows from before modes. */
+    mode: text("mode"),
+    effort: integer("effort"),
     modelId: text("model_id").notNull(),
     modelLabel: text("model_label").notNull(),
     inputTokens: integer("input_tokens").notNull().default(0),
@@ -114,6 +141,9 @@ export const usageEvents = pgTable(
     llmCostUsd: doublePrecision("llm_cost_usd").notNull().default(0),
     workerCostUsd: doublePrecision("worker_cost_usd").notNull().default(0),
     exaCostUsd: doublePrecision("exa_cost_usd").notNull().default(0),
+    /** The decision model behind sift: what it cost and how many requests it took. */
+    decisionCostUsd: doublePrecision("decision_cost_usd").notNull().default(0),
+    decisionCalls: integer("decision_calls").notNull().default(0),
     exaSearchCalls: integer("exa_search_calls").notNull().default(0),
     exaContentsCalls: integer("exa_contents_calls").notNull().default(0),
     exaAgentCalls: integer("exa_agent_calls").notNull().default(0),
@@ -126,6 +156,7 @@ export const usageEvents = pgTable(
     index("usage_events_created_idx").on(t.createdAt),
     index("usage_events_user_created_idx").on(t.userId, t.createdAt),
     check("usage_events_client_check", sql`${t.client} in ('web', 'desktop')`),
+    check("usage_events_kind_check", sql`${t.kind} in ('chat', 'voice', 'tool')`),
   ],
 );
 

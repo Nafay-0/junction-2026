@@ -1,5 +1,6 @@
 import "server-only";
 import { and, desc, eq, sql } from "drizzle-orm";
+import { modeOfModel } from "@/lib/agent/models";
 import type { ClientKind } from "@/lib/client-kind";
 import { database } from "./client";
 import { conversations } from "./schema";
@@ -37,9 +38,25 @@ const toSummary = (row: SummaryRow): ConversationSummary => ({
   title: row.title,
   createdAt: row.createdAt.getTime(),
   updatedAt: row.updatedAt.getTime(),
-  modelLabel: row.modelLabel ?? undefined,
+  // The stored label is not sent back: conversations saved before modes existed carry a model's name there.
   origin: row.origin,
 });
+
+/**
+ * Conversations saved before modes existed name the model in each answer's figures. Nothing in
+ * the interface may name a model, so on the way out the name is exchanged for the mode that model
+ * stands behind (or "voice" for what was said in a call), and dropped when it stands behind none.
+ */
+function withoutModelNames(messages: unknown[]): unknown[] {
+  return messages.map((message) => {
+    const meta = (message as { metadata?: Record<string, unknown> } | null)?.metadata;
+    if (!meta || typeof meta !== "object" || (meta.modelId === undefined && meta.modelLabel === undefined)) return message;
+    const { modelId, modelLabel: _label, ...rest } = meta;
+    void _label;
+    const mode = rest.mode ?? (typeof modelId === "string" && /-live$/.test(modelId) ? "voice" : modeOfModel(typeof modelId === "string" ? modelId : undefined));
+    return { ...(message as object), metadata: mode ? { ...rest, mode } : rest };
+  });
+}
 
 const mine = (userId: string, id: string) => and(eq(conversations.userId, userId), eq(conversations.id, id));
 
@@ -71,7 +88,7 @@ export async function getConversation(userId: string, id: string): Promise<{ met
     .where(mine(userId, id))
     .limit(1);
   if (!row) return null;
-  return { meta: toSummary(row), messages: Array.isArray(row.messages) ? row.messages : [] };
+  return { meta: toSummary(row), messages: Array.isArray(row.messages) ? withoutModelNames(row.messages) : [] };
 }
 
 /** Where this account's conversation was started, or null when the account has no such conversation. */

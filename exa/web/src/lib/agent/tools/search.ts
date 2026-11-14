@@ -17,6 +17,8 @@ export function toSearchItem(r: ExaResult): SearchResultItem {
 }
 
 export function webSearchTool(ctx: ToolContext) {
+  // How many results a search brings back grows with the depth the user asked for (mode and effort).
+  const { searchResults, maxSearchResults } = ctx.depth;
   return tool({
     description:
       "Search the live web with Exa and get the most relevant pages with quoted passages. Use it for anything that may have changed, anything local or specific, and to find sources for claims. " +
@@ -27,7 +29,7 @@ export function webSearchTool(ctx: ToolContext) {
         .string()
         .optional()
         .describe("Goal for this search: which documents should rank first, which should be excluded, and what facts or figures to pull from them."),
-      numResults: z.number().int().min(1).max(10).optional().describe("How many results. Default 6."),
+      numResults: z.number().int().min(1).max(maxSearchResults).optional().describe(`How many results. Default ${searchResults}, at most ${maxSearchResults}.`),
       category: z.enum(["news", "company", "people", "publication", "personal site", "financial report"]).optional(),
       includeDomains: z.array(z.string()).max(20).optional().describe("Only search these sites, for example official ones."),
       recency: z.enum(["day", "week", "month", "year"]).optional().describe("Only pages published within this window."),
@@ -41,7 +43,7 @@ export function webSearchTool(ctx: ToolContext) {
           {
             query: input.query,
             objective: input.objective,
-            numResults: input.numResults ?? 6,
+            numResults: input.numResults ?? searchResults,
             category: input.category,
             includeDomains: input.includeDomains?.length ? input.includeDomains : undefined,
             // Date filters are rejected for the company and people indexes.
@@ -62,7 +64,8 @@ export function webSearchTool(ctx: ToolContext) {
       if (output.results.length === 0) return { type: "text", value: "No results. Try a broader or differently worded query." };
       const lines = output.results.map((r, i) => {
         const date = r.publishedDate ? `, ${r.publishedDate.slice(0, 10)}` : "";
-        const quotes = r.highlights.slice(0, 2).map((h) => `> ${clip(h, 700)}`).join("\n");
+        // A long list keeps the first ten as they always were and gives the rest one shorter quote each.
+        const quotes = r.highlights.slice(0, i < 10 ? 2 : 1).map((h) => `> ${clip(h, i < 10 ? 700 : 400)}`).join("\n");
         return `[${i + 1}] ${r.title ?? r.domain}\n${r.url} (${r.domain}${date})\n${quotes}`;
       });
       return { type: "text", value: lines.join("\n\n") };
@@ -71,11 +74,12 @@ export function webSearchTool(ctx: ToolContext) {
 }
 
 export function readPagesTool(ctx: ToolContext) {
+  const most = ctx.depth.readPages;
   return tool({
     description:
-      "Read the full text of up to 4 web pages you already have URLs for. Use it when the quoted passages from a search are not enough: exact rules, prices, tables, deadlines, the steps of a process.",
+      `Read the full text of up to ${most} web pages you already have URLs for. Use it when the quoted passages from a search are not enough: exact rules, prices, tables, deadlines, the steps of a process.`,
     inputSchema: z.object({
-      urls: z.array(z.string().url()).min(1).max(4),
+      urls: z.array(z.string().url()).min(1).max(most),
       fresh: z.boolean().optional().describe("Set true to fetch the page live instead of using a recent copy. Use only when a stale page would be wrong (prices, availability)."),
     }),
     execute: async ({ urls, fresh }, { abortSignal }): Promise<ReadPagesData> => {

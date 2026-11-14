@@ -375,3 +375,59 @@
 @media (prefers-reduced-motion: reduce) {
   .orb-stone, .orb-facet, .orb-ring { animation: none !important; }
 }
+
+/*
+ * The effort dial in the mode picker: a track that fills up to the thumb. `--fill` is set on the
+ * element (how far along the thumb is). Firefox fills its own track; the other engines get a gradient.
+ */
+.effort-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 1.5rem;
+  background: transparent;
+  cursor: pointer;
+  touch-action: pan-y;
+}
+.effort-range:focus-visible {
+  outline: none;
+}
+.effort-range::-webkit-slider-runnable-track {
+  height: 0.375rem;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--brand) var(--fill, 0%), var(--muted) var(--fill, 0%));
+}
+.effort-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin-top: -0.375rem;
+  border-radius: 999px;
+  background: var(--card);
+  border: 2px solid var(--brand);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.22);
+  transition: transform 0.15s ease-out;
+}
+.effort-range:active::-webkit-slider-thumb {
+  transform: scale(1.12);
+}
+.effort-range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px color-mix(in oklch, var(--ring) 35%, transparent);
+}
+.effort-range::-moz-range-track {
+  height: 0.375rem;
+  border-radius: 999px;
+  background: var(--muted);
+}
+.effort-range::-moz-range-progress {
+  height: 0.375rem;
+  border-radius: 999px;
+  background: var(--brand);
+}
+.effort-range::-moz-range-thumb {
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 999px;
+  background: var(--card);
+  border: 2px solid var(--brand);
+}

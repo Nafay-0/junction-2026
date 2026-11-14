@@ -1,18 +1,22 @@
 import { convertToModelMessages, createUIMessageStreamResponse, isStepCount, pruneMessages, streamText, toUIMessageStream, type ModelMessage, type SystemModelMessage } from "ai";
+import { researchDepth } from "@/lib/agent/depth";
 import { buildContext, buildInstructions } from "@/lib/agent/instructions";
 import { RunMeter, round, toTokenUsage } from "@/lib/agent/meter";
-import { costOf, getModel, type RunStats } from "@/lib/agent/models";
-import { agentProviderOptions, languageModel, workerModelFor } from "@/lib/agent/providers";
+import { cleanEffort, pickMode } from "@/lib/agent/modes";
+import { costOf, modelForMode } from "@/lib/agent/models";
+import { MODE_UNAVAILABLE, agentProviderOptions, languageModel, workerModelFor } from "@/lib/agent/providers";
+import type { RunStats } from "@/lib/agent/stats";
 import { createTools, type ButlerMessage } from "@/lib/agent/tools";
 import type { ToolContext } from "@/lib/agent/tools/context";
 import { requireUser } from "@/lib/auth/server";
 import { clientKindOf } from "@/lib/client-kind";
+import { capFor, capRefusal } from "@/lib/db/cap";
 import { conversationOrigin, validConversationId } from "@/lib/db/conversations";
 import { readOnlyReason } from "@/lib/db/origin";
 import { recordUsage } from "@/lib/db/usage";
 
 /** Agent runs with sub-agents and live inventory lookups can take a minute or more. */
-export const maxDuration = 300;
+export const maxDuration = 800;
 
 /** Rough size, in tokens, at which older tool results are dropped from what the model re-reads. */
 const TRIM_ABOVE_TOKENS = 120_000;
@@ -27,7 +31,9 @@ type ChatRequest = {
   /** The conversation, as the interface names it. */
   id?: string;
   messages: ButlerMessage[];
-  modelId?: string;
+  /** The mode the user picked and where the effort dial stands. The server decides which model that means. */
+  mode?: string;
+  effort?: number;
   /** "Espoo, Finland": where the user is, for local questions. */
   place?: string;
   /** Two-letter country code, used to localise Exa searches. */
@@ -48,6 +54,10 @@ export async function POST(req: Request) {
   const user = await requireUser();
   if (user instanceof Response) return user;
 
+  // An account that has used up what its admin allowed gets nothing more until the limit is raised.
+  const cap = await capFor(user);
+  if (cap.reached) return capRefusal();
+
   let body: ChatRequest;
   try {
     body = (await req.json()) as ChatRequest;
@@ -58,7 +68,11 @@ export async function POST(req: Request) {
     return Response.json({ error: "No messages." }, { status: 400 });
   }
 
-  const info = getModel(body.modelId);
+  // The account's own modes decide what it may ask for: a mode it does not have becomes the best one it has.
+  const mode = pickMode(body.mode, user.modes);
+  const effort = cleanEffort(body.effort);
+  const info = modelForMode(mode);
+  const depth = researchDepth(mode, effort);
   const meter = new RunMeter();
   let model;
   let worker;
@@ -66,7 +80,9 @@ export async function POST(req: Request) {
     model = languageModel(info);
     worker = workerModelFor(info);
   } catch (err) {
-    return Response.json({ error: err instanceof Error ? err.message : "The model is not configured." }, { status: 500 });
+    // What is missing is the server's to know, not the user's.
+    console.error("[chat] the mode cannot run", mode, err);
+    return Response.json({ error: MODE_UNAVAILABLE }, { status: 500 });
   }
 
   const timeZone = safeTimeZone(body.timeZone);
@@ -90,7 +106,7 @@ export async function POST(req: Request) {
     if (origin && origin !== client) return Response.json({ error: readOnlyReason(origin) }, { status: 409 });
   }
 
-  const ctx: ToolContext = { meter, model: info, worker, country, today, coords: coords ? { lat: coords.lat, lng: coords.lng, label: coords.label } : undefined, client };
+  const ctx: ToolContext = { meter, mode, effort, depth, model: info, worker, country, today, coords: coords ? { lat: coords.lat, lng: coords.lng, label: coords.label } : undefined, client };
   const tools = createTools(ctx, model);
 
   // Reasoning from earlier turns is never replayed. Claude's thinking blocks are bound to the exact
@@ -108,7 +124,7 @@ export async function POST(req: Request) {
     { role: "system", content: buildInstructions(client), providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } } },
     {
       role: "system",
-      content: buildContext({ today, time, place: body.place?.slice(0, 80), coords, locationDeclined: body.locationDeclined === true, client, browser }),
+      content: buildContext({ today, time, place: body.place?.slice(0, 80), coords, locationDeclined: body.locationDeclined === true, client, browser, depth }),
     },
   ];
 
@@ -117,14 +133,25 @@ export async function POST(req: Request) {
   const lastMessage = body.messages.at(-1);
   const earlier = lastMessage?.role === "assistant" ? lastMessage.metadata : undefined;
 
+  // The limit also stops a task that is running: after each step, what this request has spent so
+  // far is added to what the account had already used. The step in hand finishes, its figures are
+  // recorded, and the answer says why it stopped.
+  let capHit = false;
+  const overCap = ({ steps: done }: { steps: Array<{ usage: Parameters<typeof toTokenUsage>[0] }> }) => {
+    if (cap.capUsd === null) return false;
+    const answering = done.reduce((sum, step) => sum + costOf(info.id, toTokenUsage(step.usage)), 0);
+    capHit = cap.spentUsd + answering + meter.exaCostUsd + meter.workerCostUsd + meter.decisionCostUsd >= cap.capUsd;
+    return capHit;
+  };
+
   let steps = 0;
   const result = streamText({
     model,
     instructions,
     messages: history,
     tools,
-    stopWhen: isStepCount(MAX_STEPS),
-    providerOptions: agentProviderOptions(info),
+    stopWhen: [isStepCount(MAX_STEPS), overCap],
+    providerOptions: agentProviderOptions(info, effort),
     abortSignal: req.signal,
     // Context overflow guard: once the conversation is large, the model stops re-reading old tool
     // results (the user still sees every widget). Reasoning goes with them, see above.
@@ -143,14 +170,15 @@ export async function POST(req: Request) {
       originalMessages: body.messages,
       sendReasoning: true,
       messageMetadata: ({ part }): RunStats | undefined => {
+        // What the interface is told names the mode, never the model behind it.
         if (part.type === "start") {
-          return { modelId: info.id, modelLabel: info.label, startedAt: earlier?.startedAt ?? meter.startedAt };
+          return { mode, effort, startedAt: earlier?.startedAt ?? meter.startedAt };
         }
         if (part.type === "finish") {
           const usage = toTokenUsage(part.totalUsage);
           const request: RunStats = {
-            modelId: info.id,
-            modelLabel: info.label,
+            mode,
+            effort,
             startedAt: meter.startedAt,
             durationMs: Date.now() - meter.startedAt,
             steps,
@@ -160,8 +188,11 @@ export async function POST(req: Request) {
             ...meter.snapshot(),
           };
           // This request's own figures go to the account's record; the answer shows the running total.
-          void recordUsage({ userId: user.id, conversationId, client, stats: request });
-          return addStats(earlier, request);
+          void recordUsage({ userId: user.id, conversationId, client, model: { id: info.id, label: info.label }, kind: "chat", stats: request });
+          const total = addStats(earlier, request);
+          // An account that may not see usage is sent the mode and the time, and none of the figures.
+          const shown: RunStats = user.showUsage ? total : { mode, effort, startedAt: total.startedAt, durationMs: total.durationMs, finishReason: total.finishReason };
+          return capHit ? { ...shown, capReached: true } : shown;
         }
         return undefined;
       },
@@ -197,6 +228,8 @@ function addStats(earlier: RunStats | undefined, now: RunStats): RunStats {
     workerUsage: usage(earlier.workerUsage, now.workerUsage),
     workerCostUsd: round(sum(earlier.workerCostUsd, now.workerCostUsd)),
     exaCostUsd: round(sum(earlier.exaCostUsd, now.exaCostUsd)),
+    decisionCostUsd: earlier.decisionCalls || now.decisionCalls ? round(sum(earlier.decisionCostUsd, now.decisionCostUsd)) : undefined,
+    decisionCalls: sum(earlier.decisionCalls, now.decisionCalls) || undefined,
     exaCalls:
       earlier.exaCalls && now.exaCalls
         ? {
@@ -253,9 +286,9 @@ function safeTimeZone(tz: string | undefined): string {
 
 function friendlyError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
-  if (/rate limit|429/i.test(message)) return "The model is busy right now. Give it a few seconds and try again.";
+  if (/rate limit|429/i.test(message)) return "It is busy right now. Give it a few seconds and try again.";
   if (/credit|402|billing/i.test(message)) return "The account behind this demo has run out of credit.";
-  if (/context|too long|maximum/i.test(message)) return "This conversation got too long for the model. Start a new chat to continue.";
+  if (/context|too long|maximum/i.test(message)) return "This conversation got too long. Start a new task to continue.";
   if (/abort/i.test(message)) return "Stopped.";
-  return "Something went wrong while answering. Try again, or switch model.";
+  return "Something went wrong while answering. Try again, or switch mode.";
 }

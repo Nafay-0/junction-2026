@@ -1,11 +1,14 @@
 import { asSchema } from "ai";
 import { RunMeter } from "@/lib/agent/meter";
-import { getModel } from "@/lib/agent/models";
-import { languageModel, workerModelFor } from "@/lib/agent/providers";
+import { researchDepth } from "@/lib/agent/depth";
+import { cleanEffort, pickMode } from "@/lib/agent/modes";
+import { modelForMode } from "@/lib/agent/models";
+import { MODE_UNAVAILABLE, languageModel, workerModelFor } from "@/lib/agent/providers";
 import { createTools } from "@/lib/agent/tools";
 import type { ToolContext } from "@/lib/agent/tools/context";
 import { requireUser } from "@/lib/auth/server";
 import { clientKindOf } from "@/lib/client-kind";
+import { capFor, capRefusal } from "@/lib/db/cap";
 import { conversationOrigin, validConversationId } from "@/lib/db/conversations";
 import { readOnlyReason } from "@/lib/db/origin";
 import { recordUsage } from "@/lib/db/usage";
@@ -20,7 +23,8 @@ type ToolRequest = {
   input?: unknown;
   toolCallId?: string;
   conversationId?: string;
-  modelId?: string;
+  mode?: string;
+  effort?: number;
   country?: string;
   timeZone?: string;
   coords?: { lat: number; lng: number; label?: string; country?: string };
@@ -37,6 +41,8 @@ type ToolRequest = {
 export async function POST(req: Request) {
   const user = await requireUser();
   if (user instanceof Response) return user;
+  // An account at its usage limit can neither start a call nor run a tool in one.
+  if ((await capFor(user)).reached) return capRefusal();
   const body = ((await req.json().catch(() => ({}))) ?? {}) as ToolRequest;
   const client = clientKindOf(req);
   const name = typeof body.name === "string" ? body.name : "";
@@ -48,7 +54,10 @@ export async function POST(req: Request) {
     if (origin && origin !== client) return Response.json({ error: readOnlyReason(origin) }, { status: 409 });
   }
 
-  const info = getModel(body.modelId);
+  // The tools a call runs go as far as the mode and effort chosen for typed conversations; the voice itself does not change.
+  const mode = pickMode(body.mode, user.modes);
+  const effort = cleanEffort(body.effort);
+  const info = modelForMode(mode);
   const meter = new RunMeter();
   let model;
   let worker;
@@ -56,13 +65,14 @@ export async function POST(req: Request) {
     model = languageModel(info);
     worker = workerModelFor(info);
   } catch (err) {
-    return Response.json({ error: err instanceof Error ? err.message : "The model is not configured." }, { status: 500 });
+    console.error("[voice] the mode cannot run", mode, err);
+    return Response.json({ error: MODE_UNAVAILABLE }, { status: 500 });
   }
   const timeZone = safeTimeZone(body.timeZone);
   const today = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone });
   const coords = body.coords && Number.isFinite(body.coords.lat) && Number.isFinite(body.coords.lng) ? { lat: body.coords.lat, lng: body.coords.lng, label: typeof body.coords.label === "string" ? body.coords.label.slice(0, 80) : undefined } : undefined;
   const countryCode = body.coords?.country ?? body.country ?? "";
-  const ctx: ToolContext = { meter, model: info, worker, country: /^[A-Za-z]{2}$/.test(countryCode) ? countryCode.toUpperCase() : undefined, today, coords, client };
+  const ctx: ToolContext = { meter, mode, effort, depth: researchDepth(mode, effort), model: info, worker, country: /^[A-Za-z]{2}$/.test(countryCode) ? countryCode.toUpperCase() : undefined, today, coords, client };
   const tools = createTools(ctx, model);
   if (!runsOnServer(tools, name)) return Response.json({ error: "There is no such tool to run here." }, { status: 400 });
 
@@ -88,13 +98,13 @@ export async function POST(req: Request) {
             seen = true;
           }
         } else output = await running;
-        const { exaCostUsd, workerCostUsd, exaCalls } = meter.snapshot();
-        say({ type: "result", output, text: await spokenToolResult(name, tool, toolCallId, input, output), spent: { exaCostUsd, workerCostUsd, exaCalls } });
+        const { exaCostUsd, workerCostUsd, exaCalls, decisionCostUsd, decisionCalls } = meter.snapshot();
+        say({ type: "result", output, text: await spokenToolResult(name, tool, toolCallId, input, output), spent: { exaCostUsd, workerCostUsd, exaCalls, decisionCostUsd, decisionCalls } });
       } catch (err) {
         say({ type: "error", error: err instanceof Error && err.name !== "AbortError" ? err.message.slice(0, 300) : "The tool was stopped." });
       } finally {
         // What the tool itself spent (Exa, sub-agents) is counted against the account. The call's own tokens are reported when it ends.
-        void recordUsage({ userId: user.id, conversationId, client, stats: { modelId: LIVE_MODEL.id, modelLabel: LIVE_MODEL.label, startedAt, durationMs: Date.now() - startedAt, steps: 1, ...meter.snapshot() } });
+        void recordUsage({ userId: user.id, conversationId, client, model: { id: LIVE_MODEL.id, label: LIVE_MODEL.label }, kind: "tool", stats: { mode: "voice", startedAt, durationMs: Date.now() - startedAt, steps: 1, ...meter.snapshot() } });
         controller.close();
       }
     },

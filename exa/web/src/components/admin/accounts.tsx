@@ -3,20 +3,23 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Ban, Check, Copy, KeyRound, LoaderCircle, MoreHorizontal, Search, ShieldCheck, Sparkles, Trash2, UserPlus, Users } from "lucide-react";
+import { Ban, ChartNoAxesColumn, Check, Copy, KeyRound, LoaderCircle, MoreHorizontal, Search, ShieldCheck, Sparkles, Trash2, UserPlus, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { LOWEST_MODE, type ModeId } from "@/lib/agent/modes";
 import { api, errorOf } from "@/lib/auth/fetch";
-import { AccountChange, MIN_PASSWORD, NewAccount, firstProblem } from "@/lib/auth/validation";
+import { AccountChange, MIN_PASSWORD, NewAccount, capFromText, firstProblem } from "@/lib/auth/validation";
 import type { Account } from "@/lib/db/admin";
 import { useHydrated } from "@/lib/use-client";
 import { AccountBadge } from "@/components/account/account-menu";
 import { Field } from "@/components/account/field";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { UsageDialog } from "./account-usage";
 import { Empty, PageHeading, Panel } from "./admin-shell";
 import { ago, count, dateOf, usd } from "./format";
+import { LimitInput, LimitReached, ModeChips, PermissionControls, Toggle, limitReached, type Permissions } from "./permissions";
 
-type Doing = { kind: "add" } | { kind: "password"; account: Account } | { kind: "delete"; account: Account } | null;
+type Doing = { kind: "add" } | { kind: "password"; account: Account } | { kind: "delete"; account: Account } | { kind: "usage"; account: Account } | null;
 
 const pill = "h-9 rounded-full px-4 text-[0.85rem] font-medium transition-colors disabled:opacity-60";
 const quiet = cn(pill, "border border-border bg-card hover:bg-muted");
@@ -32,19 +35,46 @@ function makePassword(): string {
 }
 
 /**
- * Every account, and the three things the admin can do to one: block it, give it a new password,
- * delete it. Adding one is the only way an account comes to exist: there is no sign-up.
+ * Every account, and what the admin can do to one: say which modes it may use, whether it sees
+ * what it costs and how much it may spend, look at what it used, block it, give it a new
+ * password, delete it. Adding one is the only way an account comes to exist: there is no sign-up.
  */
 export function AccountsScreen({ accounts, renderedAt }: { accounts: Account[]; renderedAt: number }) {
   const router = useRouter();
   const [doing, setDoing] = React.useState<Doing>(null);
   const [query, setQuery] = React.useState("");
   const [working, setWorking] = React.useState<string | null>(null);
+  // What the admin has just changed, shown at once; the server's word replaces it when the list is read again.
+  const [edits, setEdits] = React.useState<Record<string, Partial<Permissions>>>({});
+  const all = React.useMemo(() => accounts.map((a) => (edits[a.id] ? { ...a, ...edits[a.id] } : a)), [accounts, edits]);
 
-  const others = accounts.filter((a) => a.role !== "admin");
+  /** Change what an account may use. It shows straight away and is put back if the server says no. */
+  const permit = async (account: Account, change: Partial<Permissions>) => {
+    setEdits((now) => ({ ...now, [account.id]: { ...now[account.id], ...change } }));
+    let problem: string | null = null;
+    try {
+      const response = await api(`/api/admin/users/${account.id}`, { method: "PATCH", json: change });
+      if (response.ok) {
+        router.refresh();
+        return;
+      }
+      problem = await errorOf(response);
+    } catch {
+      problem = "The server could not be reached.";
+    }
+    toast.error(`${account.name} was not changed. ${problem}`);
+    setEdits((now) => {
+      const rest = { ...now[account.id] };
+      for (const field of Object.keys(change) as Array<keyof Permissions>) delete rest[field];
+      return { ...now, [account.id]: rest };
+    });
+  };
+
+  const others = all.filter((a) => a.role !== "admin");
   const blocked = others.filter((a) => a.status === "blocked").length;
   const q = query.trim().toLowerCase();
-  const shown = q ? accounts.filter((a) => a.name.toLowerCase().includes(q) || a.email.includes(q)) : accounts;
+  const shown = q ? all.filter((a) => a.name.toLowerCase().includes(q) || a.email.includes(q)) : all;
+  const capped = others.filter(limitReached).length;
 
   const setStatus = async (account: Account, status: "active" | "blocked") => {
     setWorking(account.id);
@@ -64,7 +94,7 @@ export function AccountsScreen({ accounts, renderedAt }: { accounts: Account[]; 
     <div className="flex flex-col gap-5">
       <PageHeading
         title="Accounts"
-        lead="Everyone who can sign in, on the web and in the desktop app. Only you can add, block or remove them."
+        lead="Everyone who can sign in, on the web and in the desktop app. You decide what each may use, and only you can add, block or remove them."
         action={
           <button type="button" onClick={() => setDoing({ kind: "add" })} className={cn(primary, "h-10 px-4 shadow-card")}>
             <UserPlus className="size-4" />
@@ -76,9 +106,9 @@ export function AccountsScreen({ accounts, renderedAt }: { accounts: Account[]; 
       <Panel>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <p className="text-[0.84rem] text-muted-foreground">
-            {others.length === 0 ? "Only you so far." : `${others.length === 1 ? "One account" : `${others.length} accounts`} besides yours${blocked ? `, ${blocked} blocked` : ""}.`}
+            {others.length === 0 ? "Only you so far." : `${others.length === 1 ? "One account" : `${others.length} accounts`} besides yours${blocked ? `, ${blocked} blocked` : ""}${capped ? `, ${capped} at ${capped === 1 ? "its" : "their"} usage limit` : ""}.`}
           </p>
-          {accounts.length > 6 ? (
+          {all.length > 6 ? (
             <label className="relative block w-full sm:w-64">
               <span className="sr-only">Find an account</span>
               <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle" />
@@ -121,27 +151,35 @@ export function AccountsScreen({ accounts, renderedAt }: { accounts: Account[]; 
                     </th>
                   </tr>
                 </thead>
-                <tbody>
-                  {shown.map((a) => (
-                    <tr key={a.id} className={cn("transition-colors hover:bg-muted/40", a.status === "blocked" && "text-muted-foreground")}>
-                      <td className="w-full max-w-0 border-t border-border py-3 pr-3 pl-1">
+                {/* Two rows to an account: who it is and how it has been used, then what it may use. */}
+                {shown.map((a) => (
+                  <tbody key={a.id} className={cn("group/account", a.status === "blocked" && "text-muted-foreground")}>
+                    <tr className="transition-colors group-hover/account:bg-muted/40">
+                      <td className="w-full max-w-0 border-t border-border pt-3 pr-3 pb-2 pl-1">
                         <Who account={a} />
                       </td>
-                      <td className="border-t border-border px-3 py-3">
+                      <td className="border-t border-border px-3 pt-3 pb-2">
                         <Status account={a} />
                       </td>
-                      <td className="nums border-t border-border px-3 py-3 whitespace-nowrap text-muted-foreground">
+                      <td className="nums border-t border-border px-3 pt-3 pb-2 whitespace-nowrap text-muted-foreground">
                         <When ts={a.createdAt} renderedAt={renderedAt} date />
                       </td>
-                      <td className="nums border-t border-border px-3 py-3 whitespace-nowrap text-muted-foreground">{a.lastLoginAt ? <When ts={a.lastLoginAt} renderedAt={renderedAt} /> : "Never"}</td>
-                      <td className="nums border-t border-border px-3 py-3 text-right">{count(a.conversations)}</td>
-                      <td className="nums border-t border-border px-3 py-3 text-right font-medium text-foreground">{usd(a.costUsd)}</td>
-                      <td className="border-t border-border py-3 pr-1 text-right">
+                      <td className="nums border-t border-border px-3 pt-3 pb-2 whitespace-nowrap text-muted-foreground">{a.lastLoginAt ? <When ts={a.lastLoginAt} renderedAt={renderedAt} /> : "Never"}</td>
+                      <td className="nums border-t border-border px-3 pt-3 pb-2 text-right">{count(a.conversations)}</td>
+                      <td className="border-t border-border px-2 pt-3 pb-2 text-right">
+                        <Cost account={a} onOpen={() => setDoing({ kind: "usage", account: a })} />
+                      </td>
+                      <td className="border-t border-border pt-3 pr-1 pb-2 text-right">
                         <Actions account={a} busy={working === a.id} onStatus={setStatus} onDo={setDoing} />
                       </td>
                     </tr>
-                  ))}
-                </tbody>
+                    <tr className="transition-colors group-hover/account:bg-muted/40">
+                      <td colSpan={7} className="pt-0.5 pr-1 pb-3.5 pl-[3.1rem]">
+                        <PermissionControls account={a} onChange={(change) => void permit(a, change)} />
+                      </td>
+                    </tr>
+                  </tbody>
+                ))}
               </table>
             </div>
 
@@ -161,8 +199,13 @@ export function AccountsScreen({ accounts, renderedAt }: { accounts: Account[]; 
                     </Fact>
                     <Fact label="Last sign-in">{a.lastLoginAt ? <When ts={a.lastLoginAt} renderedAt={renderedAt} /> : "Never"}</Fact>
                     <Fact label="Conversations">{count(a.conversations)}</Fact>
-                    <Fact label="Cost">{usd(a.costUsd)}</Fact>
+                    <Fact label="Cost">
+                      <Cost account={a} onOpen={() => setDoing({ kind: "usage", account: a })} />
+                    </Fact>
                   </dl>
+                  <div className="mt-3 border-t border-border/70 pt-3">
+                    <PermissionControls account={a} onChange={(change) => void permit(a, change)} />
+                  </div>
                 </li>
               ))}
             </ul>
@@ -173,6 +216,7 @@ export function AccountsScreen({ accounts, renderedAt }: { accounts: Account[]; 
       <AddDialog open={doing?.kind === "add"} onClose={() => setDoing(null)} onDone={() => router.refresh()} />
       <PasswordDialog account={doing?.kind === "password" ? doing.account : null} onClose={() => setDoing(null)} />
       <DeleteDialog account={doing?.kind === "delete" ? doing.account : null} onClose={() => setDoing(null)} onDone={() => router.refresh()} />
+      <UsageDialog account={doing?.kind === "usage" ? doing.account : null} onClose={() => setDoing(null)} />
     </div>
   );
 }
@@ -194,11 +238,30 @@ function Who({ account }: { account: Account }) {
 
 function Status({ account }: { account: Account }) {
   const blocked = account.status === "blocked";
+  // An account at its limit can sign in but nothing runs for it: that is said where "blocked" would be.
+  if (!blocked && limitReached(account)) return <LimitReached />;
   return (
     <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[0.74rem] font-medium whitespace-nowrap", blocked ? "bg-destructive/10 text-destructive" : "bg-brand-soft text-brand")}>
       <span className={cn("size-1.5 rounded-full", blocked ? "bg-destructive" : "bg-brand")} />
       {blocked ? "Blocked" : "Active"}
     </span>
+  );
+}
+
+/** What the account has cost so far. Pressing it opens the account's usage: by kind of cost, by mode and by model. */
+function Cost({ account, onOpen }: { account: Account; onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      title={`See what ${account.name} used`}
+      className={cn(
+        "nums rounded-md px-1 font-medium underline decoration-border decoration-dotted underline-offset-4 outline-none transition-colors hover:decoration-current focus-visible:ring-3 focus-visible:ring-ring/30",
+        limitReached(account) ? "text-destructive" : "text-foreground",
+      )}
+    >
+      {usd(account.costUsd)}
+    </button>
   );
 }
 
@@ -271,6 +334,10 @@ function Actions({ account, busy, onStatus, onDo }: { account: Account; busy: bo
         {busy ? <LoaderCircle className="size-4 animate-spin" /> : <MoreHorizontal className="size-4" />}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">
+        <DropdownMenuItem onSelect={() => onDo({ kind: "usage", account })}>
+          <ChartNoAxesColumn className="size-4" />
+          See usage
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onDo({ kind: "password", account })}>
           <KeyRound className="size-4" />
           Set a new password
@@ -367,6 +434,10 @@ function AddDialog({ open, onClose, onDone }: { open: boolean; onClose: () => vo
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
+  // A new account starts with the quickest mode only, does not see what it costs, and has no limit.
+  const [modes, setModes] = React.useState<ModeId[]>([LOWEST_MODE]);
+  const [showUsage, setShowUsage] = React.useState(false);
+  const [limit, setLimit] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [made, setMade] = React.useState<{ email: string; password: string } | null>(null);
@@ -378,6 +449,9 @@ function AddDialog({ open, onClose, onDone }: { open: boolean; onClose: () => vo
       setName("");
       setEmail("");
       setPassword("");
+      setModes([LOWEST_MODE]);
+      setShowUsage(false);
+      setLimit("");
       setError(null);
       setMade(null);
     }, 200);
@@ -386,7 +460,12 @@ function AddDialog({ open, onClose, onDone }: { open: boolean; onClose: () => vo
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (busy) return;
-    const parsed = NewAccount.safeParse({ name, email, password });
+    const usageCapUsd = capFromText(limit);
+    if (usageCapUsd === undefined) {
+      setError("Give the usage limit as an amount in US dollars, or leave it empty for no limit.");
+      return;
+    }
+    const parsed = NewAccount.safeParse({ name, email, password, modes, showUsage, usageCapUsd });
     if (!parsed.success) {
       setError(firstProblem(parsed.error));
       return;
@@ -407,7 +486,7 @@ function AddDialog({ open, onClose, onDone }: { open: boolean; onClose: () => vo
 
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? undefined : close())}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="font-display text-[1.3rem] leading-tight">{made ? "Account added" : "Add an account"}</DialogTitle>
           <DialogDescription>{made ? "They can sign in on the web and in the desktop app." : "An ordinary account: it can chat and hand over tasks, and sees only its own conversations."}</DialogDescription>
@@ -419,6 +498,26 @@ function AddDialog({ open, onClose, onDone }: { open: boolean; onClose: () => vo
             <Field label="Name" name="name" autoComplete="off" autoFocus placeholder="Ada Lovelace" value={name} onChange={(e) => setName(e.target.value)} />
             <Field label="Email" type="email" name="email" autoComplete="off" autoCapitalize="none" spellCheck={false} placeholder="ada@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
             <NewPasswordField value={password} onChange={setPassword} />
+            <fieldset className="flex flex-col gap-3 rounded-xl border border-border bg-surface/60 px-3.5 pt-2.5 pb-3.5">
+              <legend className="px-1 text-[0.78rem] font-medium text-muted-foreground">What it may use</legend>
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[0.8rem] font-medium">Modes</span>
+                <ModeChips value={modes} onChange={setModes} who="the new account" />
+              </div>
+              <Toggle checked={showUsage} onChange={setShowUsage}>
+                Sees usage and cost
+              </Toggle>
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="new-usage-limit" className="text-[0.8rem] font-medium">
+                  Usage limit
+                </label>
+                <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                  <LimitInput id="new-usage-limit" value={limit} onChange={setLimit} label="Usage limit in US dollars. Empty for no limit" />
+                  <span className="text-[0.76rem] leading-snug text-muted-foreground">US dollars in all. Empty for no limit.</span>
+                </div>
+              </div>
+              <p className="text-[0.76rem] leading-snug text-muted-foreground">You can change all of this later, from the account&rsquo;s row.</p>
+            </fieldset>
             {error ? (
               <p role="alert" className="text-[0.84rem] leading-snug text-destructive">
                 {error}

@@ -3,20 +3,16 @@
 import * as React from "react";
 import Link from "next/link";
 import { Bar, BarChart, CartesianGrid, Tooltip, XAxis, YAxis } from "recharts";
-import { ChartNoAxesColumn, Cpu, Globe, MessagesSquare, Monitor, Users } from "lucide-react";
+import { ChartNoAxesColumn, Cpu, Globe, Layers, MessagesSquare, Monitor, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Overview } from "@/lib/db/admin";
 import { Empty, PageHeading, Panel } from "./admin-shell";
 import { count, dayLabel, share, usd } from "./format";
+import { Meter, Rows, SPEND_KINDS, SPEND_MEANING, SpendSplit, modeRowsOf, modelRowsOf, totalSpend } from "./usage-parts";
 
-/* What the money went on, in the order the bars are stacked. One colour each, everywhere on the page. */
-const SPEND = [
-  { key: "modelUsd", name: "Model", color: "var(--chart-1)" },
-  { key: "workerUsd", name: "Sub-agents", color: "var(--chart-3)" },
-  { key: "exaUsd", name: "Exa", color: "var(--chart-2)" },
-] as const;
-
-const total = (s: { modelUsd: number; workerUsd: number; exaUsd: number }) => s.modelUsd + s.workerUsd + s.exaUsd;
+/* What the money went on: LLMs, Exa, voice and decisions, in the order the bars are stacked. */
+const SPEND = SPEND_KINDS;
+const total = totalSpend;
 
 /** The admin's overview: who there is, how much the app is used, and what that costs. */
 export function OverviewScreen({ data }: { data: Overview }) {
@@ -66,27 +62,14 @@ export function OverviewScreen({ data }: { data: Overview }) {
         <Panel title="Where the money goes" note={`In ${range}.`}>
           {quiet ? (
             <Empty icon={<ChartNoAxesColumn />} title="Nothing spent in this period">
-              The split between the model, its sub-agents and Exa appears here as soon as someone asks for something.
+              The split between LLMs, Exa, voice and decisions appears here as soon as someone asks for something.
             </Empty>
           ) : (
             <div className="flex flex-col gap-4">
-              <div className="flex h-3 overflow-hidden rounded-full bg-muted" role="img" aria-label={SPEND.map((s) => `${s.name} ${usd(data.period[s.key])}`).join(", ")}>
-                {SPEND.map((s) => (
-                  <span key={s.key} style={{ width: `${share(data.period[s.key], spent)}%`, background: s.color }} className="h-full first:rounded-l-full last:rounded-r-full" />
-                ))}
-              </div>
-              <ul className="flex flex-col gap-2.5">
-                {SPEND.map((s) => (
-                  <li key={s.key} className="flex items-center gap-2.5 text-[0.86rem]">
-                    <span className="size-2.5 shrink-0 rounded-[3px]" style={{ background: s.color }} />
-                    <span className="flex-1">{s.name}</span>
-                    <span className="nums text-muted-foreground">{Math.round(share(data.period[s.key], spent))}%</span>
-                    <span className="nums w-20 text-right font-medium">{usd(data.period[s.key])}</span>
-                  </li>
-                ))}
-              </ul>
+              <SpendSplit spend={data.period} />
               <p className="border-t border-border pt-3 text-[0.78rem] leading-snug text-muted-foreground">
-                {count(data.period.exaCalls)} Exa calls. {data.period.activeAccounts === 1 ? "One account" : `${count(data.period.activeAccounts)} accounts`} asked for something.
+                {count(data.period.exaCalls)} Exa calls{data.period.decisionCalls > 0 ? `, ${count(data.period.decisionCalls)} requests to the decision model` : ""}.{" "}
+                {data.period.activeAccounts === 1 ? "One account" : `${count(data.period.activeAccounts)} accounts`} asked for something. {SPEND_MEANING}
               </p>
             </div>
           )}
@@ -114,20 +97,27 @@ export function OverviewScreen({ data }: { data: Overview }) {
           )}
         </Panel>
 
-        <Panel title="By model" note={`In ${range}.`}>
-          {data.byModel.length === 0 ? (
-            <Empty icon={<Cpu />} title="No model has been used in this period">
-              Each model people pick is listed here with its requests, tokens and cost.
+        <Panel title="By mode" note={`What people picked, in ${range}.`}>
+          {data.byMode.length === 0 ? (
+            <Empty icon={<Layers />} title="No mode has been used in this period">
+              Each mode people pick is listed here with its requests, tokens and cost.
             </Empty>
           ) : (
-            <Rows
-              head={["Model", "Requests", "Tokens", "Cost"]}
-              rows={data.byModel.map((m) => ({ key: m.label, name: m.label, cells: [count(m.requests), count(m.tokens), usd(m.costUsd)], weight: share(m.costUsd, spent) }))}
-            />
+            <Rows head={["Mode", "Requests", "Tokens", "Cost"]} rows={modeRowsOf(data.byMode, spent)} />
           )}
         </Panel>
 
-        <Panel title="Heaviest users" note={`By cost, in ${range}.`} action={<Link href="/admin/accounts" className="text-[0.8rem] font-medium text-brand underline-offset-4 hover:underline">All accounts</Link>}>
+        <Panel title="By model" note={`The model that did the work, in ${range}. Only you see these names.`}>
+          {data.byModel.length === 0 ? (
+            <Empty icon={<Cpu />} title="No model has been used in this period">
+              Each model that stood behind a mode, a call or a helper is listed here with its requests, tokens and cost.
+            </Empty>
+          ) : (
+            <Rows head={["Model", "Requests", "Tokens", "Cost"]} rows={modelRowsOf(data.byModel, spent)} />
+          )}
+        </Panel>
+
+        <Panel className="lg:col-span-2" title="Heaviest users" note={`By cost, in ${range}.`} action={<Link href="/admin/accounts" className="text-[0.8rem] font-medium text-brand underline-offset-4 hover:underline">All accounts</Link>}>
           {data.topAccounts.length === 0 ? (
             <Empty icon={<Users />} title="Nobody has used it in this period">
               The accounts that cost the most are listed here.
@@ -159,48 +149,6 @@ function Figure({ icon, label, value, note, accent }: { icon?: React.ReactNode; 
   );
 }
 
-function Meter({ value }: { value: number }) {
-  return (
-    <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-      <div className="h-full rounded-full bg-brand transition-[width] duration-500" style={{ width: `${Math.max(value, value > 0 ? 2 : 0)}%` }} />
-    </div>
-  );
-}
-
-/** A small table whose first column is a name and whose rows carry a bar for their share of the cost. */
-function Rows({ head, rows }: { head: [string, string, string, string]; rows: Array<{ key: string; name: string; sub?: string; cells: [string, string, string]; weight: number }> }) {
-  return (
-    <div className="-mx-1 overflow-x-auto">
-      <table className="w-full min-w-[19rem] border-separate border-spacing-0 text-[0.84rem]">
-        <thead>
-          <tr className="text-left text-[0.7rem] font-medium tracking-wider text-subtle uppercase">
-            <th className="px-1 pb-2 font-medium">{head[0]}</th>
-            <th className="hidden px-2 pb-2 text-right font-medium sm:table-cell">{head[1]}</th>
-            <th className="px-2 pb-2 text-right font-medium">{head[2]}</th>
-            <th className="px-1 pb-2 text-right font-medium">{head[3]}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.key}>
-              <td className="w-full max-w-0 border-t border-border px-1 py-2.5">
-                <div className="truncate font-medium">{row.name}</div>
-                {row.sub ? <div className="truncate text-[0.74rem] text-muted-foreground">{row.sub}</div> : null}
-                <div className="mt-1.5">
-                  <Meter value={row.weight} />
-                </div>
-              </td>
-              <td className="nums hidden w-20 border-t border-border px-2 py-2.5 text-right align-top text-muted-foreground sm:table-cell">{row.cells[0]}</td>
-              <td className="nums w-16 border-t border-border px-2 py-2.5 text-right align-top text-muted-foreground">{row.cells[1]}</td>
-              <td className="nums w-20 border-t border-border px-1 py-2.5 text-right align-top font-medium">{row.cells[2]}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 /* ───────────────────────── The chart ───────────────────────── */
 
 type Measure = "cost" | "requests" | "tokens";
@@ -220,7 +168,7 @@ function Daily({ data, quiet }: { data: Overview; quiet: boolean }) {
   return (
     <Panel
       title="Day by day"
-      note={measure === "cost" ? "What each day cost, split into the model, its sub-agents and Exa." : measure === "requests" ? "Requests to a model each day." : "Tokens in and out each day, sub-agents included."}
+      note={measure === "cost" ? "What each day cost, split into LLMs, Exa, voice and decisions." : measure === "requests" ? "Requests to a model each day." : "Tokens in and out each day, sub-agents included."}
       action={
         <div role="group" aria-label="What the chart shows" className="flex items-center gap-1 rounded-full border border-border bg-background p-1 text-[0.78rem]">
           {MEASURES.map((m) => (

@@ -290,6 +290,9 @@ export type ResearchStep = {
   label: string;
   /** Domains touched by this step, for favicons. */
   domains?: string[];
+  /** A search at depth: how many pages it turned up, and how many of them bore on the angle and were kept. */
+  checked?: number;
+  kept?: number;
 };
 
 export type ResearchAgent = {
@@ -298,9 +301,17 @@ export type ResearchAgent = {
   title: string;
   status: "queued" | "working" | "done" | "failed";
   steps: ResearchStep[];
+  /** How many steps it has taken, when `steps` carries only the latest of them (a large team, while the report is written). */
+  stepCount?: number;
   /** Markdown, set when done. */
   findings?: string;
+  /** The sources shown beside this angle: the first few it kept. `sourceCount` is how many it kept in all. */
   sources: Source[];
+  sourceCount?: number;
+  /** 2 for a sub-agent sent in the second round, to close a gap the first round left. */
+  round?: 1 | 2;
+  /** Second round: what the lead wanted settled, in a sentence. */
+  why?: string;
 };
 
 export type ResearchData = WidgetBase & {
@@ -310,6 +321,13 @@ export type ResearchData = WidgetBase & {
   agents: ResearchAgent[];
   /** Markdown report with inline links, set when done. */
   report?: string;
+  /** How deep this went: "Standard", "Deep", "Deeper" or "Exhaustive". Unset on older reports. */
+  depth?: string;
+  /** Which round the team is in. Only set when the depth has a second round. */
+  round?: 1 | 2;
+  /** Distinct pages the searches turned up, and how many of them were kept as sources. `sources` lists the kept ones, up to a few hundred. */
+  pagesChecked?: number;
+  sourceCount?: number;
 };
 
 /* ───────────────────────── Widgets the model composes itself ───────────────────────── */
