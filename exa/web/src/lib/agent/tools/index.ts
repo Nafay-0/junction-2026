@@ -10,6 +10,7 @@ import { findPlacesTool, getWeatherTool } from "./places";
 import { deepResearchTool } from "./research";
 import { readPagesTool, searchImagesTool, webSearchTool } from "./search";
 import { searchProductsTool } from "./shopping";
+import { siftTool } from "./sift";
 import { searchFlightsTool, searchHotelsTool } from "./travel";
 
 /**
@@ -39,6 +40,7 @@ function allTools(ctx: ToolContext, mainModel: LanguageModel) {
     searchFlights: searchFlightsTool(ctx),
     searchHotels: searchHotelsTool(ctx),
     searchProducts: searchProductsTool(ctx),
+    sift: siftTool(ctx),
     getStocks: getStocksTool(ctx),
     getPredictionMarket: getPredictionMarketTool(ctx),
     searchImages: searchImagesTool(ctx),

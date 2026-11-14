@@ -1,4 +1,5 @@
 import type { LanguageModelUsage } from "ai";
+import type { DecisionMeter } from "@/lib/decisions/client";
 import type { ExaMeter } from "@/lib/exa/client";
 import { costOf, EMPTY_USAGE, type RunStats, type TokenUsage } from "./models";
 
@@ -29,7 +30,7 @@ export function addUsage(a: TokenUsage, b: TokenUsage): TokenUsage {
  * calls and sub-agents that run inside tools. The main agent's own usage comes from the
  * AI SDK when the stream finishes and is added in the route.
  */
-export class RunMeter implements ExaMeter {
+export class RunMeter implements ExaMeter, DecisionMeter {
   readonly startedAt = Date.now();
   exaCostUsd = 0;
   exaCalls = { search: 0, contents: 0, agent: 0, answer: 0 };
@@ -47,6 +48,12 @@ export class RunMeter implements ExaMeter {
     const flat = toTokenUsage(usage);
     this.workerUsage = addUsage(this.workerUsage, flat);
     this.workerCostUsd += costOf(modelId, flat);
+  }
+
+  /** Record a request to the decision model. It writes nothing, so only its input is counted. */
+  addJudge(inputTokens: number, costUsd: number) {
+    this.workerUsage = addUsage(this.workerUsage, { ...EMPTY_USAGE, inputTokens });
+    this.workerCostUsd += costUsd;
   }
 
   snapshot(): Pick<RunStats, "exaCostUsd" | "exaCalls" | "workerUsage" | "workerCostUsd" | "contextTrimmed"> {

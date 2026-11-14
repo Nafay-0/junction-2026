@@ -54,6 +54,29 @@ if (which === "all" || which === "models") {
 if (which === "all" || which === "gemini") {
   for (const id of ["gemini-4-carbon", "gemini-4-hydrogen"]) await timed(id, () => say(google(id)));
 }
+if (which === "all" || which === "decisions") {
+  // The decision model behind sift: no words come back, only how likely each answer is. Two pages, two wishes, one request.
+  await timed("gemini-decision-1 judges two pages against two wishes", async () => {
+    const answers = { yes: "The page says so", no: "The page says otherwise", unknown: "The page does not say" };
+    const ask = (page, wish) => ({ type: "choice", instructions: `Look only at Page ${page}. According to that page, is it true that ${wish}?`, criteria: answers });
+    const res = await fetch("https://generativelanguage.googleapis.com/v1beta/decisions", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-goog-api-key": env.GOOGLE_API_KEY },
+      body: JSON.stringify({
+        model: "gemini-decision-1",
+        input: "[Page 1] Lentil soup. Ready in 20 minutes. Lentils, carrots, onion, stock. One pot.\n\n[Page 2] Beef stew. Simmer for three hours. Beef, potatoes, red wine.",
+        questions: { p1_quick: ask(1, "the recipe takes 30 minutes or less"), p1_veg: ask(1, "the recipe contains no meat"), p2_quick: ask(2, "the recipe takes 30 minutes or less"), p2_veg: ask(2, "the recipe contains no meat") },
+      }),
+    });
+    const body = await res.json();
+    if (!res.ok) throw Object.assign(new Error(body?.error?.message ?? "request failed"), { status: res.status });
+    const got = Object.fromEntries(Object.entries(body.answers ?? {}).map(([key, a]) => [key, a.choice]));
+    const want = { p1_quick: "yes", p1_veg: "yes", p2_quick: "no", p2_veg: "no" };
+    const wrong = Object.keys(want).filter((key) => got[key] !== want[key]);
+    if (wrong.length) throw new Error(`unexpected answers for ${wrong.join(", ")}: ${JSON.stringify(got)}`);
+    return `${JSON.stringify(got)} in=${body.usage?.total_input_tokens ?? "?"}`;
+  });
+}
 if (which === "all" || which === "tools") {
   const claude = process.argv[3] === "bearer" ? bearer : aws;
   const tools = {

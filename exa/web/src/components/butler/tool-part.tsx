@@ -21,6 +21,7 @@ import type {
   PredictionMarketData,
   ProductsData,
   ResearchData,
+  SiftData,
   StocksData,
   WeatherData,
 } from "@/lib/widgets/types";
@@ -37,6 +38,7 @@ import { PredictionMarket } from "@/components/widgets/market";
 import { PlacesMap } from "@/components/widgets/places-map";
 import { Products } from "@/components/widgets/products";
 import { Research } from "@/components/widgets/research";
+import { Sift } from "@/components/widgets/sift";
 import { Stocks } from "@/components/widgets/stocks";
 import { UserAction, type UserActionInput } from "@/components/widgets/user-action";
 import { Weather } from "@/components/widgets/weather";
@@ -182,6 +184,25 @@ function renderWidget(part: ToolPart, handlers: WidgetHandlers): React.ReactNode
     case "tool-searchProducts": {
       const { data, loading } = resolve<ProductsData>(part, (i) => ({ kind: "products", query: str(i.query), products: [], sources: [] }), "Searching shops and reviews");
       return <Products data={data} loading={loading} />;
+    }
+    case "tool-sift": {
+      // The wishes are the columns: they are on screen while the pages are still being found.
+      const { data, loading } = resolve<SiftData>(
+        part,
+        (i) => ({
+          kind: "sift",
+          title: str(i.title, "Finding the ones that fit"),
+          what: str(i.what),
+          wishes: arr<Record<string, unknown>>(i.wishes)
+            .filter((w) => typeof w.label === "string")
+            .map((w) => ({ label: str(w.label), test: str(w.test) })),
+          items: [],
+          checked: 0,
+          sources: [],
+        }),
+        "Searching the web",
+      );
+      return <Sift data={data} loading={loading} />;
     }
     case "tool-getStocks": {
       const { data, loading } = resolve<StocksData>(part, () => ({ kind: "stocks", quotes: [], sources: [] }), "Fetching live prices");

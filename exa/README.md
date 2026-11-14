@@ -46,7 +46,7 @@ Sign in with `ADMIN_EMAIL` and `ADMIN_PASSWORD` from `exa/.env.local`. The admin
 - `pnpm desktop` builds the app's browser engine, starts the server if nothing answers on port 3000 (`BERYL_PORT` picks another port) and opens the app. `BERYL_URL=https://beryl.example.com pnpm desktop` opens it on a server that runs somewhere else.
 - `pnpm desktop:pack` packages it as a real application in `web/desktop/release/` (`Beryl.app` on a Mac). Give it the server's address with `BERYL_SERVER_URL` when packaging; anyone can change it later on the app's own "cannot reach the server" page. The package is not signed: on another Mac it opens with right-click, Open, the first time.
 - `pnpm db:generate` writes a migration after `src/lib/db/schema.ts` changes; `pnpm db:migrate` applies migrations by hand (the server also does it when it starts).
-- `pnpm smoke` checks that Claude (through AWS) and Gemini answer with your keys. `pnpm smoke options` sends one small request per model and job (agent, sub-agent, extraction) with the exact thinking settings the app uses.
+- `pnpm smoke` checks that Claude (through AWS), Gemini and Gemini's decision model answer with your keys. `pnpm smoke options` sends one small request per model and job (agent, sub-agent, extraction) with the exact thinking settings the app uses.
 - `pnpm test:guard` checks the live browser's safety rules as a table (no browser needed).
 - `pnpm test:auth 3000` checks accounts over HTTP with the server running: sign-in, the admin's powers, each account seeing only its own conversations, the read-only rule, blocking and deleting.
 - `pnpm test:desktop 3000` starts the real desktop app in a throwaway profile, signs in, and checks from inside it: the browser view, the agent's clicks, keys and scrolling, the safety rules, approvals, the user's own typing, hiding and closing. `BERYL_TEST_CHAT="<request>"` then types a real request into the app; `BERYL_TEST_SHOTS=<folder>` saves pictures of the window.
@@ -66,6 +66,7 @@ Sign in with `ADMIN_EMAIL` and `ADMIN_PASSWORD` from `exa/.env.local`. The admin
 | Flights | Fare cards with booking links | Jinko through Exa Connect (Exa Agent) | 20 to 30 s |
 | Hotels | Cards with photos and live rates | Jinko through Exa Connect (Exa Agent) | 30 to 60 s |
 | Products | Cards that appear one by one, compare view | Exa search, then a fast model lines them up | 10 s |
+| "Find me ones that…" (recipes, job ads, listings, reviews, studies) | Sift: a grid of pages against wishes | Exa search for about 40 pages, each checked against every wish by Gemini's decision model | 2 to 3 s |
 | Images | Gallery with lightbox | Exa search with image links | 3 s |
 | Research | Parallel sub-agents, then a sourced report | Exa search and contents, 3 to 4 sub-agents | 30 s |
 | Anything else | Text with source pills | Exa search and contents | 5 to 10 s |
@@ -75,6 +76,16 @@ The model can also show a comparison table, key facts, a plan, clarifying questi
 **Custom widget.** When none of the fixed widgets fits, the agent composes its own with the `showWidget` tool, block by block: charts (pie, donut, bar, stacked bar, horizontal bar, line, area, scatter, radar), stat tiles, tables, lists and timelines, progress bars, images, callouts and buttons. A button can open a link, copy text, or send a follow-up to the agent, so the widget can continue the task. For something no block can express (a calculator, a custom diagram) there is an `html` block: a self-contained fragment that runs in a sandboxed frame with no network access and the app's colours passed in. Blocks appear as the model writes them. The block shapes are in `web/src/lib/widgets/types.ts` ("Custom widget"), the tool in `web/src/lib/agent/tools/compose.ts`.
 
 Every widget shows its sources. Every answer shows the model, the time, the number of Exa calls and the cost; the top bar adds them up for the conversation.
+
+## Sift: find the ones that fit
+
+Most requests to a butler are "find me one that…": a dinner that is quick, vegetarian and one pan; a junior job that is hybrid and fine with English; a study that is a randomized trial in older adults. An agent that reads pages one at a time gets through four or five. Sift reads about forty, and checks every one against every wish.
+
+- **How it works.** The agent turns the request into wishes, one condition each ("the recipe takes 30 minutes or less"). Exa returns up to 100 pages with their text in one search (`sift` asks for about 40, or about 100 when asked to be thorough), including the passages further down each page that bear on the wishes. One request to Gemini's decision model (`gemini-decision-1`) then answers, for every page and every wish, yes, no or "the page does not say", with how sure it is. A decision model writes nothing: it returns probabilities, so a thousand questions take about as long as one and cost almost nothing ($0.10 per million input tokens, no output).
+- **What it shows.** A grid: one row per page, one column per wish, best fit first, in three bands (meets every wish, misses one, the rest). A solid mark is a sure answer, a dashed one is "probably", a question mark is "the page does not say". Tapping a wish keeps only the pages that meet it. On a phone each page is a card and the marks are labelled chips. Pages that turn out not to be one such thing (a list, a shop front, an empty page) are left out and counted.
+- **What it costs and how long it takes** (measured 14 November): 40 pages against 4 or 5 wishes is about 200 judgements in 0.7 to 1.3 seconds for under half a cent, plus about 3 cents for the Exa search. A thorough sift (100 pages, 600 judgements) took 2.8 seconds, 1.4 cents for the judging and 14 cents on Exa. A whole answer, typed, takes 8 to 14 seconds; in a call the grid is on screen about 3 seconds after the user stops speaking.
+- **Where it is honest about its limits.** The judge only sees what Exa returned for each page, so a fact the page does not state comes back as "does not say", not as no, and the agent is told to say so. It fits where one page carries the facts: recipes, job ads, listings, reviews, courses, events, studies. It is the wrong tool for restaurants (opening hours and prices are rarely in the page text; `findPlaces` has them), flights, hotels and shop prices, and the agent is told that too.
+- **Where the code is.** `web/src/lib/decisions/client.ts` (the Decisions API), `web/src/lib/agent/tools/sift.ts` (search, judge, rank), `web/src/components/widgets/sift.tsx` (the grid). `pnpm smoke decisions` checks that the decision model answers with your key.
 
 ## Voice
 
@@ -137,13 +148,15 @@ Reading, navigating, searching, filling in a form, adding to a basket and refusi
 ## How it is built
 
 - **Stack:** Next.js 16, React 19, Tailwind 4, shadcn/ui, Vercel AI SDK 7, Postgres through Drizzle. One server for web and desktop; the desktop shell is Electron.
+- **Sift:** Gemini's Decisions API (`gemini-decision-1`) called over HTTP from the server, with the same key as the other Gemini models.
 - **Voice:** Gemini's Live API straight from the browser, with short-lived tokens from the server (`@google/genai` on the server only). `gemini-3.8-live` for calls, `gemini-3.5-transcribe-live` for voice input.
 - **Models:** Claude (Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable 5.2) through Claude Platform on AWS (`@ai-sdk/anthropic-aws`) and Gemini (4 Carbon, 4 Hydrogen) through Google AI Studio, switchable per message. Sub-agents and extraction run on the fast model of the same family (Haiku 5.5 or Gemini 4 Hydrogen). The thinking settings differ by family and by model (Gemini 4 rejects the "minimal" level; only Haiku lets Claude's thinking be switched off), so they are decided per model and job in one file, `web/src/lib/agent/options.ts`. Prices are in `web/src/lib/agent/models.ts`; Gemini 4 Carbon's list price doubles on 1 Dec 2026.
 - **Why the AI SDK and not Pydantic AI or a hand-written loop:** see `research_notes/Agent runtime choice/`. Short version: one codebase, and each tool's output type is the widget's input type.
 - **Code map** (all under `web/src`):
   - `lib/widgets/types.ts`: the contract between tools and widgets.
   - `lib/exa/client.ts`: the Exa client (search, contents, agent runs), with cost tracking and a 5-minute cache.
-  - `lib/agent/tools/`: the 24 tools. `lib/agent/instructions.ts`: the system prompt.
+  - `lib/decisions/client.ts`: the client for Gemini's Decisions API (many closed questions about one input, answered with probabilities).
+  - `lib/agent/tools/`: the 25 tools. `lib/agent/instructions.ts`: the system prompt.
   - `app/api/chat/route.ts`: the agent loop, usage metadata, context trimming, prompt caching.
   - `lib/client-kind.ts`: web or desktop, and the header that tells the server which is asking.
   - `lib/agent/tools/index.ts`: which tools each kind gets (`createTools`); `lib/agent/instructions.ts`: what each kind is told it can do.

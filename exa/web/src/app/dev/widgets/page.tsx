@@ -18,6 +18,7 @@ import { PlacesMap } from "@/components/widgets/places-map";
 import { Plan } from "@/components/widgets/plan";
 import { Products } from "@/components/widgets/products";
 import { Research } from "@/components/widgets/research";
+import { Sift } from "@/components/widgets/sift";
 import { Stocks } from "@/components/widgets/stocks";
 import { Weather } from "@/components/widgets/weather";
 import { actionsFixture, actionsLoadingFixture } from "@/lib/widgets/fixtures/actions";
@@ -33,6 +34,7 @@ import { placesFixture, placesLoadingFixture } from "@/lib/widgets/fixtures/plac
 import { planFixture } from "@/lib/widgets/fixtures/plan";
 import { productsFixture, productsLoadingFixture } from "@/lib/widgets/fixtures/products";
 import { researchFixture, researchLoadingFixture } from "@/lib/widgets/fixtures/research";
+import { siftFixture, siftLoadingFixture } from "@/lib/widgets/fixtures/sift";
 import { stocksFixture, stocksLoadingFixture } from "@/lib/widgets/fixtures/stocks";
 import { weatherFixture, weatherLoadingFixture } from "@/lib/widgets/fixtures/weather";
 
@@ -77,6 +79,7 @@ export default function WidgetGallery() {
     ["custom", <Custom key="custom" data={loading ? customLoadingFixture : customFixture} loading={loading} onAsk={(prompt) => window.alert(`Would send: ${prompt}`)} />],
     ["custom-charts", <Custom key="custom-charts" data={customChartsFixture} />],
     ["custom-html", <Custom key="custom-html" data={customHtmlFixture} onAsk={(prompt) => window.alert(`Would send: ${prompt}`)} />],
+    ["sift", <Sift key="sift" data={loading ? siftLoadingFixture : siftFixture} loading={loading} />],
     ["comparison", <Comparison key="comparison" data={loading ? comparisonLoadingFixture : comparisonFixture} loading={loading} />],
     ["facts", <KeyFacts key="facts" data={loading ? factsLoadingFixture : factsFixture} loading={loading} />],
     ["actions", <Actions key="actions" data={loading ? actionsLoadingFixture : actionsFixture} loading={loading} />],

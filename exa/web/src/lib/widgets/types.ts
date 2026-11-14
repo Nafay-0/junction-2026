@@ -332,6 +332,49 @@ export type KeyFactsData = WidgetBase & {
   facts: Array<{ label: string; value: string; detail?: string; sourceUrl?: string }>;
 };
 
+/* ───────────────────────── Sift: many pages, each checked against every wish ───────────────────────── */
+
+/** From this confidence up a verdict is shown as certain; below it, as "probably". */
+export const SIFT_SURE = 0.8;
+
+/** How one page answers one wish. */
+export type SiftVerdict = {
+  /** "yes": the page says so. "no": it says otherwise. "unknown": the page does not say. */
+  answer: "yes" | "no" | "unknown";
+  /** How sure the judge is of that answer, 0 to 1. */
+  confidence: number;
+};
+
+export type SiftItem = Source & {
+  image?: string;
+  /** One verdict per wish, in the order of `wishes`. Missing while the pages are still being checked. */
+  verdicts?: SiftVerdict[];
+};
+
+export type SiftData = WidgetBase & {
+  kind: "sift";
+  title: string;
+  /** What one result is, singular: "a recipe", "a job ad", "a review of one laptop". */
+  what: string;
+  wishes: Array<{
+    /** Two or three words, the column heading: "Under 30 min". */
+    label: string;
+    /** The statement each page was checked against: "the recipe takes 30 minutes or less". */
+    test: string;
+  }>;
+  /** The pages that are one such thing, best fit first. */
+  items: SiftItem[];
+  /** How many pages were read and checked. */
+  checked: number;
+  /** How many of those were left out because they were not one such thing: a list, a shop front, an empty page. */
+  skipped?: number;
+  /** How many single yes-or-no judgements were made, and how long they took together, in milliseconds. */
+  judgements?: number;
+  judgedMs?: number;
+  /** Set when the pages were found but could not be checked. The items are then in search order, without verdicts. */
+  unjudged?: string;
+};
+
 export type ActionItem = {
   label: string;
   description?: string;
