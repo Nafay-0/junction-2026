@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Spinner } from "../../_ui/kit";
+import { Composer, ThreadDock } from "../../_ui/thread";
 import { shortProduct } from "../../_ui/plain";
 import { useText } from "../../_i18n/provider";
 import type { Lang } from "../../_i18n/lang";
@@ -89,6 +89,50 @@ export function AssistantPanel() {
 
   const busy = asking || agent.busy;
 
+  const chip = "inline-flex max-w-full items-center gap-1.5 rounded-full bg-paper py-0.5 pl-3 pr-1 text-[0.85rem] ring-1 ring-lavender-mid";
+  const drop = "flex size-8 shrink-0 items-center justify-center rounded-full text-ink-soft hover:bg-lavender hover:text-ink";
+  const composer = (
+    <>
+      {(agent.followUp || agent.product) && (
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {agent.followUp && (
+            <span className={chip}>
+              <span className="shrink-0 font-semibold text-lavender-deep">{tx.changing}</span>
+              <span className="truncate">{requestLabel(agent.followUp, lang)}</span>
+              <button type="button" className={drop} aria-label={tx.stopChanging} onClick={() => agent.setFollowUp(undefined)}>
+                <X aria-hidden size={15} />
+              </button>
+            </span>
+          )}
+          {agent.product && (
+            <span className={chip}>
+              <span className="shrink-0 font-semibold text-lavender-deep">{tx.product}</span>
+              <span className="truncate">{shortProduct(lang === "en" ? (agent.product.names?.en ?? agent.product.name) : nameIn(agent.product, lang))}</span>
+              <button type="button" className={drop} aria-label={tx.removeProduct} onClick={() => agent.setProduct(undefined)}>
+                <X aria-hidden size={15} />
+              </button>
+            </span>
+          )}
+        </div>
+      )}
+      <Composer
+        value={agent.draft}
+        onChange={agent.setDraft}
+        onSubmit={() => void submit(agent.draft)}
+        inputRef={fieldRef}
+        busy={busy}
+        label={agent.followUp ? tx.labelChange : agent.product ? tx.labelProduct : tx.labelAsk}
+        placeholder={agent.followUp ? tx.phChange : agent.product ? tx.phProduct : tx.phAsk}
+        hint={tx.footnote}
+        // Microphone and "add a photo or document" mount here (see channel-slot.tsx).
+        tools={<ChannelSlot kitchen={kitchen.slug} lang={SPEECH[lang]} disabled={busy} onText={agent.setDraft} onSubmit={(t) => void submit(t)} />}
+      />
+      <div className="mt-2.5 border-t border-lavender-mid/70 pt-2.5">
+        <CallAgent compact />
+      </div>
+    </>
+  );
+
   return (
     <>
       {!open && (
@@ -102,31 +146,11 @@ export function AssistantPanel() {
           {tx.open}
         </button>
       )}
-      {open && <div aria-hidden className="fade-in fixed inset-0 z-40 bg-petrol-deep/45 backdrop-blur-[2px] xl:hidden" onClick={() => agent.setPanelOpen(false)} />}
-      {/* A sheet from the bottom edge on a phone, a side sheet on a tablet, docked beside the page on a wide screen. */}
-      <aside
-        id="assistant"
-        aria-label={tx.panel}
-        className={`${open ? "flex" : "hidden"} sheet-up fixed inset-x-0 bottom-0 z-50 max-h-[90dvh] flex-col rounded-t-2xl bg-lavender shadow-lg sm:inset-x-auto sm:inset-y-0 sm:right-0 sm:max-h-none sm:w-[26rem] sm:rounded-none sm:rounded-l-2xl xl:z-40 xl:w-[25rem] xl:animate-none xl:rounded-none xl:border-l xl:border-lavender-mid xl:shadow-none`}
-      >
-        <span aria-hidden className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-lavender-mid sm:hidden" />
-        <header className="flex items-center gap-3 px-4 pb-3 pt-3 sm:pt-4">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-lavender-deep text-paper">
-            <AgentIcon size={19} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <h2 className="display text-[1.2rem] leading-tight">{kitchen.agentName}</h2>
-            <p className="line-clamp-2 text-[0.8rem] leading-snug text-ink-soft">{tx.buysFor(kitchen.name)}</p>
-          </div>
-          <button type="button" onClick={() => agent.setPanelOpen(false)} className="flex size-11 shrink-0 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-lavender-mid hover:text-ink" aria-label={tx.close}>
-            <X aria-hidden size={20} />
-          </button>
-        </header>
-
-        <ol className="min-h-24 flex-1 space-y-4 overflow-y-auto px-4 py-2" aria-live="polite">
+      <ThreadDock open={open} onClose={() => agent.setPanelOpen(false)} name={kitchen.agentName} sub={tx.buysFor(kitchen.name)} label={tx.panel} footer={composer}>
+        <ol className="space-y-4" aria-live="polite">
           {turns.length === 0 && (
             <li className="space-y-3">
-              <p className="text-[0.95rem] leading-relaxed text-ink">{tx.intro}</p>
+              <p className="px-1 text-[0.95rem] leading-relaxed text-ink">{tx.intro}</p>
               <div className="flex flex-col items-stretch gap-2">
                 {[...suggestions(productId, orderId, lang), kitchen.examples[1] ?? kitchen.examples[0]].filter(Boolean).map((s, i, all) => (
                   <button key={s} type="button" onClick={() => void submit(s)} className="flex min-h-11 items-center justify-between gap-2 rounded-xl bg-paper px-3.5 py-2 text-left text-[0.92rem] shadow-xs ring-1 ring-lavender-mid/70 transition-shadow duration-150 hover:shadow-sm hover:ring-lavender-deep/40">
@@ -138,18 +162,18 @@ export function AssistantPanel() {
             </li>
           )}
           {turns.map((t) => (
-            <li key={t.id} className="space-y-2">
-              <p className="ml-10 w-fit max-w-[calc(100%-2.5rem)] justify-self-end rounded-2xl rounded-br-md bg-lavender-deep px-3.5 py-2 text-[0.95rem] leading-snug text-paper [margin-left:auto]">{t.q}</p>
+            <li key={t.id} className="flex flex-col gap-2">
+              <p className="max-w-[85%] self-end rounded-[1.25rem] rounded-br-md bg-lavender-deep px-4 py-2.5 text-[0.95rem] leading-snug text-paper">{t.q}</p>
               {t.kind === "pending" && (
-                <div role="status" className="space-y-2 rounded-2xl rounded-bl-md bg-paper px-3.5 py-3 shadow-xs">
+                <div role="status" className="space-y-2 rounded-xl bg-paper px-4 py-3.5 shadow-xs">
                   <span className="skeleton block h-3 w-4/5" />
                   <span className="skeleton block h-3 w-3/5" />
                   <span className="block text-[0.8rem] text-ink-soft">{tx.lookingUp}</span>
                 </div>
               )}
-              {t.kind === "error" && <p className="rounded-xl bg-bad-soft px-3.5 py-2.5 text-[0.92rem]">{tx.failed(t.message)}</p>}
+              {t.kind === "error" && <p className="rounded-xl bg-bad-soft px-4 py-3 text-[0.92rem]">{tx.failed(t.message)}</p>}
               {t.kind === "order" && (
-                <div className="rounded-2xl rounded-bl-md bg-paper px-3.5 py-3 text-[0.92rem] leading-snug shadow-xs ring-1 ring-lavender-mid/70">
+                <div className="rounded-xl bg-paper px-4 py-3.5 text-[0.92rem] leading-snug shadow-xs ring-1 ring-lavender-mid/70">
                   <p className="font-semibold">{tx.onLane}</p>
                   <p className="mt-0.5 text-ink-soft">
                     {tx.followA}
@@ -165,63 +189,7 @@ export function AssistantPanel() {
           ))}
           <li ref={endRef} aria-hidden />
         </ol>
-
-        <form
-          className="border-t border-lavender-mid/70 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 sm:pb-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void submit(agent.draft);
-          }}
-        >
-          {(agent.followUp || agent.product) && (
-            <div className="mb-2 flex flex-wrap gap-1.5">
-              {agent.followUp && (
-                <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-paper py-0.5 pl-3 pr-1 text-[0.85rem] ring-1 ring-lavender-mid">
-                  <span className="shrink-0 font-semibold text-lavender-deep">{tx.changing}</span>
-                  <span className="truncate">{requestLabel(agent.followUp, lang)}</span>
-                  <button type="button" className="flex size-8 shrink-0 items-center justify-center rounded-full text-ink-soft hover:bg-lavender hover:text-ink" aria-label={tx.stopChanging} onClick={() => agent.setFollowUp(undefined)}>
-                    <X aria-hidden size={15} />
-                  </button>
-                </span>
-              )}
-              {agent.product && (
-                <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-paper py-0.5 pl-3 pr-1 text-[0.85rem] ring-1 ring-lavender-mid">
-                  <span className="shrink-0 font-semibold text-lavender-deep">{tx.product}</span>
-                  <span className="truncate">{shortProduct(lang === "en" ? (agent.product.names?.en ?? agent.product.name) : nameIn(agent.product, lang))}</span>
-                  <button type="button" className="flex size-8 shrink-0 items-center justify-center rounded-full text-ink-soft hover:bg-lavender hover:text-ink" aria-label={tx.removeProduct} onClick={() => agent.setProduct(undefined)}>
-                    <X aria-hidden size={15} />
-                  </button>
-                </span>
-              )}
-            </div>
-          )}
-          <label htmlFor="need" className="px-1 text-[0.82rem] font-medium text-lavender-deep">
-            {agent.followUp ? tx.labelChange : agent.product ? tx.labelProduct : tx.labelAsk}
-          </label>
-          <div className="mt-1.5 flex items-center gap-0.5 rounded-[1.6rem] bg-paper p-1 shadow-xs ring-1 ring-lavender-mid transition-shadow duration-150 focus-within:ring-2 focus-within:ring-lavender-deep">
-            <input
-              id="need"
-              ref={fieldRef}
-              value={agent.draft}
-              onChange={(e) => agent.setDraft(e.target.value)}
-              placeholder={agent.followUp ? tx.phChange : agent.product ? tx.phProduct : tx.phAsk}
-              autoComplete="off"
-              enterKeyHint="send"
-              className="min-h-11 min-w-0 flex-1 rounded-full bg-transparent px-3 text-[1rem] placeholder:text-ink-soft focus:outline-none"
-            />
-            {/* Microphone and "add a photo or document" mount here (see channel-slot.tsx). */}
-            <ChannelSlot kitchen={kitchen.slug} lang={SPEECH[lang]} disabled={busy} onText={agent.setDraft} onSubmit={(t) => void submit(t)} />
-            <button type="submit" disabled={busy} aria-busy={busy || undefined} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full bg-lime px-4 text-[0.95rem] font-semibold text-ink transition-colors duration-150 hover:bg-lime-hover disabled:opacity-60">
-              {busy && <Spinner size={14} />}
-              {tx.send}
-            </button>
-          </div>
-          <p className="mt-2 px-1 text-[0.78rem] leading-snug text-ink-soft">{tx.footnote}</p>
-          <div className="mt-2.5 border-t border-lavender-mid/70 pt-2.5">
-            <CallAgent compact />
-          </div>
-        </form>
-      </aside>
+      </ThreadDock>
     </>
   );
 }

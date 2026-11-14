@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { Activity, Bot, Circle, CirclePause, Ellipsis, FileCheck2, History, LogOut, Radar, Route, Server, ShieldCheck, SlidersHorizontal, Users, type LucideIcon } from "lucide-react";
+import { useEffect, useState } from "react";
 import { api } from "../../_client/api";
 import { useLive } from "../../_client/use-live";
 import { PRODUCT_NAME } from "../../_ui/brand";
+import { Avatar, Sheet } from "../../_ui/kit";
 import { clockSeconds } from "../../_ui/plain";
 import { Target } from "../../_ui/target";
 import { Wordmark } from "../../_ui/wordmark";
@@ -26,13 +28,31 @@ const NAV: { href: string; label: string; what: string; key: string }[] = [
   { href: "/ops/platform", label: "Platform", what: "What runs on Aiven, live", key: "p" },
 ];
 
+/** One icon per section, by address, so a section added to NAV without one still shows (with a plain ring). */
+const ICON: Record<string, LucideIcon> = {
+  "/ops": Activity,
+  "/ops/trace": Route,
+  "/ops/safeguards": ShieldCheck,
+  "/ops/radar": Radar,
+  "/ops/control": SlidersHorizontal,
+  "/ops/audit": FileCheck2,
+  "/ops/agents": Bot,
+  "/ops/customers": Users,
+  "/ops/platform": Server,
+  "/ops/time-machine": History,
+};
+/** The four sections in the phone's tab bar; the rest are one tap further, under More. */
+const PRIMARY = ["/ops", "/ops/trace", "/ops/control", "/ops/safeguards"];
+
 /** Shown at the rail's foot on every operations page. */
 export const OPS_DEMO_NOTE = "Demo on synthetic data, built for the Junction 2026 Valio Aimo challenge. Not the wholesaler's own system.";
 
 /**
- * The operations portal's rail: petrol-deep, so staff always know they are on the wholesaler's side. It is headed by
- * the gatehouse's status (Helsinki clock, ledger chain, sign-offs waiting on a person, agents suspended), and every
- * section has a key: press g, then the letter (g l for Live, g t for Trace...).
+ * The operations portal's shell. On a desk: a petrol-deep sidebar, so staff always know they are on the
+ * wholesaler's side, and a status bar above the page with what a person on the desk needs to know before anything
+ * else (the ledger chain, sign-offs waiting on a person, agents suspended, Helsinki time). On a phone: a top bar with
+ * the same status, and the sections in a tab bar under the thumb, the rest under More.
+ * Every section has a key: press g, then the letter (g l for Live, g t for Trace...).
  */
 export function Rail() {
   const path = usePathname();
@@ -81,84 +101,145 @@ export function Rail() {
 
   const waiting = s?.waiting ?? 0;
   const suspended = s?.suspended ?? 0;
+  const [more, setMore] = useState(false);
+  const [forPath, setForPath] = useState(path);
+  if (forPath !== path) {
+    setForPath(path);
+    setMore(false);
+  }
+
+  /** The gatehouse's status: the ledger chain, sign-offs waiting on a person, agents suspended. */
+  const status = (compact: boolean) => (
+    <>
+      {s?.chain && (
+        <span title="Every ledger entry hashes the one before it" className={`inline-flex min-h-8 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[0.82rem] font-medium ${s.chain.ok ? "bg-good-soft text-good" : "bg-safety-ink text-safety"}`}>
+          {s.chain.ok ? <ShieldCheck aria-hidden size={15} /> : <Target size={14} tone="safety" />}
+          {s.chain.ok ? (compact ? `${num(s.chain.length)}` : `Ledger intact, ${num(s.chain.length)} entries`) : "Ledger chain broken"}
+          {compact && s.chain.ok && <span className="sr-only"> ledger entries, chain intact</span>}
+        </span>
+      )}
+      {waiting > 0 ? (
+        <Link href="/ops/control#waiting" className="inline-flex min-h-8 items-center gap-1.5 whitespace-nowrap rounded-full bg-safety px-3 text-[0.82rem] font-semibold text-safety-ink transition-[filter] hover:brightness-95">
+          <Target size={14} tone="safety" />
+          {compact ? waiting : `${waiting} sign-off${waiting === 1 ? "" : "s"} waiting`}
+          {compact && <span className="sr-only"> sign-offs waiting</span>}
+        </Link>
+      ) : (
+        !compact && <span className="whitespace-nowrap text-[0.82rem] text-ink-soft">No sign-off waiting</span>
+      )}
+      {suspended > 0 && (
+        <Link href="/ops/control" className="inline-flex min-h-8 items-center gap-1.5 whitespace-nowrap rounded-full bg-safety-soft px-3 text-[0.82rem] font-semibold text-safety-ink ring-1 ring-inset ring-safety/60">
+          <CirclePause aria-hidden size={15} />
+          {suspended}
+          {!compact && " suspended"}
+          {compact && <span className="sr-only"> suspended</span>}
+        </Link>
+      )}
+    </>
+  );
+
+  const item = (n: (typeof NAV)[number], onDark: boolean) => {
+    const on = active(n.href);
+    const Icon = ICON[n.href] ?? Circle;
+    return (
+      <Link
+        key={n.href}
+        href={n.href}
+        title={n.what}
+        aria-current={on ? "page" : undefined}
+        aria-keyshortcuts={`g ${n.key}`}
+        className={
+          onDark
+            ? `group relative flex min-h-10 items-center gap-3 rounded-lg px-3 text-[0.92rem] transition-colors duration-150 ${on ? "bg-paper/12 font-semibold text-paper" : "font-medium text-paper/70 hover:bg-paper/8 hover:text-paper"}`
+            : `flex min-h-13 items-center gap-3.5 px-5 text-[0.98rem] transition-colors ${on ? "font-semibold text-petrol" : "font-medium text-ink hover:bg-mist"}`
+        }
+      >
+        {onDark && on && <span aria-hidden className="absolute inset-y-2.5 left-0 w-[3px] rounded-full bg-lime" />}
+        <Icon aria-hidden size={onDark ? 18 : 20} strokeWidth={on ? 2.2 : 1.9} className="shrink-0" />
+        <span className="min-w-0 flex-1 truncate">
+          {n.label}
+          {!onDark && <span className="block text-[0.8rem] font-normal text-ink-soft">{n.what}</span>}
+        </span>
+        {onDark && <kbd className="hidden text-[0.7rem] font-medium uppercase text-paper/35 group-hover:block">{n.key}</kbd>}
+      </Link>
+    );
+  };
 
   return (
-    <aside className="on-dark flex shrink-0 flex-col bg-petrol-deep text-paper lg:sticky lg:top-0 lg:h-dvh lg:w-[232px]">
-      <div className="flex items-center justify-between gap-3 px-4 pb-3 pt-4 lg:block">
-        <Link href="/ops" className="block leading-none" aria-label={`${PRODUCT_NAME}, wholesaler operations`}>
-          <Wordmark tone="paper" size={28} />
-          <span className="mt-1.5 block text-[0.82rem] text-paper/75">Wholesaler operations</span>
+    <>
+      {/* ----- a desk: the sidebar, and the status bar above the page ----- */}
+      <aside className="on-dark sticky top-0 hidden h-dvh w-[15rem] shrink-0 flex-col bg-petrol-deep text-paper lg:flex">
+        <Link href="/ops" className="block px-5 pb-4 pt-5 leading-none" aria-label={`${PRODUCT_NAME}, wholesaler operations`}>
+          <Wordmark tone="paper" size={27} />
+          <span className="mt-2 block text-[0.8rem] text-paper/60">Wholesaler operations</span>
         </Link>
-        {/* The gatehouse: what a person on the desk needs to know before anything else. */}
-        <dl className="flex items-center gap-4 text-[0.85rem] lg:mt-4 lg:block lg:space-y-1.5 lg:border-t lg:border-paper/15 lg:pt-3">
-          <div className="hidden lg:block">
-            <dt className="sr-only">Helsinki time</dt>
-            <dd className="display text-[1.5rem] tabular" suppressHydrationWarning>
-              {now ? clockSeconds(new Date(now)) : "–"}
-            </dd>
-          </div>
-          {s?.chain && (
-            <div className="flex items-center gap-2" title="Every ledger entry hashes the one before it">
-              <dt className="sr-only">Ledger</dt>
-              <Target size={14} tone={s.chain.ok ? "chalk" : "safety"} />
-              <dd>{s.chain.ok ? `Ledger intact, ${num(s.chain.length)} entries` : "Ledger chain broken"}</dd>
-            </div>
-          )}
-          <div>
-            <dt className="sr-only">Sign-offs waiting</dt>
-            <dd>
-              <Link href="/ops/control#waiting" className="flex items-center gap-2 hover:underline">
-                {waiting > 0 ? <span aria-hidden className="hazard-thin size-3.5 shrink-0" /> : <span aria-hidden className="size-3.5 shrink-0 border border-paper/50" />}
-                <span className={waiting > 0 ? "font-semibold" : "text-paper/75"}>{waiting > 0 ? `${waiting} sign-off${waiting === 1 ? "" : "s"} waiting` : "No sign-off waiting"}</span>
-              </Link>
-            </dd>
-          </div>
-          {suspended > 0 && (
-            <div>
-              <dt className="sr-only">Suspended</dt>
-              <dd>
-                <Link href="/ops/control" className="flex items-center gap-2 font-semibold hover:underline">
-                  <span aria-hidden className="size-3.5 shrink-0 bg-safety ring-1 ring-paper/40" />
-                  {suspended} suspended
-                </Link>
-              </dd>
-            </div>
-          )}
-        </dl>
+        <nav aria-label="Operations" className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 pb-3">
+          {NAV.map((n) => item(n, true))}
+        </nav>
+        <div className="border-t border-paper/10 px-5 py-4 text-[0.76rem] leading-snug text-paper/55">
+          <p>
+            Press <kbd className="rounded-xs border border-paper/30 px-1 text-paper/80">g</kbd> then a section&apos;s letter to jump.
+          </p>
+          <p className="mt-2">{OPS_DEMO_NOTE}</p>
+        </div>
+      </aside>
+      <div className="fixed left-[15rem] right-0 top-0 z-20 hidden h-14 items-center justify-end gap-2.5 border-b border-line bg-mist/85 px-6 backdrop-blur-md lg:flex xl:px-10">
+        {status(false)}
+        <span className="mx-1 h-5 w-px bg-line-strong" aria-hidden />
+        <span className="text-[0.86rem] font-medium tabular text-ink-soft" title="Helsinki time" suppressHydrationWarning>
+          {now ? clockSeconds(new Date(now)) : "–"}
+        </span>
+        <span className="mx-1 h-5 w-px bg-line-strong" aria-hidden />
+        <span className="flex items-center gap-2 text-[0.86rem]">
+          <Avatar name={s?.name ?? "Operations"} size={30} />
+          <span className="hidden font-medium xl:inline">{s?.name ?? "…"}</span>
+          <button type="button" onClick={leave} title={s?.mode === "demo" ? "Leave (demo entry)" : "Leave"} aria-label="Leave the operations portal" className="flex size-9 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-surface hover:text-ink">
+            <LogOut aria-hidden size={17} />
+          </button>
+        </span>
       </div>
 
-      <nav aria-label="Operations" className="flex gap-0.5 overflow-x-auto border-t border-paper/15 px-2 py-2 lg:flex-1 lg:flex-col lg:overflow-y-auto">
-        {NAV.map((n) => {
-          const on = active(n.href);
-          return (
-            <Link
-              key={n.href}
-              href={n.href}
-              aria-current={on ? "page" : undefined}
-              aria-keyshortcuts={`g ${n.key}`}
-              className={`group relative shrink-0 px-3 py-1.5 ${on ? "bg-petrol" : "hover:bg-petrol/50"}`}
-            >
-              {on && <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-lime" />}
-              <span className="block text-[1rem] font-semibold leading-tight">{n.label}</span>
-              <span className={`hidden text-[0.78rem] leading-tight lg:block ${on ? "text-paper/85" : "text-paper/60"}`}>{n.what}</span>
-            </Link>
-          );
-        })}
+      {/* ----- a phone: a top bar with the status, and the sections under the thumb ----- */}
+      <header className="sticky top-0 z-20 flex items-center gap-2 border-b border-line bg-paper/90 px-4 py-2.5 backdrop-blur-md lg:hidden">
+        <Link href="/ops" className="mr-auto flex min-w-0 items-center" aria-label={`${PRODUCT_NAME}, wholesaler operations`}>
+          <Wordmark size={24} />
+        </Link>
+        {status(true)}
+      </header>
+      <nav aria-label="Operations" className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-paper/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden">
+        <div className="mx-auto grid max-w-md grid-cols-5 px-2">
+          {NAV.filter((n) => PRIMARY.includes(n.href)).map((n) => {
+            const on = active(n.href);
+            const Icon = ICON[n.href] ?? Circle;
+            return (
+              <Link key={n.href} href={n.href} aria-current={on ? "page" : undefined} className={`flex min-h-14 flex-col items-center justify-center gap-0.5 text-[0.7rem] font-medium ${on ? "text-petrol" : "text-ink-soft"}`}>
+                <Icon aria-hidden size={22} strokeWidth={on ? 2.3 : 1.9} />
+                <span className="max-w-full truncate px-1">{n.label}</span>
+              </Link>
+            );
+          })}
+          <button type="button" onClick={() => setMore(true)} aria-haspopup="dialog" aria-expanded={more} className={`flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-none text-[0.7rem] font-medium ${NAV.some((n) => !PRIMARY.includes(n.href) && active(n.href)) ? "text-petrol" : "text-ink-soft"}`}>
+            <Ellipsis aria-hidden size={22} />
+            <span>More</span>
+          </button>
+        </div>
       </nav>
-
-      <div className="hidden border-t border-paper/15 px-4 py-3 text-[0.8rem] leading-snug text-paper/70 lg:block">
-        <p>
-          Signed in as <span className="font-semibold text-paper">{s?.name ?? "…"}</span>
-          {s?.mode === "demo" && ", demo entry"}.{" "}
-          <button type="button" onClick={leave} className="underline underline-offset-2 hover:text-paper">
+      <Sheet open={more} onClose={() => setMore(false)} title="Operations">
+        <nav aria-label="All sections" className="-mx-5 divide-y divide-line border-y border-line">
+          {NAV.map((n) => item(n, false))}
+        </nav>
+        <p className="mt-5 flex items-center justify-between gap-4 text-[0.9rem]">
+          <span className="text-ink-soft">
+            Signed in as <span className="font-semibold text-ink">{s?.name ?? "…"}</span>
+            {s?.mode === "demo" && ", demo entry"}
+          </span>
+          <button type="button" onClick={leave} className="inline-flex min-h-10 items-center gap-2 rounded-full border border-line-strong px-4 font-semibold">
+            <LogOut aria-hidden size={16} />
             Leave
           </button>
         </p>
-        <p className="mt-1.5">
-          Press <kbd className="border border-paper/40 px-1 font-sans text-paper">g</kbd> then a section&apos;s letter to jump.
-        </p>
-        <p className="mt-1.5">{OPS_DEMO_NOTE}</p>
-      </div>
-    </aside>
+        <p className="mt-4 text-[0.8rem] leading-snug text-ink-soft">{OPS_DEMO_NOTE}</p>
+      </Sheet>
+    </>
   );
 }

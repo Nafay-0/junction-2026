@@ -286,7 +286,7 @@ export function Portal({ kitchen, kitchens, children }: { kitchen: KitchenInfo; 
   return (
     <PortalContext.Provider value={value}>
       <Toaster>
-        <div className={`relative min-h-dvh overflow-x-clip bg-mist text-ink ${panelOpen ? "xl:pr-[25rem]" : ""}`}>
+        <div className={`relative min-h-dvh overflow-x-clip bg-mist text-ink ${panelOpen ? "xl:pr-[27rem] 2xl:pr-[30rem]" : ""}`}>
           <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded-full focus:bg-paper focus:px-4 focus:py-2 focus:shadow-md">
             {tx.skip}
           </a>
@@ -359,12 +359,16 @@ function Header() {
     <header className="sticky top-0 z-30 border-b border-line bg-paper/90 backdrop-blur-md supports-[not(backdrop-filter:blur(0))]:bg-paper">
       <div className="mx-auto flex max-w-[1320px] flex-wrap items-center gap-x-3 gap-y-2.5 px-4 py-2.5 sm:px-6 lg:flex-nowrap lg:gap-x-5 lg:py-3 xl:px-8">
         <Link href="/k" className="flex shrink-0 items-center rounded-md" aria-label={`${PRODUCT_NAME}: ${tx.allKitchens}`}>
-          <Wordmark size={25} className="lg:hidden" />
-          <Wordmark size={30} className="hidden lg:inline-flex" />
+          <span className="lg:hidden">
+            <Wordmark size={25} />
+          </span>
+          <span className="hidden lg:block">
+            <Wordmark size={30} />
+          </span>
         </Link>
 
         {/* Whose kitchen this is. The whole pill is the switch: a native select laid over it. */}
-        <div className="relative flex min-w-0 flex-1 items-center gap-2.5 rounded-full py-1 pl-1 pr-2.5 transition-colors focus-within:bg-surface hover:bg-surface lg:max-w-[19rem] lg:flex-none lg:border-l lg:border-line lg:rounded-none lg:rounded-r-full lg:py-0.5 lg:pl-5">
+        <div className="relative flex min-w-0 flex-1 items-center gap-2.5 rounded-full py-1 pl-1 pr-2.5 transition-colors focus-within:bg-surface hover:bg-surface lg:min-w-[9rem] lg:max-w-[17rem] lg:flex-initial lg:border-l lg:border-line lg:rounded-none lg:rounded-r-full lg:py-0.5 lg:pl-5">
           <Avatar name={kitchen.name} size={34} />
           <div className="min-w-0">
             <p className="flex items-center gap-1 text-[0.95rem] font-semibold leading-tight">
@@ -393,7 +397,7 @@ function Header() {
         <form
           role="search"
           aria-label={tx.searchRegion}
-          className={`${showSearch ? "flex" : "hidden"} relative order-last basis-full items-center rounded-full bg-surface transition-[background-color,box-shadow] duration-150 focus-within:bg-paper focus-within:shadow-[0_0_0_2px_var(--color-petrol)] lg:order-none lg:flex lg:min-w-[14rem] lg:flex-1 lg:basis-auto`}
+          className={`${showSearch ? "flex" : "hidden"} relative order-last basis-full items-center rounded-full bg-surface transition-[background-color,box-shadow] duration-150 focus-within:bg-paper focus-within:shadow-[0_0_0_2px_var(--color-petrol)] lg:order-none lg:flex lg:min-w-[8rem] lg:flex-1 lg:basis-0`}
           onSubmit={(e) => {
             e.preventDefault();
             const t = q.trim();
@@ -436,8 +440,8 @@ function Header() {
             className={`hidden min-h-11 items-center gap-2 rounded-full px-4 text-[0.92rem] font-semibold transition-colors duration-150 lg:inline-flex ${agent.panelOpen ? "bg-lavender-deep text-paper" : "bg-lavender text-lavender-deep hover:bg-lavender-mid"}`}
           >
             <AgentIcon size={18} />
-            <span>{tx.agentButton}</span>
-            <span className="hidden items-center gap-0.5 2xl:flex">
+            <span className={agent.panelOpen ? "sr-only" : ""}>{tx.agentButton}</span>
+            <span className={agent.panelOpen ? "hidden" : "hidden items-center gap-0.5 2xl:flex"}>
               <Kbd dark={agent.panelOpen}>Ctrl K</Kbd>
             </span>
           </button>
@@ -523,8 +527,10 @@ function TabBar() {
   const basketTotal = basket.lines.reduce((s, l) => s + (live.results[l.productId]?.offer?.unitPriceCents ?? 0) * l.packs, 0);
   const priced = basket.lines.length > 0 && basket.lines.every((l) => live.results[l.productId]?.offer);
   const moreActive = ["/menu", "/orders", "/agent", "/basket"].some((sub) => isActive(pathname, base, sub));
+  // On a phone the thread is a screen of its own: going to another tab leaves it.
+  const leaveThread = () => agent.panelOpen && agent.setPanelOpen(false);
   const tab = (href: string, label: string, Icon: typeof House, active: boolean) => (
-    <Link key={href} href={`${base}${href}`} aria-current={active ? "page" : undefined} className={`flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-xl text-[0.7rem] font-medium transition-colors ${active ? "text-petrol" : "text-ink-soft"}`}>
+    <Link key={href} href={`${base}${href}`} onClick={leaveThread} aria-current={active ? "page" : undefined} className={`flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-xl text-[0.7rem] font-medium transition-colors ${active ? "text-petrol" : "text-ink-soft"}`}>
       <Icon aria-hidden size={22} strokeWidth={active ? 2.3 : 1.9} />
       <span className="max-w-full truncate px-1">{label}</span>
     </Link>
@@ -547,7 +553,7 @@ function TabBar() {
       )}
       <nav aria-label={tx.tabsLabel} className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-paper/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden">
         <div className="mx-auto grid max-w-md grid-cols-5 items-end px-2">
-          {TABS.map((t) => tab(t.href, tx.nav[t.key], t.icon, isActive(pathname, base, t.href)))}
+          {TABS.map((t) => tab(t.href, tx.nav[t.key], t.icon, !agent.panelOpen && isActive(pathname, base, t.href)))}
           <button
             type="button"
             onClick={() => (agent.panelOpen ? agent.setPanelOpen(false) : agent.open())}
@@ -560,8 +566,8 @@ function TabBar() {
             </span>
             <span>{tx.agentButton}</span>
           </button>
-          {TABS_AFTER.map((t) => tab(t.href, tx.nav[t.key], t.icon, isActive(pathname, base, t.href)))}
-          <button type="button" onClick={() => setMore(true)} aria-haspopup="dialog" aria-expanded={more} className={`flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-xl text-[0.7rem] font-medium ${moreActive ? "text-petrol" : "text-ink-soft"}`}>
+          {TABS_AFTER.map((t) => tab(t.href, tx.nav[t.key], t.icon, !agent.panelOpen && isActive(pathname, base, t.href)))}
+          <button type="button" onClick={() => { leaveThread(); setMore(true); }} aria-haspopup="dialog" aria-expanded={more} className={`flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-xl text-[0.7rem] font-medium ${moreActive ? "text-petrol" : "text-ink-soft"}`}>
             <Ellipsis aria-hidden size={22} strokeWidth={moreActive ? 2.3 : 1.9} />
             <span>{tx.more}</span>
           </button>
