@@ -85,7 +85,8 @@ export const Drift = ({ children, by = 0.025, origin = "50% 50%" }: { children: 
  */
 const Through = ({ children, presentationDirection, presentationProgress }: TransitionPresentationComponentProps<Record<string, never>>) => {
   const entering = presentationDirection === "entering";
-  const p = entering ? interpolate(presentationProgress, [0.45, 1], [0, 1], clamp) : interpolate(presentationProgress, [0, 0.55], [0, 1], clamp);
+  // The old scene is fully gone before the new one starts to show: never two scenes on screen at once.
+  const p = entering ? interpolate(presentationProgress, [0.5, 1], [0, 1], clamp) : interpolate(presentationProgress, [0, 0.5], [0, 1], clamp);
   return <AbsoluteFill style={{ opacity: entering ? p : 1 - p, scale: String(entering ? 0.94 + 0.06 * EASE(p) : 1 + 0.08 * EASE_IO(p)) }}>{children}</AbsoluteFill>;
 };
 export const through = () => ({ component: Through, props: {} });

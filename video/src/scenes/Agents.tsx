@@ -149,10 +149,11 @@ const CHAIN = [
   { l: "sign-off", h: "469b5e71…0fa3" },
   { l: "order placed", h: "fa63b6cc…535d" },
 ];
-const Meet = () => {
+const Ring = ({ at, exit, line, line2, line2At }: { at: number; exit?: number; line: string; line2?: string; line2At?: number }) => {
   const frame = useCurrentFrame();
-  if (frame < T.meet - 1) return null;
-  const p = prog(frame, T.meet, M);
+  const START = at;
+  if (frame < START - 1 || (exit !== undefined && frame > exit + Q)) return null;
+  const p = prog(frame, START, M) * (exit === undefined ? 1 : 1 - interpolate(frame, [exit, exit + Q], [0, 1], { ...clamp, easing: EASE_IO }));
   return (
     <div style={{ position: "absolute", inset: 0, opacity: p }}>
       <svg width={1920} height={1080} style={{ position: "absolute", inset: 0 }}>
@@ -160,49 +161,44 @@ const Meet = () => {
           const left = a.x < 960;
           const x0 = left ? a.x + 400 : a.x;
           const x1 = left ? 800 : 1120;
-          return <Wire key={a.name} at={T.meet + 8 + k * 4} dur={M + 6} every={44} offset={k * 7} pts={[[x0, a.y + 64], [left ? x0 + 130 : x0 - 130, a.y + 64], [left ? x1 - 130 : x1 + 130, 480], [x1, 480]]} rest={0.55} />;
+          return <Wire key={a.name} at={START + 8 + k * 4} dur={M + 6} every={44} offset={k * 7} pts={[[x0, a.y + 64], [left ? x0 + 130 : x0 - 130, a.y + 64], [left ? x1 - 130 : x1 + 130, 480], [x1, 480]]} rest={0.55} />;
         })}
-        <Wire at={T.meet + 40} dur={Q} pts={[[960, 762], [960, 790], [960, 800], [960, 830]]} rest={0.7} />
+        <Wire at={START + 40} dur={Q} pts={[[960, 762], [960, 790], [960, 800], [960, 830]]} rest={0.7} />
       </svg>
       {RING.map((a, k) => {
-        const q = prog(frame, T.meet + 2 + k * 4, M);
+        const q = prog(frame, START + 2 + k * 4, M);
         const left = a.x < 960;
         return <NodeCard key={a.name} name={a.name} sub={a.sub} w={400} lit={0.25 + 0.75 * q} style={{ position: "absolute", left: a.x, top: a.y, opacity: q, translate: `${(1 - q) * (left ? -40 : 40)}px 0px` }} />;
       })}
       <div style={{ position: "absolute", left: 960 - 160, top: 192, scale: String(0.94 + 0.06 * EASE(p)), transformOrigin: "50% 50%" }}>
-        <GateObject passed={Math.floor(interpolate(frame, [T.meet + 14, T.meet + 44], [0, 4.99], clamp))} scale={0.89} />
+        <GateObject passed={Math.floor(interpolate(frame, [START + 14, START + 44], [0, 4.99], clamp))} scale={0.89} />
       </div>
       <div style={{ position: "absolute", left: 0, right: 0, top: 832, display: "flex", justifyContent: "center", gap: 18 }}>
         {CHAIN.map((b, i) => {
-          const q = prog(frame, T.meet + 44 + i * 6, M);
+          const q = prog(frame, START + 44 + i * 6, M);
           return <Block key={b.h} label={b.l} hash={b.h} style={{ opacity: q, translate: `0px ${(1 - q) * 18}px` }} />;
         })}
       </div>
-      <Rise at={T.meet + 10} style={{ position: "absolute", left: 0, right: 0, top: 934, textAlign: "center", ...display, fontSize: 80, color: C.paper }}>
-        Six agents. None can order past the gate.
+      <Rise at={START + 10} exit={line2At !== undefined ? line2At - Q : undefined} style={{ position: "absolute", left: 0, right: 0, top: 934, textAlign: "center", ...display, fontSize: 80, color: C.paper }}>
+        {line}
       </Rise>
+      {line2 && line2At !== undefined && (
+        <Rise at={line2At} style={{ position: "absolute", left: 0, right: 0, top: 940, textAlign: "center", ...display, fontSize: 68, color: C.lime }}>
+          {line2}
+        </Rise>
+      )}
     </div>
   );
 };
 
 export const Agents = () => {
   const frame = useCurrentFrame();
-  const intro = interpolate(frame, [T.buyer - Q, T.buyer], [1, 0], { ...clamp, easing: EASE_IO });
   const body = 1 - interpolate(frame, [T.meet - Q, T.meet], [0, 1], { ...clamp, easing: EASE_IO });
   const active = SIX.reduce((a, s, i) => (frame >= s.at ? i : a), -1);
   return (
     <AbsoluteFill>
       <Ground>
-        {intro > 0 && (
-          <div style={{ position: "absolute", inset: 0, opacity: intro, translate: `0px ${(1 - intro) * -30}px` }}>
-            <Rise at={8} style={{ position: "absolute", left: 110, top: 300, ...display, fontSize: 190, color: C.paper }}>
-              Six agents. One gate.
-            </Rise>
-            <Rise at={T.tech} style={{ position: "absolute", left: 116, top: 560, ...sans, fontSize: 52, color: C.lime, fontWeight: 600 }}>
-              Built on the Vercel AI SDK, MCP and OpenAPI.
-            </Rise>
-          </div>
-        )}
+        <Ring at={4} exit={T.buyer - Q} line="Six agents. One gate." line2="Built on the Vercel AI SDK, MCP and OpenAPI." line2At={T.tech} />
 
         <div style={{ position: "absolute", inset: 0, opacity: body }}>
           {SIX.map((s, i) => {
@@ -239,7 +235,7 @@ export const Agents = () => {
             </BrowserFrame>
           </Stage>
         </div>
-        <Meet />
+        <Ring at={T.meet} line="Six agents. None can order past the gate." />
       </Ground>
     </AbsoluteFill>
   );
