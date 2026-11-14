@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as approvalRoute from "@/app/api/v1/approvals/[approvalId]/route";
+import * as approverHome from "@/app/api/v1/approver/route";
+import * as approverDemoOrder from "@/app/api/v1/approver/demo-order/route";
+import * as mine from "@/app/k/mine/route";
 import * as challengeRoute from "@/app/api/v1/approvals/[approvalId]/challenge/route";
 import * as consoleApproval from "@/app/ui-api/kitchens/[kitchen]/approval/[approvalId]/route";
 import * as enrolRoute from "@/app/ui-api/presenter/enrol/route";
@@ -80,6 +83,24 @@ describe("presenter enrolment for the built-in demo kitchens", () => {
     expect(signed.body.order.status).toBe("committed");
     expect(signed.body.order.approval.signOff ?? signed.body.view.outcome).toBeTruthy();
     expect(rt.dock.ledger.entries().some((e) => e.data.step === "presenter_enrolled" && /Nafay enrolled a passkey to sign for Aino Virtanen/.test(e.summary))).toBe(true);
+  });
+
+  it("an enrolled presenter has an approver home screen for the demo kitchen, can ask its agent, and opens its shop", async () => {
+    const begin = await json(enrolRoute.POST(req("POST", "/ui-api/presenter/enrol", { kitchen: "kaari", passcode: "harbour-7", presenter: "Nafay" })));
+    const phone = new SoftwareAuthenticator(BASE);
+    const done = await json(enrolVerifyRoute.POST(req("POST", "/ui-api/presenter/enrol/verify", { response: phone.register(begin.body.options) })));
+    const cookie = done.headers.get("set-cookie")!.split(";")[0];
+    expect((await json(approverHome.GET(req("GET", "/api/v1/approver")))).status).toBe(401);
+    const home = await json(approverHome.GET(req("GET", "/api/v1/approver", undefined, { cookie })));
+    expect(home.status).toBe(200);
+    expect(home.body).toMatchObject({ approver: { name: begin.body.approver.name, passkey: true }, kitchen: { name: "Ravintola Kaari" }, agent: { name: "Kaari's buyer agent" }, pending: [] });
+    const asked = await json(approverDemoOrder.POST(req("POST", "/api/v1/approver/demo-order", undefined, { cookie })));
+    expect(asked.status).toBe(201);
+    expect(asked.body.order.status).toBe("pending_approval");
+    const again = await json(approverHome.GET(req("GET", "/api/v1/approver", undefined, { cookie })));
+    expect(again.body.pending.map((p: Json) => p.approvalId)).toEqual([asked.body.order.approvalId]);
+    const shop = await mine.GET(req("GET", "/k/mine", undefined, { cookie }));
+    expect(shop.headers.get("location")).toMatch(/\/k\/kaari$/);
   });
 
   it("limits wrong passcodes per address and refuses enrolment in production without a passcode", async () => {

@@ -1,5 +1,5 @@
 import type { IntakeView } from "@/core/intake";
-import { isoWeekday } from "@/core/kitchen";
+import { isoWeekday, localNow } from "@/core/kitchen";
 import { formatAmount } from "@/core/need";
 import { LABEL_TEXT, formatCutoff } from "@/core/options";
 import type { PublicOrder } from "@/core/orders";
@@ -23,6 +23,13 @@ export function spokenDate(iso: string): string {
 export type ForModel = { ok: boolean; state: string; say: string; ask?: string; [k: string]: unknown };
 
 export function stepForModel(step: IntakeView): ForModel {
+  const out = stepCore(step);
+  if (!step.alsoAsked?.length) return out;
+  const also = `The caller also asked for ${step.alsoAsked.map((x) => x.text).join(", and ")}; this request is only the first, so say that nothing is ordered for the rest yet and offer to take ${step.alsoAsked.length === 1 ? "it" : "them"} next.`;
+  return { ...out, say: `${out.say} ${also}`, alsoAsked: step.alsoAsked.map((x) => x.text) };
+}
+
+function stepCore(step: IntakeView): ForModel {
   switch (step.state) {
     case "needs_confirmation": {
       const checks = step.concerns.map((c) => ({
@@ -78,7 +85,7 @@ export function stepForModel(step: IntakeView): ForModel {
       return {
         ok: true,
         state: step.state,
-        say: `The wholesaler fixed the price: ${formatEur(q.quote.totalCents)}, valid until ${formatCutoff(q.quote.expiresAt)} UTC. ${gate}`,
+        say: `The wholesaler fixed the price: ${formatEur(q.quote.totalCents)}, valid until ${localNow(new Date(q.quote.expiresAt)).time} Helsinki time. ${gate}`,
         ask: d.outcome === "reject" ? undefined : "Ask whether to place the order.",
         total: formatEur(q.quote.totalCents),
         lines: q.quote.lines.map((l) => ({ product: l.name, packs: l.quantity, delivery: spokenDate(l.deliveryDate) })),

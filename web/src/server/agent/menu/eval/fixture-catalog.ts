@@ -24,16 +24,16 @@ export const MENU_FIXTURES: FixtureSpec[] = [
   { id: "800001", names: { fi: "LOHIFILEE TUORE 1KG", en: "SALMON FILLET FRESH 1KG" }, salesUnit: "KG", baseUnit: "KG", units: [["KG", 1]], category: "18701", allergens: [["AF", "CONTAINS"]], labels: COOL },
   { id: "800002", names: { fi: "Merisaalis lohifilee kuutio 1 kg", en: "Merisaalis salmon fillet cube 1 kg" }, salesUnit: "KG", baseUnit: "KG", units: [["KG", 1]], category: "18701", allergens: [["AF", "CONTAINS"]], labels: COOL },
   { id: "800003", names: { fi: "Merisaalis lohifilee pakaste 1 kg", en: "Merisaalis salmon fillet frozen 1 kg" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "41720", allergens: [["AF", "CONTAINS"]], labels: FROZEN, each: kg(1) },
-  { id: "800004", names: { fi: "PERUNA PESTY 2KG", en: "POTATO WASHED 2KG" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "17421", labels: COOL, each: kg(2) },
+  { id: "800004", names: { fi: "PERUNA PESTY 2KG", en: "POTATO WASHED 2KG" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "17421", freeFrom: ["AN", "AP"], labels: COOL, each: kg(2) },
   { id: "800005", names: { fi: "Juuri peruna kuorittu 5kg", en: "Juuri potato peeled 5kg" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "17422", allergens: [["AM", "UNDECLARED"]], freeFrom: ["AN", "AP"], labels: COOL, each: kg(5) },
-  { id: "800006", names: { fi: "PORKKANA PESTY 1KG", en: "CARROT WASHED 1KG" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "17431", labels: COOL, each: kg(1) },
+  { id: "800006", names: { fi: "PORKKANA PESTY 1KG", en: "CARROT WASHED 1KG" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "17431", freeFrom: ["AN", "AP"], labels: COOL, each: kg(1) },
   { id: "800007", names: { fi: "Juuri porkkana viipale 1kg", en: "Juuri carrot slice 1kg" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "17444", freeFrom: ["AN", "AP"], labels: COOL, each: kg(1) },
-  { id: "800008", names: { fi: "PURJO 1KG", en: "LEEK 1KG" }, salesUnit: "KG", baseUnit: "KG", units: [["KG", 1]], category: "17405", labels: COOL },
+  { id: "800008", names: { fi: "PURJO 1KG", en: "LEEK 1KG" }, salesUnit: "KG", baseUnit: "KG", units: [["KG", 1]], category: "17405", freeFrom: ["AN", "AP"], labels: COOL },
   { id: "800009", names: { fi: "Juuri purjorengas 1kg", en: "Juuri leek ring 1kg" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "17444", freeFrom: ["AN", "AP"], labels: COOL, each: kg(1) },
   { id: "800010", names: { fi: "Tunturi ruokakerma 15 % 1 l laktoositon", en: "Tunturi cooking cream 15 % 1 l lactose free" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "10401", claims: ["FREE_FROM_LACTOSE"], allergens: [["AM", "CONTAINS"]], labels: COOL, each: l(1) },
   { id: "800011", names: { fi: "Kuusi ruokakerma 15 % 1 l", en: "Kuusi cooking cream 15 % 1 l" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "10401", allergens: [["AM", "CONTAINS"]], labels: COOL, each: l(1) },
   { id: "800012", names: { fi: "Liemi kalaliemi 1 kg", en: "Liemi fish stock 1 kg" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "21902", allergens: [["AF", "CONTAINS"]], labels: AMB, each: kg(1) },
-  { id: "800013", names: { fi: "TILLI 100G PUNTTI", en: "DILL 100G BUNCH" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "17451", labels: COOL, each: kg(0.1) },
+  { id: "800013", names: { fi: "TILLI 100G PUNTTI", en: "DILL 100G BUNCH" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "17451", freeFrom: ["AN", "AP"], labels: COOL, each: kg(0.1) },
   { id: "800014", names: { fi: "Mauste tilli 130g", en: "Mauste dill 130g" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "22630", freeFrom: ["AN", "AP"], labels: AMB, each: kg(0.13) },
   { id: "800015", names: { fi: "Pakkas tilli pakaste 250g", en: "Pakkas dill frozen 250g" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "41733", freeFrom: ["AN", "AP"], labels: FROZEN, each: kg(0.25) },
   { id: "800016", names: { fi: "Leipomo ruisleipä viipaloitu 1kg", en: "Leipomo rye bread sliced 1kg" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "10900", allergens: [["AW", "CONTAINS"], ["NR", "CONTAINS"], ["AN", "MAY_CONTAIN"]], labels: AMB, each: kg(1) },
@@ -43,7 +43,11 @@ export const MENU_FIXTURES: FixtureSpec[] = [
   { id: "800020", names: { fi: "Pähkinä maapähkinävoi 1kg", en: "Pahkina peanut butter 1kg" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "21453", allergens: [["AP", "CONTAINS"]], labels: AMB, each: kg(1) },
   { id: "800021", names: { fi: "Siipi broilerin rintafilee 2,5kg", en: "Siipi chicken breast fillet 2,5kg" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "18750", freeFrom: ["AN", "AP"], labels: COOL, each: kg(2.5) },
   { id: "800022", names: { fi: "Jyvä riisi 5kg", en: "Jyva rice 5kg" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "21340", freeFrom: ["AN", "AP"], labels: AMB, each: kg(5) },
-  { id: "800023", names: { fi: "SIPULI 10KG", en: "ONION 10KG" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "17405", labels: COOL, each: kg(10) },
+  { id: "800023", names: { fi: "SIPULI 10KG", en: "ONION 10KG" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "17405", freeFrom: ["AN", "AP"], labels: COOL, each: kg(10) },
+  // Eggs counted by the partner's size code; a liquid concentrate dosed differently from powder.
+  { id: "800024", names: { fi: "Kanala vapaan kanan muna M10 580g", en: "Kanala barn egg M10 580g" }, salesUnit: "RAS", baseUnit: "RAS", units: [["RAS", 1]], category: "10590", allergens: [["AE", "CONTAINS"]], labels: COOL, each: kg(0.58) },
+  { id: "800025", names: { fi: "20 x Kanala vapaan kanan muna L6 408g", en: "20 x Kanala barn egg L6 408g" }, salesUnit: "KI", baseUnit: "RAS", units: [["RAS", 1], ["KI", 20]], category: "10590", allergens: [["AE", "CONTAINS"]], labels: COOL, each: kg(0.408) },
+  { id: "800026", names: { fi: "Liemi kalaliemitiiviste 1 l pullo", en: "Liemi fish stock concentrate 1 l bottle" }, salesUnit: "BOT", baseUnit: "BOT", units: [["BOT", 1]], category: "21902", allergens: [["AF", "CONTAINS"]], labels: AMB, each: { ...l(1), ...kg(1.1) } },
 ];
 
 export const MENU_NOW = new Date("2026-11-13T10:00:00.000Z"); // Friday 12:00 in Helsinki
@@ -74,6 +78,9 @@ export const MENU_SCENARIOS: Record<string, FakeScenario> = {
   "800021": ok(17.5, { unit: "ST" }),
   "800022": ok(6.4, { unit: "ST" }),
   "800023": ok(8.9, { unit: "ST" }),
+  "800024": ok(3.2, { unit: "RAS" }),
+  "800025": ok(29.0, { unit: "KI" }),
+  "800026": ok(11.5, { unit: "BOT" }),
 };
 
 /** A Dock over the fixture catalogue and a fake live API, trusting the two demo kitchens' keys. */

@@ -104,7 +104,7 @@ export function repeatNeed(r: PortalRequest, today = helsinkiToday(), lang: Lang
   const was = (need.deliverBy as string | undefined) ?? r.order?.deliveryDate;
   const deliverBy = was ? nextSameWeekday(was, today) : undefined;
   const qty = need.quantity ? (lang === "en" ? amount(need.quantity.amount, need.quantity.unit) : measureL(need.quantity.amount, need.quantity.unit, lang)) : tx.sameAmount;
-  const text = r.text ? tx.repeatText(r.text) : tx.repeatOrder(dayL(helsinkiToday(new Date(r.at)), lang), r.order ? r.order.lines.map((l) => `${l.quantity} × ${shortProduct(l.name)}`).join(" + ") : qty);
+  const text = r.text ? tx.repeatText(r.text.replace(/^((Repeat|Toisto|Upprepning): )+/, "")) : tx.repeatOrder(dayL(helsinkiToday(new Date(r.at)), lang), r.order ? r.order.lines.map((l) => `${l.quantity} × ${shortProduct(l.name)}`).join(" + ") : qty);
   const next: NeedInput = { ...need, text: text.slice(0, 2000), sameAsLastTime: false };
   if (deliverBy) next.deliverBy = deliverBy;
   else delete next.deliverBy;

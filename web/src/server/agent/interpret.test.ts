@@ -228,3 +228,32 @@ describe("POST /api/v1/agent/interpret", () => {
     expect(r).toMatchObject({ status: 503, body: { error: { code: "model_unavailable" } } });
   });
 });
+
+describe("the kitchen's memory reaches the reader as context, never as the need", () => {
+  it("puts the recalled block in the prompt and still records only what the buyer said", async () => {
+    const seen: LanguageModelV4CallOptions[] = [];
+    const memory = "What this kitchen's memory says. RULE: apply it, do not ask.\nRULE Always lactose-free (stated by Sanna Koskinen on 3 Nov)";
+    const r = await interpretNeed({ text: "Tarvitsen 200 litraa maitoa perjantaiksi.", now: NOW, model: replay(RECORDED["Tarvitsen 200 litraa maitoa perjantaiksi."], seen), memory, evidence: ["Always lactose-free"] });
+    expect(JSON.stringify(seen[0].prompt)).toContain("RULE Always lactose-free");
+    expect(JSON.stringify(seen[0].prompt)).toContain("Do NOT copy its rules or habits into the need");
+    expect(r.need.requiredClaims).toEqual([]); // the intake applies the rule, the reader does not
+  });
+
+  it("the route recalls the kitchen's memory for the words", async () => {
+    const { interpretRequest } = await import("./interpret");
+    const seen: LanguageModelV4CallOptions[] = [];
+    const { setInterpretModelForTests } = await import("./interpret");
+    setInterpretModelForTests(replay(RECORDED[MILK], seen));
+    try {
+      const { KITCHEN_ORG } = await import("../demo-kitchen");
+      const { getMemoryService } = await import("../memory/runtime");
+      resetRuntime();
+      (await import("../memory/runtime")).resetMemoryService();
+      await (await getMemoryService()).state(KITCHEN_ORG.orgId, { fact: { kind: "note", text: "Deliveries to the back door before 7" }, text: "Deliveries to the back door before 7: milk", by: "Sanna" });
+      await interpretRequest({ text: MILK }, { catalog: { searchProducts: async () => SEED_PRODUCTS }, mandate: { allowedCategories: ["milk"], requiredAttributes: [], forbiddenAllergens: [], issuer: { orgId: KITCHEN_ORG.orgId } } });
+      expect(JSON.stringify(seen[0].prompt)).toContain("kitchen's memory");
+    } finally {
+      setInterpretModelForTests(undefined);
+    }
+  });
+});

@@ -14,7 +14,7 @@ const committedAbove = (rec: RunRecord) => rec.orders.filter((o) => o.status ===
 
 export const quoteExpiry: Scenario = {
   id: "quote-expiry",
-  version: 1,
+  version: 2,
   title: "The quote expires and the price moves while the chef decides",
   decision: "Re-quote when a fixed price has lapsed, notice that the new total breaks the limit the buyer just gave, ask again, and report the price actually paid.",
   competentBuyer: "Quotes, asks the chef as told (EUR 387: fine, up to EUR 400), finds the quote expired after the 40-minute wait, re-quotes at the new price (EUR 411), asks again because it is over the chef's EUR 400, orders when told to, and reports EUR 411.",

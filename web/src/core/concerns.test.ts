@@ -10,6 +10,16 @@ const ctx = (profile: KitchenProfile = kitchen(regularHistory()), over: Partial<
 const L = (amount: number) => ({ quantity: { amount, unit: "L" as const } });
 
 describe("quantity against the kitchen's own pattern", () => {
+  it("a site of the kitchen (a daycare unit) is compared with its own orders, never called too small against the whole kitchen", () => {
+    const history = regularHistory(); // about 100 L a time for the kitchen
+    expect(checkQuantity(need(L(15)), ctx(kitchen(history))).map((c) => c.code)).not.toEqual([]); // the kitchen itself: 15 L is unusual
+    expect(checkQuantity(need(L(15)), ctx(kitchen(history), { site: "Päiväkoti Satu" }))).toEqual([]); // the daycare's first order
+    const daycare = [15, 15, 14, 16, 15].map((a, i) => ({ ...history[i], orderId: `ord_dc_${i}`, amount: a, site: "Päiväkoti Satu" }));
+    expect(checkQuantity(need(L(150)), ctx(kitchen([...history, ...daycare]), { site: "Päiväkoti Satu" })).map((c) => c.code)).toEqual(["quantity_tenfold"]);
+    // The daycare's orders do not move the kitchen's own usual amount.
+    expect(checkQuantity(need(L(100)), ctx(kitchen([...history, ...daycare])))).toEqual([]);
+  });
+
   it("catches a factor-of-ten slip upwards and offers the usual amount in one tap", () => {
     const [c, ...rest] = checkQuantity(need(L(1000)), ctx());
     expect(rest).toHaveLength(0);
@@ -134,6 +144,17 @@ describe("duplicates", () => {
   it("does not flag another delivery day or an older order", () => {
     expect(checkDuplicate(need({ deliverBy: "2026-11-19" }), ctx(recent(3)))).toEqual([]);
     expect(checkDuplicate(need({ deliverBy: "2026-11-18" }), ctx(recent(72)))).toEqual([]);
+  });
+
+  it("flags an order still waiting for sign-off, and says so", () => {
+    const pending = [{ orderId: "ord_wait", placedAt: new Date(NOW.getTime() - 2 * 3600_000).toISOString(), family: "milk", amount: 1000, unit: "L" as const, neededBy: "2026-11-18", deliveryDate: "2026-11-17" }];
+    const [c] = checkDuplicate(need({ deliverBy: "2026-11-18" }), ctx(kitchen(regularHistory()), { pending }));
+    expect(c).toMatchObject({ key: "duplicate_recent:ord_wait", evidence: { status: "pending_approval" } });
+    expect(c.message).toBe("You already asked for 1,000 L of milk 2 hours ago for Wed 18 Nov (order ord_wait), and that order is still waiting for sign-off. Order again?");
+    // Minutes, not "1 hour ago", for an order placed a few minutes earlier (QA wording note).
+    const [soon] = checkDuplicate(need({ deliverBy: "2026-11-18" }), ctx(kitchen(regularHistory()), { pending: pending.map((p) => ({ ...p, placedAt: new Date(NOW.getTime() - 3 * 60_000).toISOString() })) }));
+    expect(soon.message).toMatch(/1,000 L of milk 3 minutes ago for Wed 18 Nov/);
+    expect(checkDuplicate(need({ deliverBy: "2026-11-18" }), ctx(kitchen(regularHistory()), { pending: pending.map((p) => ({ ...p, family: "cream" })) }))).toEqual([]);
   });
 
   it("without a date, flags a recent order that has not been delivered yet", () => {

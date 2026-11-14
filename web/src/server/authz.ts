@@ -80,8 +80,34 @@ export async function consoleKitchen(req: Request, rt: Runtime, slug: string) {
     if (!ops && me?.account.orgId !== k.info.orgId) throw new DockError(403, "not_your_kitchen", "This is another visitor's kitchen; it can only be used from the phone that joined it.", "data_access");
     // The visitor is the person behind this kitchen: answers given here are theirs, by a passkey-backed session.
     if (me && me.account.orgId === k.info.orgId) console.person = { channel: "portal_session", name: me.account.name, approverId: me.account.approverId };
+  } else {
+    // A built-in demo kitchen stays open to anyone at the table; a presenter enrolled as its approver (a passkey
+    // behind the operations passcode, server/presenter.ts) is that kitchen's own signed-in person.
+    const me = await currentApprover(req, rt);
+    if (me && me.account.orgId === k.info.orgId) {
+      const { presenterKitchenOf } = await import("./presenter"); // presenter.ts imports this module's readers
+      if (presenterKitchenOf(me.account)) console.person = { channel: "portal_session", name: me.account.name, approverId: me.account.approverId };
+    }
   }
   return { ...k, console, setCookie: session.setCookie };
+}
+
+/**
+ * Changing what a kitchen remembers (forgetting or correcting a rule, stating one, sharing it, adding it to the
+ * mandate) is the kitchen's own call: it needs the kitchen's signed-in person, a visitor's own phone for their
+ * kitchen, or for a built-in demo kitchen the presenter enrolled as its approver. An open demo console, a relayed
+ * name or the operations desk can read memory, never change it.
+ */
+export function requireKitchenPerson(k: { info: { kind: string; name: string }; console?: ConsoleContext }, what = "Changing this kitchen's rules"): void {
+  if (k.console?.person) return;
+  throw new DockError(
+    401,
+    "kitchen_person_required",
+    k.info.kind === "visitor"
+      ? `${what} needs the kitchen's own signed-in person: open it on the phone that joined it.`
+      : `${what} needs ${k.info.name}'s own signed-in person: at the demo table, the presenter enrolled as its approver. Anyone else can read the rules, not change them.`,
+    "data_access",
+  );
 }
 
 /**

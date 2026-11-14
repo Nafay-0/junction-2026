@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import * as ledgerRoute from "@/app/api/v1/ledger/route";
 import * as consoleCall from "@/app/ui-api/kitchens/[kitchen]/call/route";
 import * as kitchenRoute from "@/app/ui-api/kitchens/[kitchen]/route";
+import * as portalMemory from "@/app/ui-api/kitchens/[kitchen]/memory/route";
+import { presenterRoles } from "./presenter";
 import { signMandate } from "@/core/mandate";
 import { DEMO_ORG, demoMandate, demoOrgKeyPair } from "./dev-fixtures";
 import { attachConsoleContext, humanViaOf } from "./console-context";
@@ -61,5 +63,28 @@ describe("authorisation", () => {
     expect(humanViaOf(forged)).toEqual({ channel: "relayed" });
     const real = attachConsoleContext(new Request(`${BASE}/api/v1/intake/req_x/concerns`, { method: "POST" }), { kitchen: "sbx_1", session: "s", person: { channel: "portal_session", name: "Helmi Salo", approverId: "apv_1" } });
     expect(humanViaOf(real)).toEqual({ channel: "portal_session", person: "Helmi Salo" });
+  });
+
+  it("a demo kitchen's stated rules can be forgotten only by its own signed-in person: the enrolled presenter (F-PORTAL-MEMORY-OPEN)", async () => {
+    const rt = await getRuntime();
+    const before = await (await viaConsole("kaari", { method: "GET", path: "/api/v1/kitchen" })).json();
+    const pref = before.kitchen.stated.find((p: { text: string }) => /lactose/i.test(p.text));
+    expect(pref).toBeTruthy();
+    const forget = (cookie?: string) =>
+      portalMemory.POST(new Request(`${BASE}/ui-api/kitchens/kaari/memory`, { method: "POST", headers: { "content-type": "application/json", ...(cookie ? { cookie } : {}) }, body: JSON.stringify({ action: "forget", preferenceId: pref.id }) }), params("kaari"));
+    const anon = await forget();
+    expect(anon.status).toBe(401);
+    expect((await anon.json()).error.code).toBe("kitchen_person_required");
+    // Another kitchen's visitor is not Kaari's person either.
+    const visitor = await rt.sandboxes.joinWithoutPasskey();
+    expect((await forget(`dock_approver=${encodeURIComponent(visitor.sessionToken)}`)).status).toBe(401);
+    const after = await (await viaConsole("kaari", { method: "GET", path: "/api/v1/kitchen" })).json();
+    expect(after.kitchen.stated.some((p: { id: string }) => p.id === pref.id)).toBe(true);
+    // The presenter enrolled as Kaari's head chef may.
+    const role = presenterRoles("kaari")![0];
+    const expiresAt = new Date(Date.now() + 3600_000);
+    await rt.passkeys.enrol({ approverId: "apv_presenter_kaari", orgId: role.orgId, role: role.role, name: role.name, userHandle: "", createdAt: new Date().toISOString(), expiresAt: expiresAt.toISOString() });
+    const token = await rt.passkeys.newSession("apv_presenter_kaari", expiresAt);
+    expect((await forget(`dock_approver=${encodeURIComponent(token)}`)).status).toBe(200);
   });
 });
