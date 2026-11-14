@@ -409,7 +409,7 @@ export async function placeQuoted(run: TurnRun, s: IntakeView, words: string, pa
 
 /** The card an action answers must still be open: a tap on an old card never acts on a newer request. */
 export async function checkOpen(run: TurnRun, a: ThreadAction): Promise<IntakeView | undefined> {
-  if (a.type === "remember" || a.type === "withdraw" || a.type === "retry") return undefined;
+  if (a.type === "remember" || a.type === "withdraw" || a.type === "retry" || a.type === "plan_order") return undefined;
   const s = await run.rt.dock.intake.get(run.session, a.requestId);
   const want = a.type === "concern" ? ["needs_confirmation"] : a.type === "answer" ? ["needs_input", "options_ready"] : a.type === "choose" ? ["options_ready"] : ["quoted"];
   if (!want.includes(s.state)) throw new DockError(409, "turn_card_stale", `That card has moved on: the request is now ${s.state.replace(/_/g, " ")}.`, "intake_sequence", { state: s.state });
@@ -423,7 +423,7 @@ export async function checkOpen(run: TurnRun, a: ThreadAction): Promise<IntakeVi
 export async function runAction(run: TurnRun, a: ThreadAction, words?: string): Promise<ItemOutcome[]> {
   const via = humanVia(run, words);
   const by = byLine(run);
-  if (words) record(run, "heard", `Heard from the buyer before ${a.type}: "${words.slice(0, 300)}"`, { heard: words.slice(0, 1000), action: a }, "requestId" in a ? a.requestId : undefined);
+  if (words && a.type !== "plan_order") record(run, "heard", `Heard from the buyer before ${a.type}: "${words.slice(0, 300)}"`, { heard: words.slice(0, 1000), action: a }, "requestId" in a ? a.requestId : undefined);
   const dock = run.rt.dock;
   switch (a.type) {
     case "concern": {
@@ -466,6 +466,10 @@ export async function runAction(run: TurnRun, a: ThreadAction, words?: string): 
       run.store.card(run.thread, run.turnId, gateCard(o));
       run.store.card(run.thread, run.turnId, orderCard(o));
       return [{ words: words ?? "", requestId: o.requestId, placed: { orderId: o.orderId, status: o.status, totalCents: o.totalCents } }];
+    }
+    case "plan_order": {
+      const { orderPlan } = await import("./plan");
+      return orderPlan(run, a.planId, words);
     }
     case "remember":
     case "retry":
