@@ -20,7 +20,8 @@ import { serverAgentName, serverAmount, serverDays, serverDifference, serverLice
 
 type Phase = "idle" | "passkey" | "sending";
 /** Kept as a kind, not as words, so the screen follows a language switch. Server messages stay as they came. */
-type Problem = { key: "noConnection" | "notAccepted" | "cantStart" | "cantDecline"; body?: string } | { key: "passkey"; err: unknown };
+type Problem = { key: "noConnection" | "notAccepted" | "cantStart" | "cantDecline" | "storeDown"; body?: string } | { key: "passkey"; err: unknown };
+const STORE_DOWN = "store_unavailable"; // the database away: said as such, nothing was signed
 type DecideReply = { view?: ApprovalView; order?: unknown };
 
 const OPTIONS_FRESH_MS = 4 * 60_000; // the server's prompts live 5 minutes
@@ -59,6 +60,7 @@ export function ApprovalScreen({ approvalId, token }: { approvalId: string; toke
   const [reason, setReason] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const prepared = useRef<{ options: PublicKeyCredentialRequestOptionsJSON; at: number } | null>(null);
+  const prepareError = useRef<string | null>(null);
 
   const refresh = useCallback(async () => {
     const r = await api<{ view: ApprovalView }>("GET", `/api/v1/approvals/${encodeURIComponent(approvalId)}${token ? `?token=${encodeURIComponent(token)}` : ""}`);
@@ -75,6 +77,7 @@ export function ApprovalScreen({ approvalId, token }: { approvalId: string; toke
   const prepare = useCallback(async () => {
     const r = await api<{ options: PublicKeyCredentialRequestOptionsJSON }>("POST", `/api/v1/approvals/${encodeURIComponent(approvalId)}/challenge`, { decision: "approve" });
     prepared.current = r.ok ? { options: r.data.options, at: Date.now() } : null;
+    prepareError.current = r.ok ? null : r.error.code;
     return prepared.current;
   }, [approvalId]);
 
@@ -106,7 +109,7 @@ export function ApprovalScreen({ approvalId, token }: { approvalId: string; toke
       setProblem(null);
       return true;
     }
-    setProblem({ key: r.status === 0 ? "noConnection" : "notAccepted", body: r.error.message });
+    setProblem(r.error.code === STORE_DOWN ? { key: "storeDown" } : { key: r.status === 0 ? "noConnection" : "notAccepted", body: r.error.message });
     void refresh();
     return false;
   }
@@ -118,7 +121,7 @@ export function ApprovalScreen({ approvalId, token }: { approvalId: string; toke
     if (!p || Date.now() - p.at > OPTIONS_FRESH_MS) p = await prepare();
     if (!p) {
       setPhase("idle");
-      setProblem({ key: "cantStart" });
+      setProblem({ key: prepareError.current === STORE_DOWN ? "storeDown" : "cantStart" });
       return;
     }
     let response;
@@ -165,13 +168,22 @@ export function ApprovalScreen({ approvalId, token }: { approvalId: string; toke
     ? null
     : problem.key === "passkey"
       ? passkeyProblemL(problem.err, lang)
-      : { title: tx[problem.key], body: problem.body ?? tx.cantStartBody };
+      : problem.key === "storeDown"
+        ? { title: tx.storeDown, body: tx.storeDownBody }
+        : { title: tx[problem.key], body: problem.body ?? tx.cantStartBody };
+
+  // Opening the request while the database is away: say so, and ask again by itself.
+  useEffect(() => {
+    if (loadError?.code !== STORE_DOWN || view) return;
+    const t = setTimeout(() => void refresh(), 10_000);
+    return () => clearTimeout(t);
+  }, [loadError, view, refresh]);
 
   if (loadError && !view)
     return (
       <PhoneNotice
-        title={loadError.code === "approval_not_found" ? tx.noSuch : tx.didNotLoad}
-        body={loadError.message}
+        title={loadError.code === "approval_not_found" ? tx.noSuch : loadError.code === STORE_DOWN ? tx.storeDown : tx.didNotLoad}
+        body={loadError.code === STORE_DOWN ? tx.storeDownBody : loadError.message}
         mark={
           <IconDisc tone="muted" size={56}>
             <CircleSlash size={26} />

@@ -128,7 +128,7 @@ export async function selfApproveChecks(agent: Http, approvalId: string): Promis
   return out;
 }
 
-export type ApproverView = { listStatus: number; listed: boolean; pageStatus: number; viewStatus: number; decideStatus?: number; decideCode?: string; orderStatus?: string; ms: number };
+export type ApproverView = { listStatus: number; listCode?: string; listMs?: number; listed: boolean; pageStatus: number; viewStatus: number; viewCode?: string; decideStatus?: number; decideCode?: string; orderStatus?: string; ms: number };
 
 /** What the approver's phone does: the list behind /approver, the page /approve/<id>, its data, then the passkey sign-off. */
 export async function approverFlow(v: Visitor, approvalId: string, decide?: "approve" | "decline", passkeyDecide?: (v: Visitor, id: string, d: "approve" | "decline") => Promise<Reply>): Promise<ApproverView> {
@@ -136,7 +136,7 @@ export async function approverFlow(v: Visitor, approvalId: string, decide?: "app
   const list = await v.http.get("/api/v1/approvals");
   const page = await v.http.raw("GET", `/approve/${approvalId}`, undefined, { accept: "text/html" });
   const view = await v.http.get(`/api/v1/approvals/${approvalId}`);
-  const out: ApproverView = { listStatus: list.status, listed: (list.body?.approvals ?? []).some((a: any) => a.approvalId === approvalId), pageStatus: page.status, viewStatus: view.status, ms: 0 };
+  const out: ApproverView = { listStatus: list.status, listCode: list.body?.error?.code ?? list.error, listMs: list.ms, viewCode: view.body?.error?.code ?? view.error, listed: (list.body?.approvals ?? []).some((a: any) => a.approvalId === approvalId), pageStatus: page.status, viewStatus: view.status, ms: 0 };
   if (decide && passkeyDecide) {
     const d = await passkeyDecide(v, approvalId, decide);
     out.decideStatus = d.status;
