@@ -84,6 +84,8 @@ export type AccountDeps = {
   maxAccounts?: () => number;
   /** The gate's register of reissued mandates (server/mandates.ts): an account's new mandate retires the old there. */
   mandates?: MandateBook;
+  /** After a reset of the shared test accounts: their old organisations, so what was staged for them is cleared (server/watch). */
+  afterTestReset?: (oldOrgIds: string[], by: string) => Promise<unknown>;
 };
 
 const signInFailed = () => new DockError(401, "sign_in_failed", "That username and password do not match an account here. Check both and try again.", "account");
@@ -386,8 +388,10 @@ export class AccountService {
    */
   async resetTestAccounts(by: string): Promise<{ reset: string[] }> {
     const reset: string[] = [];
+    const oldOrgs: string[] = [];
     for (const seed of TEST_ACCOUNTS) {
       const old = await this.deps.store.get(seed.username);
+      if (old?.kitchen) oldOrgs.push(old.kitchen.orgId);
       if (old?.kitchen) {
         this.deps.registry.remove(old.kitchen.key.kid);
         const signer = await this.deps.passkeys.store.findApprover(old.kitchen.orgId, old.kitchen.approverRole);
@@ -398,6 +402,7 @@ export class AccountService {
       reset.push(seed.username);
     }
     this.deps.dock.ledger.append({ type: "intake", actor: "dock", summary: `The shared test accounts (${reset.join(", ")}) were reset to their seed: rules, mandate and history; ${by}.`, data: { step: "test_accounts_reset", accounts: reset, by } });
+    await this.deps.afterTestReset?.(oldOrgs, by).catch((err: Error) => console.warn("[accounts] after the test reset", err.message));
     return { reset };
   }
 
