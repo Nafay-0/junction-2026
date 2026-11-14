@@ -41,13 +41,13 @@ export type PlatformOverview = {
 };
 
 const JOBS: Record<string, { name: string; job: string; why: string }> = {
-  "dock-app": { name: "Aiven Runtime", job: "Hosts Dock: the gate, its MCP door and REST API, the portals", why: "The app sits next to its data, gets the services' credentials injected, and Managed Agents reach its MCP endpoint over public HTTPS." },
+  "dock-app": { name: "Aiven Runtime", job: "Hosts AimoPilot: the gate, its MCP door and REST API, the portals", why: "The app sits next to its data, gets the services' credentials injected, and Managed Agents reach its MCP endpoint over public HTTPS." },
   "dock-pg": { name: "PostgreSQL", job: "System of record: orders, approvals, the hash-chained ledger, kitchen memory, telemetry", why: "Committing at a fixed price is a transaction; the ledger's hash chain is checked by constraints with pgcrypto; pgvector keeps memory next to its rows." },
   "dock-events": { name: "Kafka", job: "Every agent action and gate decision, in order (topic dock.actions)", why: "Durable and replayable per request key: the trace replays from it, and the telemetry sink is just a consumer group." },
   "dock-cache": { name: "Valkey", job: "Live-price cache, each agent's lookup budget, the event bus", why: "SET with an expiry matches 'this price is valid for N minutes'; INCR+EXPIRE is a rate budget; pub/sub fans out sign-offs." },
   "dock-search": { name: "OpenSearch", job: "Search over 17,546 products in Finnish, Swedish and English", why: "Relevance ranking and language analysers narrow to a short list in master data, so the live price API is asked only about that list." },
   "dock-grafana": { name: "Grafana", job: "The full dashboard: business numbers next to service CPU, memory, disk and app logs", why: "Reads PostgreSQL as a read-only user and the Aiven API with a read-only token; free plans allow no metrics integration." },
-  "managed-agents": { name: "Managed Agents", job: "An outside purchasing agent that runs on Aiven and buys through Dock's MCP door", why: "Proves the door is open: an agent Dock does not run, with its own model, held to the same mandate and gate." },
+  "managed-agents": { name: "Managed Agents", job: "An outside purchasing agent that runs on Aiven and buys through AimoPilot's MCP door", why: "Proves the door is open: an agent AimoPilot does not run, with its own model, held to the same mandate and gate." },
   "aiven-mcp": { name: "Aiven MCP server", job: "The operations copilot's way to service state, logs and metrics", why: "Read-only token, read-only tools: staff ask about the platform without anyone holding admin credentials." },
 };
 

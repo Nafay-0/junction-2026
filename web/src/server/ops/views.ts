@@ -266,7 +266,7 @@ function refusalCases(ctx: OpsContext): Case[] {
         rule,
         outcome: "fail",
         orgName: (e.requestId && ctx.orgOfRequest(e.requestId)) || agent?.orgName || (e.actor.startsWith("approver") ? "An approver" : "Unknown caller"),
-        agentLabel: agent?.label ?? (e.actor.startsWith("agent:") ? e.actor.slice(6) : e.actor === "dock" ? "Dock" : "Unknown"),
+        agentLabel: agent?.label ?? (e.actor.startsWith("agent:") ? e.actor.slice(6) : e.actor === "dock" ? "AimoPilot" : "Unknown"),
         via: (typeof d.via === "string" ? (d.via as Via) : undefined) ?? (e.requestId ? ctx.viaOfRequest(e.requestId) : agent ? ctx.door.viaAt(agent.agentId, e.at)?.via : undefined),
         requestId: e.requestId,
         orderId: e.orderId,

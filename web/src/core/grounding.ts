@@ -544,7 +544,7 @@ function dedupe(v: Violation[]): Violation[] {
 
 /** The message the call screen sends the agent when it said something Dock never gave it. */
 export function correctionFor(v: Violation[]): string {
-  return `[Dock check] You said ${v.map((x) => `"${x.said}"`).join(", ")}, which is not in any tool result in this call. Your audio was cut off. Tell the caller in one short sentence to ignore that, then say only what the last tool result says.`;
+  return `[AimoPilot check] You said ${v.map((x) => `"${x.said}"`).join(", ")}, which is not in any tool result in this call. Your audio was cut off. Tell the caller in one short sentence to ignore that, then say only what the last tool result says.`;
 }
 
 // ---------- what a person's own words say (for structured output read from them) ----------

@@ -382,7 +382,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
       if (c.questions.length) {
         i.state = "needs_input";
         i.questions = c.questions;
-        log(i, "dock", `Dock asked ${c.questions.length} question${c.questions.length > 1 ? "s" : ""}: ${c.questions.map((q) => q.text).join(" / ")}`, {
+        log(i, "dock", `AimoPilot asked ${c.questions.length} question${c.questions.length > 1 ? "s" : ""}: ${c.questions.map((q) => q.text).join(" / ")}`, {
           step: "questions",
           questions: c.questions.map((q) => ({ id: q.id, options: q.options.map((o) => o.id) })),
           reasons: memoryText(i, c.fromMemory).map((t) => `From memory: ${t}`),
@@ -417,7 +417,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
     const short = shortlist(narrowed, prefer, MAX_LIVE_IDS_PER_CALL, i.amount, span);
     // "On Monday": what is available earlier is delivered that day (orders.ts scheduledOn).
     const on = (l: LiveLookupResult): LiveLookupResult => (i.need.deliverOn ? { ...l, offers: l.offers.map((o) => scheduledOn(o, i.need.deliverOn)), statuses: l.statuses.map((st) => (st.offer ? { ...st, offer: scheduledOn(st.offer, i.need.deliverOn) } : st)) } : l);
-    const live = on(await deps.liveLookup(session, i.requestId, short.map((p) => p.id), i.need.deliverBy, "Dock checked live price and availability for the shortlist"));
+    const live = on(await deps.liveLookup(session, i.requestId, short.map((p) => p.id), i.need.deliverBy, "AimoPilot checked live price and availability for the shortlist"));
     const goalForRank = goal.optimise && goal.optimise !== "no_preference" ? goal.optimise : undefined;
     const options = (priced: Product[], l: Pick<LiveLookupResult, "offers" | "statuses">) => buildOptions({
       amount: i.amount!,
@@ -448,7 +448,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
     if (rest.length && (result.cards.length < MAX_CARDS || uncovered.size)) {
       const wanted = rest.filter((p) => uncovered.has(span?.(p) ?? ""));
       const pool = shortlist(wanted.length ? wanted : rest, [], MAX_LIVE_IDS_PER_CALL, i.amount, span);
-      const second = on(await deps.liveLookup(session, i.requestId, pool.map((p) => p.id), i.need.deliverBy, "The first short list left gaps; Dock checked the next few products once"));
+      const second = on(await deps.liveLookup(session, i.requestId, pool.map((p) => p.id), i.need.deliverBy, "The first short list left gaps; AimoPilot checked the next few products once"));
       short.push(...pool);
       seen = { offers: [...live.offers, ...second.offers], statuses: [...live.statuses, ...second.statuses] };
       result = options(short, seen);
@@ -480,14 +480,14 @@ export function createIntakeFlow(deps: IntakeDeps) {
     for (const c of deferred.filter((x) => x.code === "large_first_order")) {
       for (const card of i.options) card.cons.push(c.message);
       (i.signOffNotes ??= []).push(`Check the amount: ${c.message}`);
-      log(i, "dock", `Dock did not stop the buyer for large_first_order: it is a note on every option${i.options.some((o) => o.totalCents > session.mandate.perOrderLimitCents) ? " and goes to the person signing off" : ""}.`, { step: "noted", concerns: [{ key: c.key, code: c.code }], reasons: [c.message] });
+      log(i, "dock", `AimoPilot did not stop the buyer for large_first_order: it is a note on every option${i.options.some((o) => o.totalCents > session.mandate.perOrderLimitCents) ? " and goes to the person signing off" : ""}.`, { step: "noted", concerns: [{ key: c.key, code: c.code }], reasons: [c.message] });
     }
     const ask = deferred.filter((x) => x.code !== "large_first_order");
     if (ask.length) {
       const limit = session.mandate.perOrderLimitCents;
       if (result.cards.every((c) => c.totalCents > limit)) {
         (i.signOffNotes ??= []).push(...ask.map((c) => `Check the amount: ${c.message} (not asked before ordering, because a person signs this order off anyway).`));
-        log(i, "dock", `Dock did not stop the buyer for ${ask.map((c) => c.code).join(", ")}: every option is over the ${formatEur(limit)} the agent may spend alone, so the person signing it off sees it.`, {
+        log(i, "dock", `AimoPilot did not stop the buyer for ${ask.map((c) => c.code).join(", ")}: every option is over the ${formatEur(limit)} the agent may spend alone, so the person signing it off sees it.`, {
           step: "carried_to_sign_off",
           concerns: ask.map((c) => ({ key: c.key, code: c.code })),
           reasons: i.signOffNotes,
@@ -510,7 +510,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
     const pick = candidatePick && i.options.find((o) => o.optionId === candidatePick.optionId)?.lines.some((l) => declined.has(l.productId)) ? undefined : candidatePick;
     if (pick && goal.source) i.preselected = { ...pick, source: goal.source as NonNullable<Intake["preselected"]>["source"] };
     const picked = i.preselected && i.options.find((o) => o.optionId === i.preselected!.optionId);
-    log(i, "dock", `Dock offered ${i.options.length} option${i.options.length > 1 ? "s" : ""} for ${formatAmount(i.amount.amount, i.amount.unit)} of ${i.family} (${i.options.every((o) => o.match === "full") ? "all full matches, ranked" : "none meets the whole request; each says what it gives up"})${i.preselected ? `; pre-selected ${i.preselected.optionId} (${i.preselected.reason})` : ""}.`, {
+    log(i, "dock", `AimoPilot offered ${i.options.length} option${i.options.length > 1 ? "s" : ""} for ${formatAmount(i.amount.amount, i.amount.unit)} of ${i.family} (${i.options.every((o) => o.match === "full") ? "all full matches, ranked" : "none meets the whole request; each says what it gives up"})${i.preselected ? `; pre-selected ${i.preselected.optionId} (${i.preselected.reason})` : ""}.`, {
       step: "options",
       reasons: [...i.options.map(cardLine), ...result.excluded.filter((e) => e.code === "cutoff_passed").map((e) => `${e.productId}: ${e.reason}`), ...memoryText(i, i.fromMemory).map((t) => `From memory: ${t}`)],
       options: i.options.map((o) => ({ optionId: o.optionId, rank: o.rank, match: o.match, givesUp: o.givesUp.map((g) => g.part), labels: o.labels, totalCents: o.totalCents, lines: o.quoteLines })),
@@ -529,7 +529,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
   async function needsConfirmation(i: Intake, concerns: Concern[], when: string): Promise<Intake> {
     i.state = "needs_confirmation";
     i.concerns = concerns;
-    log(i, "dock", `Dock found ${concerns.length} thing${concerns.length > 1 ? "s" : ""} to check ${when}.`, {
+    log(i, "dock", `AimoPilot found ${concerns.length} thing${concerns.length > 1 ? "s" : ""} to check ${when}.`, {
       step: "concerns",
       reasons: concerns.map((c) => `${c.code}: ${c.message}`),
       concerns: concerns.map((c) => ({ key: c.key, code: c.code, severity: c.severity })),
@@ -548,7 +548,7 @@ export function createIntakeFlow(deps: IntakeDeps) {
   async function noOptions(i: Intake, reason: string): Promise<Intake> {
     i.state = "no_options";
     i.notes.unshift(reason);
-    log(i, "dock", `Dock found no option: ${reason}`, { step: "no_options", reasons: i.excluded.map((e) => `${e.productId}: ${e.reason}`) });
+    log(i, "dock", `AimoPilot found no option: ${reason}`, { step: "no_options", reasons: i.excluded.map((e) => `${e.productId}: ${e.reason}`) });
     await intakes.save(i);
     return i;
   }

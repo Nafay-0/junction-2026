@@ -22,8 +22,8 @@ export type AssistantSetup = {
 export type ConnectorSetup = { url: string; name: string; prompt: string; assistants: AssistantSetup[]; limits: typeof CONNECTOR_LIMITS };
 
 export function connectorSetup({ url, kitchenName }: { url: string; kitchenName: string }): ConnectorSetup {
-  const name = `Dock (${kitchenName})`.slice(0, 60);
-  const prompt = "Using Dock, order 1,000 litres of lactose-free milk for our kitchen, delivered by Monday.";
+  const name = `AimoPilot (${kitchenName})`.slice(0, 60);
+  const prompt = "Using AimoPilot, order 1,000 litres of lactose-free milk for our kitchen, delivered by Monday.";
   return {
     url,
     name,
@@ -39,9 +39,9 @@ export function connectorSetup({ url, kitchenName }: { url: string; kitchenName:
           "Open claude.ai (or Claude Desktop) and sign in.",
           "Open Customize > Connectors, click Add, then Add custom connector.",
           `Name: ${name}. Remote MCP server URL: paste the address. Click Continue.`,
-          "If Claude asks how to sign in, choose No sign-in (Dock needs none: the address is the key). Click Add, then Connect.",
-          "Start a new chat. Under + > Connectors, make sure Dock is switched on.",
-          `Type: "${prompt}" When Claude asks to use a Dock tool, click Allow once (or Always allow).`,
+          "If Claude asks how to sign in, choose No sign-in (AimoPilot needs none: the address is the key). Click Add, then Connect.",
+          "Start a new chat. Under + > Connectors, make sure AimoPilot is switched on.",
+          `Type: "${prompt}" When Claude asks to use a AimoPilot tool, click Allow once (or Always allow).`,
           "Connectors added on the web or Desktop also appear in the Claude mobile app after it next signs in.",
         ],
         docs: "https://claude.com/docs/connectors/custom/add-unlisted",
@@ -56,7 +56,7 @@ export function connectorSetup({ url, kitchenName }: { url: string; kitchenName:
           "Open Plugins, click +, then Add custom MCP server.",
           `Name: ${name}. Server URL: paste the address. Authentication: No authentication.`,
           'Tick "I understand and want to continue", click Create as a plugin, then install it.',
-          "Start a new chat, type @ in the prompt box and pick Dock.",
+          "Start a new chat, type @ in the prompt box and pick AimoPilot.",
           `Type: "${prompt}" ChatGPT asks you to confirm each ordering step (write actions): click Confirm.`,
         ],
         docs: "https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt",

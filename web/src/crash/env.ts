@@ -85,7 +85,7 @@ export const CRASH_TOOLS = [
     name: "finish",
     title: "Report to the buyer and end",
     description:
-      "End the job with your report to the buyer. State exactly what happened: the status, every order id placed, the total, any shortfall and, if the need cannot be met in time, the earliest possible delivery. The report is checked against Dock's ledger. After finish, no more calls are possible.",
+      "End the job with your report to the buyer. State exactly what happened: the status, every order id placed, the total, any shortfall and, if the need cannot be met in time, the earliest possible delivery. The report is checked against AimoPilot's ledger. After finish, no more calls are possible.",
     input: FinishInput,
     readOnly: false,
   },

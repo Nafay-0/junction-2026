@@ -854,7 +854,7 @@ export function createDock(deps: DockDeps) {
         const products = await catalog.searchProducts({ ids, limit: 100 });
         let live: LiveLookupResult;
         try {
-          live = await liveLookup(session, requestId, ids, request.neededBy, "Dock asked live prices for a quote", { fresh: true, batch: true });
+          live = await liveLookup(session, requestId, ids, request.neededBy, "AimoPilot asked live prices for a quote", { fresh: true, batch: true });
         } catch (err) {
           // The wholesaler's service is slow or down: a refusal that needs no price (category, attributes, allergens,
           // certificates, read from master data) is still the gate's answer, not "try again later".

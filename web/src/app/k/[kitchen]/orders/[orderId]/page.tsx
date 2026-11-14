@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
+import { pick } from "../../../../_i18n/lang";
+import { requestLang } from "../../../../_i18n/server";
 import { Suspense } from "react";
 import { PRODUCT_NAME } from "../../../../_ui/brand";
 import { OrderDetail } from "../../order-detail";
 
-export const metadata: Metadata = { title: `${PRODUCT_NAME}: order` };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: `${PRODUCT_NAME}: ${pick(await requestLang(), { en: "order", fi: "tilaus", sv: "beställning" })}` };
+}
 
 export default function Order({ params }: PageProps<"/k/[kitchen]/orders/[orderId]">) {
   return (

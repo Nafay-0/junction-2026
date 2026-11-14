@@ -1,8 +1,5 @@
 # Questions and answers (jury and Valio Aimo's judges)
 
-> **Name: the team must choose.** Replace `{{NAME}}` everywhere ("Dock" in the code, "AimoPilot" in the draft
-> submission).
-
 Each answer is two or three sentences, in words you can say. Numbers come from `claims.md`. If a question goes past
 what is written here, say "we have not tested that" rather than guess. Both of you should be able to give every
 answer in the first section.
@@ -10,11 +7,12 @@ answer in the first section.
 ## Last year's four (the 2025 jury asked all of them)
 
 **1. "What did each of you do, and how did you make decisions?"**
-> **The team must write this, truthfully, before Sunday.** Git shows all but one commit under one account (258 of
-> 259 across all branches on Saturday 01:30), and about four in five with an AI co-author line. A juror can look. So say how the work was really split (for example, one of you
-> ran and merged the coding agents, the other worked with the partner's mentors, tested the demo path and reviewed
-> the screens), and how you decided: the challenge, the pitch and the demo path were written down on Friday evening
-> in `CLAUDE.md` and everything after was checked against Valio's five criteria.
+> "One of us is the product owner and design engineer, the other is the developer. AI coding agents wrote the code,
+> under our direction. We decided together: the challenge, the pitch and the demo path were written down on Friday
+> evening in `CLAUDE.md`, and everything after was checked against Valio Aimo's five criteria."
+>
+> If a juror looks at Git: almost every commit is under one account (258 of 259 on Saturday 01:30), and about four
+> in five carry an AI co-author line. That matches the answer above; say so if asked.
 
 **2. "Was all of this built this weekend?"**
 > "Yes. The first line of app code was committed on Friday at 21:41, after hacking started at 19:30. Before that we
@@ -65,10 +63,10 @@ answer in the first section.
 > allowed each one. That is Valio Aimo's own reason for setting this challenge; we did not have to invent the demand."
 
 **"What did the AI coding agents do, and what did you do?"**
-> "The coding agents wrote most of the code: about four in five of our commits carry an AI co-author line. We chose the
-> challenge and the design, wrote down the rules the agents had to follow, decided what to cut, and ran a separate QA
-> agent whose job was to break the product; its findings went back to the builders. **Team: add the human part
-> truthfully here.**"
+> "The coding agents wrote the code, under our direction: one of us as product owner and design engineer, the other
+> as developer. About four in five of our commits carry an AI co-author line. We chose the challenge and the design,
+> wrote down the rules the agents had to follow, decided what to cut, and ran a separate QA agent whose job was to
+> break the product; its findings went back to the builders."
 
 ## Other likely questions
 

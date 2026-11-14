@@ -172,7 +172,7 @@ export async function verifyClaim(token: string, keys: VerifyingKey[], now: Date
   const subject = payload.credentialSubject as Record<string, unknown> | undefined;
   const type = CLAIM_TYPES.find((t) => subject && t in subject);
   const evidence = (payload.evidence as Record<string, unknown>[] | undefined)?.[0];
-  if (!subject || !type || subject.productId !== payload.sub || !evidence) throw new ClaimError("claim_malformed", "Claim body is not a Dock product claim.");
+  if (!subject || !type || subject.productId !== payload.sub || !evidence) throw new ClaimError("claim_malformed", "Claim body is not a AimoPilot product claim.");
   return {
     claimId: String(payload.jti),
     type,

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Rail } from "../_ui/rail";
 
-export const metadata: Metadata = { title: { template: "%s, Dock operations", default: "Dock operations" } };
+export const metadata: Metadata = { title: { template: "%s, AimoPilot operations", default: "AimoPilot operations" } };
 
 /** The wholesaler's operations desk: the petrol-deep rail on the left, the page on mist. */
 export default function DeskLayout({ children }: LayoutProps<"/ops">) {

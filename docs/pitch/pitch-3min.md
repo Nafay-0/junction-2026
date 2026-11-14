@@ -1,8 +1,5 @@
 # Three-minute pitch (top 5, Sunday final ceremony)
 
-> **Name: the team must choose.** The code says "Dock", the draft submission says "AimoPilot". Replace `{{NAME}}`
-> everywhere at once. "Aimo" is part of the partner's brand; check with Valio Aimo before using it.
-
 Format (from `research/05-official-briefs.md`): exactly 3 minutes, the mic is cut; then 3 minutes of questions;
 seven judges vote. You may demo from your own laptop. One handheld mic. Last year the jury asked a team why only one
 person spoke, so both of you speak.
@@ -88,7 +85,7 @@ And we built a crash test for AI buyers: thirteen hard purchasing situations. Th
 
 What we need next is a test account on Valio Aimo's real webshop, and one kitchen willing to try it.
 
-{{NAME}}. The agent can ask for anything. It can only buy what the kitchen signed for. Thank you."
+AimoPilot. The agent can ask for anything. It can only buy what the kitchen signed for. Thank you."
 
 ### Timing check
 
@@ -123,7 +120,7 @@ recorded this morning" and plays the clip on slide 4 from the same point. Keep t
 Eight slides. Each must make sense without a speaker, because the PDF is read on its own. Large type, one idea per
 slide, the demo note "Demo on synthetic data" in the footer, no partner logo.
 
-1. **Title.** {{NAME}}. "The agent can ask for anything. It can only buy what the kitchen signed for." Junction 2026,
+1. **Title.** AimoPilot. "The agent can ask for anything. It can only buy what the kitchen signed for." Junction 2026,
    Valio Aimo, Trusted Trade Agents. Demo address and QR code. Team names.
 2. **The problem.** A head chef late at night; an order from a machine on the wholesaler's side. Valio Aimo's own
    words: "I need 1,000 litres of lactose-free milk by Monday." The three questions: did a person mean it, who allowed

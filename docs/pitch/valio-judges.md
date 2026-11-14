@@ -1,8 +1,5 @@
 # For Valio Aimo's judges: the brief, line by line
 
-> **Name: the team must choose.** Replace `{{NAME}}` everywhere ("Dock" in the code, "AimoPilot" in the draft
-> submission). "Aimo" is part of your brand; we would like your view before we use it.
-
 Demo: `https://jolly-wondrous-bunny.eur-1.aiven.app` (live commit `d7611f0` on Saturday 01:30; check
 `/api/health`). Source: `web/` in the repository. All kitchens, people and histories are synthetic; product records
 (17,546) and live prices come from your challenge materials and test API.
@@ -74,8 +71,8 @@ your phone its approver. `/ops` is the wholesaler's desk; ask us for the passcod
    are yours.
 2. **Stock placeholders are unknown.** Amounts of 999999 and above from the availability API are treated as "the
    wholesaler does not know", not as stock.
-3. **The wholesaler holds the signing key.** In the demo, {{NAME}} signs quotes, claims and confirmations with a
-   "wholesaler" key. In production Valio Aimo would hold that key, and {{NAME}} would sign on its behalf.
+3. **The wholesaler holds the signing key.** In the demo, AimoPilot signs quotes, claims and confirmations with a
+   "wholesaler" key. In production Valio Aimo would hold that key, and AimoPilot would sign on its behalf.
 4. **The buyer organisation holds its own key.** It signs its agent's mandate; we keep only its public key.
 5. **Prices hold for a short time.** A quote holds 30 minutes by default and never past the order cut-off; a price
    statement is vouched for at most 24 hours, even when the price list says it is valid until 9999.
@@ -93,7 +90,7 @@ your phone its approver. `/ops` is the wholesaler's desk; ask us for the passcod
 | Sign-off is a passkey on the approver's own phone, bound to the order's digest | No app, no password, resistant to phishing, and an approval cannot be moved to another or edited order |
 | One hash-chained ledger, two views | Both sides read the same facts; the wholesaler's view leaves out the buyer's private memory |
 | MCP and REST (OpenAPI 3.1) from the same schemas | You said either form is acceptable. Offering both covers most agent frameworks; we checked seven |
-| When a client cannot show Dock's question to the person, a relayed answer is logged as "relayed, not verified" and the order goes to a person | Found in our own QA: an agent could otherwise confirm a likely mistake in the chef's name |
+| When a client cannot show AimoPilot's question to the person, a relayed answer is logged as "relayed, not verified" and the order goes to a person | Found in our own QA: an agent could otherwise confirm a likely mistake in the chef's name |
 | State on Aiven (PostgreSQL, Kafka, Valkey, OpenSearch), with in-process fallbacks | Survives restarts (tested on the live site), replayable events, and each service can be switched off without stopping the demo |
 
 ## Known limits
@@ -107,7 +104,7 @@ your phone its approver. `/ops` is the wholesaler's desk; ask us for the passcod
   five (P@1 19.5 %); 22 % of your list's pairs fail your own data's claims or allergens (`web/docs/knowledge-map.md`).
 - **The crash-test licence is not applied at the live gate**; the operations desk shows it only when results are
   published to the server.
-- **Clients without MCP elicitation** (four of the seven frameworks we ran) relay the buyer's answer; Dock records it
+- **Clients without MCP elicitation** (four of the seven frameworks we ran) relay the buyer's answer; AimoPilot records it
   as unverified and sends the order to a person, but cannot prove who answered (`examples/runtimes/GAPS.md`).
 - **Consumer assistants** (Claude, ChatGPT) connect through a secret per-kitchen address. OAuth with the mandate as
   the consent screen is designed (`web/docs/connect-an-agent.md`), not built. The Claude and ChatGPT apps were not
@@ -121,5 +118,5 @@ your phone its approver. `/ops` is the wholesaler's desk; ask us for the passcod
 2. Feed the alternatives map into the option cards, behind the same hard rules.
 3. Apply the crash-test licence at the gate, so a model's tested rating caps what it may spend alone.
 4. OAuth 2.1 for consumer assistants, with the mandate as the consent screen and short-lived, client-bound tokens.
-5. A one-time answer link for buyers whose agent's client cannot show Dock's question, so every human answer is proven.
+5. A one-time answer link for buyers whose agent's client cannot show AimoPilot's question, so every human answer is proven.
 6. With your help: a test account on the real webshop, real stock figures, and one kitchen willing to try it.

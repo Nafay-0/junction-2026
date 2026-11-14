@@ -41,7 +41,7 @@ export function apiCatalog(origin: string) {
   const u = urls(origin);
   const docs = [
     { href: u.llms, type: "text/markdown", title: "How to connect an agent" },
-    { href: u.manifest, type: "application/json", title: "Dock manifest: auth, mandates, keys" },
+    { href: u.manifest, type: "application/json", title: "AimoPilot manifest: auth, mandates, keys" },
   ];
   return {
     linkset: [
@@ -64,8 +64,8 @@ export function apiCatalog(origin: string) {
 export function manifest(origin: string) {
   const u = urls(origin);
   return {
-    $comment: "Dock's own discovery manifest (not a standard). Standard entry points: /.well-known/api-catalog (RFC 9727), /.well-known/jwks.json (RFC 7517), /llms.txt.",
-    name: "Dock",
+    $comment: "AimoPilot's own discovery manifest (not a standard). Standard entry points: /.well-known/api-catalog (RFC 9727), /.well-known/jwks.json (RFC 7517), /llms.txt.",
+    name: "AimoPilot",
     description:
       "Open ordering gateway for AI purchasing agents. Any company's agent orders from the wholesaler carrying a signed mandate that says what it may buy; anything beyond the mandate needs a human sign-off. Plain code, not a model, checks every order.",
     interfaces: {
@@ -77,7 +77,7 @@ export function manifest(origin: string) {
         tools: TOOLS.map((t) => ({ name: t.name, title: t.title, readOnly: t.readOnly ?? false, humanInput: ("humanInput" in t && t.humanInput) || false })),
         humanInput: {
           tools: TOOLS.filter((t) => "humanInput" in t && t.humanInput).map((t) => t.name),
-          how: `These calls carry the human buyer's own answer (a mistake confirmation, a clarifying answer). If the client declares the MCP elicitation capability (2026-07-28), Dock asks the buyer directly with an input_required elicitation/create form; otherwise the agent relays the question and passes the buyer's answer. Marked in tools/list with _meta["${HUMAN_INPUT_META}"] (Dock's own key, not a standard).`,
+          how: `These calls carry the human buyer's own answer (a mistake confirmation, a clarifying answer). If the client declares the MCP elicitation capability (2026-07-28), AimoPilot asks the buyer directly with an input_required elicitation/create form; otherwise the agent relays the question and passes the buyer's answer. Marked in tools/list with _meta["${HUMAN_INPUT_META}"] (AimoPilot's own key, not a standard).`,
         },
       },
       rest: { baseUrl: u.rest, openapi: u.openapi },
@@ -85,19 +85,19 @@ export function manifest(origin: string) {
     ordering: {
       start: { mcp: "submit_need", rest: "POST /api/v1/intake" },
       summary:
-        "Start every order from a structured need. Dock checks it against the kitchen's history for likely mistakes, asks the buyer at most two typed questions, offers option cards with pros and cons, and quotes the chosen one at a fixed price. Each reply is a step with a state and the next call. The lower-level search, availability and quote calls stay available for follow-up.",
+        "Start every order from a structured need. AimoPilot checks it against the kitchen's history for likely mistakes, asks the buyer at most two typed questions, offers option cards with pros and cons, and quotes the chosen one at a fixed price. Each reply is a step with a state and the next call. The lower-level search, availability and quote calls stay available for follow-up.",
       states: INTAKE_STATES,
       humanOnly: ["Confirming or correcting a likely mistake", "Answering a clarifying question", "Signing off an order above the mandate (on the approver's own phone, never through MCP)"],
     },
     authentication: {
-      summary: "Present the mandate your organisation signed for you, and your agent id, on every call. Same credential for MCP and REST. No OAuth, no Dock account.",
+      summary: "Present the mandate your organisation signed for you, and your agent id, on every call. Same credential for MCP and REST. No OAuth, no AimoPilot account.",
       headers: { Authorization: "Bearer <mandate JWS>  (or: Mandate <mandate JWS>)", "Dock-Agent-Id": "<the agent id the mandate names>" },
       mandate: {
         format: "JWT (RFC 7519), compact JWS (RFC 7515), alg Ed25519 (RFC 8037, RFC 9864)",
         typ: MANDATE_TYP,
         aud: MANDATE_AUDIENCE,
         claims: { iss: "buyer organisation id", sub: "agent id", jti: "mandate id", nbf: "valid from", exp: "valid until", mandate: "the limits; schema at #/components/schemas/Mandate in the OpenAPI document" },
-        issuedBy: "The buyer organisation signs with its own key. Dock holds only the organisation's public key, registered when the organisation is onboarded.",
+        issuedBy: "The buyer organisation signs with its own key. AimoPilot holds only the organisation's public key, registered when the organisation is onboarded.",
         schema: `${u.openapi}#/components/schemas/Mandate`,
       },
       approvals: "Orders above the mandate go to a human approver named in the mandate, on their own device. Agents cannot approve.",
@@ -126,9 +126,9 @@ export function manifest(origin: string) {
 export function llmsTxt(origin: string) {
   const u = urls(origin);
   const tools = TOOLS.map((t) => `- \`${t.name}\`: ${t.title}.`).join("\n");
-  return `# Dock
+  return `# AimoPilot
 
-> Dock is a wholesaler's open ordering gateway for AI purchasing agents. Your agent carries a mandate its organisation signed (what it may buy, how much it may spend alone, who signs off above that). It orders through MCP or REST; plain code checks every order against the mandate, and anything beyond it waits for a human sign-off on their phone.
+> AimoPilot is a wholesaler's open ordering gateway for AI purchasing agents. Your agent carries a mandate its organisation signed (what it may buy, how much it may spend alone, who signs off above that). It orders through MCP or REST; plain code checks every order against the mandate, and anything beyond it waits for a human sign-off on their phone.
 
 It is not a chatbot and not a marketplace. One wholesaler, one catalogue, signed quotes at fixed prices, signed order receipts.
 
@@ -147,7 +147,7 @@ Send two headers on every request, MCP or REST:
     Authorization: Bearer <mandate JWS>
     Dock-Agent-Id: <agent id the mandate names>
 
-The mandate is a JWT (typ ${MANDATE_TYP}, aud ${MANDATE_AUDIENCE}) signed with your organisation's Ed25519 key. There is no OAuth and no Dock account. A bad, expired or mismatched mandate is refused with the rule that failed (mandate_signature, mandate_window, mandate_agent); do not retry with the same mandate.
+The mandate is a JWT (typ ${MANDATE_TYP}, aud ${MANDATE_AUDIENCE}) signed with your organisation's Ed25519 key. There is no OAuth and no AimoPilot account. A bad, expired or mismatched mandate is refused with the rule that failed (mandate_signature, mandate_window, mandate_agent); do not retry with the same mandate.
 
 Claude Code:
 
@@ -160,7 +160,7 @@ ${tools}
 
 ## How an order goes
 
-Start every order with \`submit_need\`: the buyer's need as fields (what, how much exactly as they said it, by when, must-haves). Dock answers with a step; its \`state\` says what happens next and \`nextStep\` names the exact call.
+Start every order with \`submit_need\`: the buyer's need as fields (what, how much exactly as they said it, by when, must-haves). AimoPilot answers with a step; its \`state\` says what happens next and \`nextStep\` names the exact call.
 
 1. \`needs_confirmation\`: Dock found a likely mistake, for example 1,000 L where this kitchen usually orders 100 L. Ask the buyer and pass their answer to \`respond_to_concerns\` ("confirm" or a correction id).
 2. \`needs_input\`: at most two typed questions its memory cannot answer. Ask the buyer and pass their answers to \`answer_questions\`.
@@ -191,6 +191,6 @@ The reply is { step } with \`step.next\`: the method, path and an example body o
 
 ## Verify a receipt
 
-An order's \`confirmation\` is a compact JWS (typ ${ORDER_TYP}). Fetch ${u.jwks}, pick the key whose kid matches the JWS header, verify with Ed25519. Any JOSE library does this; nothing Dock-specific is needed.
+An order's \`confirmation\` is a compact JWS (typ ${ORDER_TYP}). Fetch ${u.jwks}, pick the key whose kid matches the JWS header, verify with Ed25519. Any JOSE library does this; nothing AimoPilot-specific is needed.
 `;
 }

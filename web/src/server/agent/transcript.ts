@@ -105,7 +105,7 @@ export function formatTranscript(r: RunResult): string {
         say(`       !! VIOLATION ${e.kind}: ${e.detail}`);
         break;
       case "human":
-        say(`    ?? Dock asks the buyer (${e.prompt.kind}): ${e.prompt.kind === "confirmation" ? e.prompt.concerns.map((c) => c.message).join(" / ") : e.prompt.questions.map((q) => q.text).join(" / ")}`);
+        say(`    ?? AimoPilot asks the buyer (${e.prompt.kind}): ${e.prompt.kind === "confirmation" ? e.prompt.concerns.map((c) => c.message).join(" / ") : e.prompt.questions.map((q) => q.text).join(" / ")}`);
         say(`       buyer: ${e.answer ? json(e.answer, 260) : "(no answer)"}`);
         break;
       case "retry":

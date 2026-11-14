@@ -1,10 +1,5 @@
 # Table demo (peer review, Sunday 10:30 to 13:00)
 
-> **Name: the team must choose.** The code calls the product "Dock"; the draft submission says "AimoPilot". Every
-> file here writes `{{NAME}}`. Replace it everywhere at once. One thing to weigh: "Aimo" is part of the partner's own
-> brand, and the repo's rules say not to imitate the partner's branding. If you pick AimoPilot, ask Valio Aimo's
-> mentors first.
-
 Who this is for: an assigned peer reviewer who has seen ten tables already. They score **Innovation** (new or
 different), **Impact** (a real effect on the people who have the problem) and **Implementation** (realistic,
 working, feasible). Every number below is in `claims.md` with its source.
@@ -28,7 +23,7 @@ working, feasible). Every number below is in `claims.md` with its source.
 
 | Time | Presenter says | Presenter does | Reviewer does | Serves |
 |---|---|---|---|---|
-| 0:00 | "Hi. Soon a kitchen's AI agent will order its food. {{NAME}} is the gate that agent has to go through. Can you scan this with your phone?" | Points at the QR code on the wall. | Scans the QR code with the phone camera. The page says "A demo kitchen, yours for 90 minutes". | Impact |
+| 0:00 | "Hi. Soon a kitchen's AI agent will order its food. AimoPilot is the gate that agent has to go through. Can you scan this with your phone?" | Points at the QR code on the wall. | Scans the QR code with the phone camera. The page says "A demo kitchen, yours for 90 minutes". | Impact |
 | 0:08 | "Press the button. It makes a passkey: just your face or your finger. No name, no email." | Waits. | Taps **Create my passkey and start**, then Face ID or fingerprint. | Implementation |
 | 0:15 | "You are now the purchasing manager of a hotel kitchen. Its agent may spend five hundred euros alone. Anything more comes to you." | Clicks **Run 1,000 L** next to the reviewer's kitchen on the wall. | Reads their phone: their name, the kitchen, "may spend up to 500,00 € per order alone". | Innovation |
 | 0:22 | "The agent now gets Valio's own example: a thousand litres of lactose-free milk by Monday. It finds real products and live prices. The wholesaler signs a fixed price. That order is more than the agent's limit. So the gate stops it. The gate is plain code, not the AI." | Points at the request moving along the wall's stations. | Watches. | Implementation, Innovation |

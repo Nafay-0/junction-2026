@@ -44,7 +44,7 @@ export async function verifyToken(input: string, ledger?: readonly { seq: number
   } catch {
     return { ok: false, by: "browser", problem: "The header cannot be read: this is not a JWS." };
   }
-  if (!typ || !KINDS[typ]) return { ok: false, by: "browser", typ, problem: `Not a Dock document: typ is ${typ ?? "missing"}; expected order+jws, quote+jws or vc+jwt.` };
+  if (!typ || !KINDS[typ]) return { ok: false, by: "browser", typ, problem: `Not a AimoPilot document: typ is ${typ ?? "missing"}; expected order+jws, quote+jws or vc+jwt.` };
   try {
     const { payload, protectedHeader } = await compactVerify(token, createLocalJWKSet(await jwks()), { algorithms: ["Ed25519", "EdDSA"] });
     const body = JSON.parse(new TextDecoder().decode(payload)) as Record<string, unknown>;

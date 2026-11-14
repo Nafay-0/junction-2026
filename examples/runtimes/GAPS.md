@@ -14,7 +14,7 @@ the gate); 6 fixed (output schemas published shallow: tools/list 129 KB -> 30 KB
 
 **Seen with:** OpenAI Agents SDK (no elicitation support at all), Google ADK (2025-11-25 handshake), LangGraph
 (`langchain-mcp-adapters` pins `mcp<2`, so 2025-11-25), Semantic Kernel over REST. Only Pydantic AI, the Claude Agent
-SDK and the Vercel AI SDK reach MCP 2026-07-28 and let Dock ask the buyer itself.
+SDK and the Vercel AI SDK reach MCP 2026-07-28 and let AimoPilot ask the buyer itself.
 
 On every other path `respond_to_concerns` / `answer_questions` (REST `/concerns`, `/answers`) accept whatever `by`
 and `choice` the agent sends. In a Semantic Kernel development run, gpt-6-luna called `respondToConcerns` with
@@ -49,7 +49,7 @@ result for anyone who wants to verify it; the model no longer has to transcribe 
 **Seen with:** Semantic Kernel (any OpenAPI-to-tools converter behaves the same).
 
 - MCP marks the two human-input tools with `_meta["dock/humanInput"]`; `/api/v1/openapi.json` has no equivalent on
-  `respondToConcerns` and `answerQuestions`, so the example names them by operationId (its only Dock-specific line).
+  `respondToConcerns` and `answerQuestions`, so the example names them by operationId (its only AimoPilot-specific line).
   **Fix:** add `x-dock-human-input: true` (same content as the MCP `_meta`) to those two operations.
 - The same document lists `decideApproval`, `approvalChallenge`, `approvalLink`, `beginJoin`, `completeJoin`,
   `approverDemoOrder`, `sandboxDemoOrder`, `listSandboxes`. A converter that loads every operation offers a buyer agent
@@ -96,17 +96,17 @@ schema (`ok`, `step.state`, `nextStep`, `error`) and keep the full shapes in the
 ## 7. Runtime behaviours the gate should keep in mind (no change needed)
 
 - **Server `instructions` rarely reach the model.** Only Pydantic AI has an option to forward them, off by default.
-  Dock's guidance survives because tool descriptions and every result's `nextStep` repeat it. Keep it that way.
+  AimoPilot's guidance survives because tool descriptions and every result's `nextStep` repeat it. Keep it that way.
 - **Refusals (`isError` with `structuredContent`) are handled unevenly.** Pydantic AI's default raises `ModelRetry`
   (the model reads "retry" and the run aborts on the second refusal by one tool); Semantic Kernel drops 4xx bodies
-  entirely. OpenAI Agents, ADK, LangGraph and the AI SDK pass the text through. Because Dock repeats the JSON as
+  entirely. OpenAI Agents, ADK, LangGraph and the AI SDK pass the text through. Because AimoPilot repeats the JSON as
   text content, the clients that ignore `structuredContent` still see `code`, `rule` and `nextStep`.
 - **"Waiting for sign-off, do not retry" was obeyed.** No runtime placed an order again after `pending_approval`;
   when the scripted buyer kept talking, the AI SDK buyer called `get_order` instead.
 - **Custom headers were never a problem** for these SDKs. They matter for hosted connectors (ChatGPT, claude.ai,
   OpenAI's hosted MCP tool, which also needs a public URL); that is what the URL-only connector credential on
   `claude/connector` is for.
-- **The human-input marker is Dock's own.** MCP has no standard annotation for "needs a person", so every example
+- **The human-input marker is AimoPilot's own.** MCP has no standard annotation for "needs a person", so every example
   that routes those tools through an approval step reads `_meta["dock/humanInput"]` (the Claude Agent SDK does not
   expose tool `_meta`, so that example sends one plain `tools/list`).
 
@@ -125,7 +125,7 @@ from their current documentation:
 | LangGraph 1.2 | `interrupt()` + a Postgres or SQLite checkpointer; resume with the same `thread_id`, hours or days later. | Yes |
 | Vercel AI SDK 7 | `WorkflowAgent` (`@ai-sdk/workflow`, Workflow DevKit 5): durable steps, `createHook` / `createWebhook`, `sleep("1d")`. Outside Vercel: Local World (development) or Postgres World (reference implementation, routes unauthenticated). | Yes, with a Workflow world |
 
-All of these pause the agent **before one of its own tool calls runs**, for the agent's human to approve it. Dock's
+All of these pause the agent **before one of its own tool calls runs**, for the agent's human to approve it. AimoPilot's
 sign-off has a different shape: the tool call has already run, the order exists, and a different person decides on
 the gate. The state that matters (the order, the approval, the ledger) already lives in the gate and survives
 restarts; the agent has nothing worth keeping while it waits. A durable runtime would add two things only: resuming

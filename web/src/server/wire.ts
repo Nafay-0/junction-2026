@@ -180,7 +180,7 @@ export const QuestionSchema = named(
     id: z.string(),
     kind: z.enum(["dimension", "optimise"]),
     text: z.string().describe("The question to put to the buyer."),
-    options: z.array(z.looseObject({ id: z.string(), label: z.string() })).describe("The only answers Dock accepts: send one optionId."),
+    options: z.array(z.looseObject({ id: z.string(), label: z.string() })).describe("The only answers AimoPilot accepts: send one optionId."),
     dimension: z.string().optional(),
   }),
 );
@@ -230,10 +230,10 @@ export const IntakeStepSchema = named(
     state: z.enum(INTAKE_STATES).describe("needs_confirmation, needs_input, options_ready, quoted, no_options or cancelled."),
     family: z.string().describe("Product family, e.g. milk."),
     need: NeedOutSchema,
-    amount: amount.optional().describe("The need in base units, once Dock could work it out."),
+    amount: amount.optional().describe("The need in base units, once AimoPilot could work it out."),
     concerns: z.array(ConcernSchema).describe("needs_confirmation: likely mistakes the buyer must confirm or correct."),
     questions: z.array(QuestionSchema).describe("needs_input: at most two questions for the buyer."),
-    fromMemory: z.array(MemoryNoteSchema).describe("Answers Dock took from the kitchen's memory instead of asking."),
+    fromMemory: z.array(MemoryNoteSchema).describe("Answers AimoPilot took from the kitchen's memory instead of asking."),
     memoryUsed: z
       .array(z.looseObject({ itemId: z.string().optional(), text: z.string() }))
       .optional()
@@ -267,7 +267,7 @@ export const KitchenSchema = named(
         orders: z.number().int(),
         usual: z.looseObject({ amount: z.number(), unit: z.string(), text: z.string() }),
         lastOrder: z.record(z.string(), z.unknown()),
-        learned: z.array(z.looseObject({ kind: z.string(), text: z.string() })).describe("Patterns Dock learned from the history."),
+        learned: z.array(z.looseObject({ kind: z.string(), text: z.string() })).describe("Patterns AimoPilot learned from the history."),
       }),
     ),
     recentHistory: z.array(z.record(z.string(), z.unknown())),
