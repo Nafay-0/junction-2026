@@ -5,6 +5,7 @@ import { formatDay } from "@/core/kitchen";
 import type { Mandate } from "@/core/mandate";
 import { buildOptions, formatCutoff, type OptionCard } from "@/core/options";
 import { shortfall, type OnHand } from "@/core/on-hand";
+import { ruleFor } from "@/core/dish-rules";
 import { leftoverNote, orderByFit } from "@/core/pack-choice";
 import { formatEur } from "@/core/util";
 import type { DraftIngredient, DraftUnit, MenuDraft } from "./draft";
@@ -100,6 +101,11 @@ export type PlanInput = {
   diet: DietRules;
   now: Date;
   spentThisWeekCents: number;
+  /** The kitchen's rules in words with their sources: the rule that refuses a line travels with the refusal. */
+  rules?: { text: string; source: string }[];
+  /** Dishes refused under a rule, and dishes of the same kind that can be made instead (service.ts checkDishes). */
+  refused?: { dishId: string; name: string; ingredient: string; allergen: string; rule: { text: string; source: string } }[];
+  instead?: { name: string; nameFi: string | null; course: string; portion: string; ingredients: string[]; checked: string }[];
 };
 
 export type DoubtKind = "cannot_arrive" | "no_safe_product" | "no_product" | "not_priced" | "allergen_unknown" | "different_form" | "amount_check" | "rule_conflict";
@@ -167,6 +173,15 @@ export type PlanTotals = {
   warnings: string[];
   /** Set when nothing can arrive by the date asked: the earliest date the products can come. */
   allLate: { neededBy: string; earliest: string | null } | null;
+  /** A dish refused because what it is made of breaks a rule (the rule named), and what can be made instead. */
+  refusedDish: { name: string; ingredient: string; rule: { text: string; source: string } } | null;
+  instead: NonNullable<PlanInput["instead"]>;
+  /** Every rule that kept a line from being bought, named: what refused it, never just "your rules". */
+  ruleRefusals: { lineId: string; ingredient: string; rule: { text: string; source: string }; reason: string }[];
+  /** The delivery day as offered, checked for every line being bought: which line cannot make it, and why. */
+  day: { date: string | null; ok: boolean; lines: { lineId: string; ingredient: string; ok: boolean; arrives: string | null; why?: string }[] };
+  /** Each ingredient of each dish and how it is covered: ordered, on hand (with the basis), a staple assumed, or left out. */
+  coverage: { dish: string; ingredient: string; lineId: string; basis: "ordered" | "on_hand" | "staple" | "left_out" | "open"; text: string }[];
 };
 
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
@@ -371,7 +386,10 @@ function evaluateLine(spec: LineSpec, input: PlanInput): PlanLineView {
   }
   if (set.candidates.length === 0) {
     const unsafe = set.rejected.filter((r) => /contains|may contain|allergen data|lactose-free|claim/.test(r.reason));
-    if (unsafe.length) addDoubt("no_safe_product", `No product found for ${spec.name} that meets the kitchen's rules: ${unsafe.slice(0, 3).map((r) => `${r.name} (${r.reason})`).join("; ")}.`);
+    if (unsafe.length) {
+      const rule = ruleOfReasons(unsafe.map((r) => r.reason), input.rules ?? []);
+      addDoubt("no_safe_product", `No product found for ${spec.name} that meets the kitchen's rules${rule ? ` (the rule "${rule.text}", ${rule.source})` : ""}: ${unsafe.slice(0, 3).map((r) => `${r.name} (${r.reason})`).join("; ")}.`);
+    }
     else addDoubt("no_product", `No product in the catalogue fits ${spec.name} for this use (searched: ${set.searched.join(", ")}).`);
     return finish(view);
   }
@@ -454,6 +472,17 @@ function finish(v: PlanLineView): PlanLineView {
   return v;
 }
 
+/** The kitchen rule behind refusal reasons such as "contains fish" or "may contain nuts", when one names it. */
+export function ruleOfReasons(reasons: string[], rules: { text: string; source: string }[]): { text: string; source: string } | undefined {
+  for (const r of reasons) {
+    const m = /(?:contains|may contain)\s+([a-z_ ]+?)(?:\s+by its nature)?(?:;|$|\))/i.exec(r);
+    const allergen = m?.[1]?.trim().replace(/ /g, "_");
+    if (allergen) return ruleFor(allergen === "nut" ? "nuts" : allergen, rules);
+    if (/lactose|claim|allergen data/i.test(r)) return rules.find((x) => /lactose|laktoos|allergen/i.test(x.text)) ?? { text: r, source: "the kitchen's rules" };
+  }
+  return undefined;
+}
+
 /** Lines that chose the same product become one purchase: amounts added, then rounded to packs once. */
 function mergeShared(lines: PlanLineView[], specs: LineSpec[], input: PlanInput): void {
   const owner = new Map<string, PlanLineView>();
@@ -530,6 +559,33 @@ export function computePlan(input: PlanInput): PlanView {
     allLate = { neededBy: input.settings.deliverBy, earliest };
     blockers.unshift(`Nothing on this plan can arrive by ${formatDay(input.settings.deliverBy)}${earliest ? `: the earliest delivery is ${formatDay(earliest)}` : ""}. Move the date, or buy locally.`);
   }
+  // A refused dish: said first, with its rule and what can be made instead.
+  const refused = input.refused?.[0];
+  const instead = input.instead ?? [];
+  if (refused) {
+    blockers.unshift(`${refused.name} cannot be made under the kitchen's rule "${refused.rule.text}" (${refused.rule.source}): its ${refused.ingredient} is ${refused.allergen.replace(/_/g, " ")}.${instead.length ? ` Instead: ${instead.map((x) => x.name).join("; ")}.` : ""}`);
+    const nothing = blockers.indexOf("Nothing to order: every line is struck.");
+    if (nothing >= 0) blockers.splice(nothing, 1);
+  }
+  const ruleRefusals = lines.flatMap((l) =>
+    l.doubts
+      .filter((d) => !d.accepted && (d.kind === "no_safe_product" || d.kind === "rule_conflict"))
+      .map((d) => ({ lineId: l.lineId, ingredient: l.name, rule: ruleOfReasons([d.text, ...l.excluded.map((e) => e.reason)], input.rules ?? []) ?? { text: "the kitchen's rules", source: "the kitchen's rules" }, reason: d.text })),
+  );
+  const day = input.settings.deliverBy ?? dates.at(-1) ?? null;
+  const dayLines = buying.map((l) => {
+    const arrives = l.chosen ? l.chosen.deliveryDate : null;
+    const late = l.doubts.find((d) => !d.accepted && d.kind === "cannot_arrive");
+    const ok = !!arrives && !late && (!day || arrives <= day);
+    return { lineId: l.lineId, ingredient: l.name, ok, arrives, ...(ok ? {} : { why: (late?.text ?? (arrives ? `arrives ${formatDay(arrives)}, after ${day ? formatDay(day) : "the day"}` : l.statusText)).replace(/\s*\(searched:[^)]*\)/g, "") }) };
+  });
+  const coverage: PlanTotals["coverage"] = input.specs.flatMap((spec) => {
+    const l = lines.find((x) => x.lineId === spec.lineId);
+    const owner = l?.status === "merged" ? lines.find((x) => x.lineId === l.mergedInto) : l;
+    const basis: PlanTotals["coverage"][number]["basis"] = !owner ? "open" : owner.status === "struck" ? (owner.onHand ? "on_hand" : spec.pantry && !input.edits[spec.lineId]?.struck ? "staple" : "left_out") : owner.chosen ? (owner.status === "ready" ? "ordered" : "open") : "open";
+    const text = basis === "ordered" ? (owner!.chosen!.products.map((x) => x.packText).join(" + ")) : basis === "on_hand" ? owner!.struckReason ?? "on hand" : basis === "staple" ? "a staple the kitchen keeps (its pantry list): not bought" : basis === "left_out" ? (owner?.struckReason ?? "left out") : (owner?.doubts.filter((d) => !d.accepted).map((d) => d.text).join(" ") || owner?.statusText || "not planned");
+    return [...new Set(spec.uses.map((u) => u.dish))].map((dish) => ({ dish, ingredient: spec.name, lineId: spec.lineId, basis, text }));
+  });
   return {
     lines,
     totals: {
@@ -546,6 +602,11 @@ export function computePlan(input: PlanInput): PlanView {
       blockers,
       warnings: input.draft.conflicts,
       allLate,
+      refusedDish: refused ? { name: refused.name, ingredient: refused.ingredient, rule: refused.rule } : null,
+      instead,
+      ruleRefusals,
+      day: { date: day, ok: dayLines.every((x) => x.ok), lines: dayLines },
+      coverage,
     },
   };
 }

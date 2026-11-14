@@ -382,15 +382,15 @@ describe("menu to order, on the fixture catalogue", () => {
     expect(withRequestRules(kaari.diet, {})).toBe(kaari.diet);
   });
 
-  it("holds a request that breaks the kitchen's rule: no peanut product is offered, nothing is quoted", async () => {
+  it("refuses a dish made of what the kitchen's rule forbids, with the rule named: nothing of it is bought, nothing is quoted", async () => {
     const { service, laakso } = await setup();
     const { record } = await service.plan(laakso, "satay", "Aino");
     await service.settled(record.planId);
     const { view } = await service.get(laakso, record.planId);
-    const pb = view.lines.find((l) => l.lineId === "peanut_butter")!;
-    expect(pb.chosen).toBeUndefined();
-    expect(pb.doubts.map((d) => d.kind)).toEqual(expect.arrayContaining(["rule_conflict", "no_safe_product"]));
-    expect(pb.doubts.find((d) => d.kind === "no_safe_product")!.text).toMatch(/contains peanuts/);
+    // Not planned with the peanut quietly left out: the whole dish is refused under the rule that forbids it.
+    expect(view.totals.refusedDish).toEqual({ name: "Peanut satay chicken", ingredient: "Peanut butter", rule: { text: expect.stringMatching(/nuts or peanuts/), source: "mandate" } });
+    expect(view.lines.filter((l) => l.chosen)).toEqual([]);
+    expect(view.totals.blockers[0]).toMatch(/^Peanut satay chicken cannot be made under the kitchen's rule "No nuts or peanuts/);
     expect(view.totals.canQuote).toBe(false);
     await expect(service.quote(laakso, record.planId, "Aino")).rejects.toMatchObject({ code: "plan_not_ready" });
   });

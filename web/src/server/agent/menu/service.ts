@@ -2,7 +2,9 @@ import type { AlternativesSource } from "@/core/alternatives";
 import type { Door } from "@/core/orders";
 import { MAX_LIVE_IDS_PER_CALL, usableOffer, type LiveOffer, type LiveStatus, type Product } from "@/core/catalog";
 import { DockError } from "@/core/errors";
-import { formatDay, localNow } from "@/core/kitchen";
+import { allergenInName, definingConflict, missingEssentials } from "@/core/dish-rules";
+import { formatDay, latestDeliveryDay, localNow } from "@/core/kitchen";
+import { nutritionFindings } from "@/core/nutrition";
 import { agentKeyOf } from "@/core/live-allowance";
 import type { AgentSession, Dock, PublicOrder } from "@/core/orders";
 import type { Decision } from "@/core/policy";
@@ -80,7 +82,16 @@ export type PlanRecord = {
   quote?: { quote: Quote; quoteToken: string; policyPreview: Decision; claims: number };
   order?: PublicOrder;
   error?: { code: string; message: string; rule?: string };
+  /** Dishes refused because what they are made of breaks a kitchen rule (core/dish-rules.ts), with the rule named. */
+  refused?: RefusedDish[];
+  /** Up to three dishes of the same kind that can be made instead, each ingredient checked against the rules. */
+  instead?: InsteadDish[];
+  /** Lines plain code added because the recipe could not be made without them (a cake's flour and sweetener). */
+  added?: { dishId: string; dish: string; key: string; name: string; what: string }[];
 };
+
+export type RefusedDish = { dishId: string; name: string; ingredient: string; allergen: string; rule: { text: string; source: string } };
+export type InsteadDish = { name: string; nameFi: string | null; course: string; portion: string; ingredients: string[]; checked: string };
 
 export type PlanDeps = {
   dock: Dock;
@@ -212,7 +223,7 @@ export function createPlanService(deps: PlanDeps) {
     // whatever the draft or an edit put on the plan; a product that breaks one is moved to the rejected list.
     const diet = withRequestRules(k.diet, p.draft ?? {});
     const candidates = diet === k.diet ? p.candidates : recheck(p.candidates, diet);
-    return { draft: p.draft, specs: p.specs, candidates, live: p.live, edits: p.edits, acceptances: p.acceptances, fixes: p.fixes, settings: p.settings, mandate: k.mandate, diet, now: deps.now(), spentThisWeekCents: spent };
+    return { draft: p.draft, specs: p.specs, candidates, live: p.live, edits: p.edits, acceptances: p.acceptances, fixes: p.fixes, settings: p.settings, mandate: k.mandate, diet, now: deps.now(), spentThisWeekCents: spent, rules: k.info.rules, refused: p.refused ?? [], instead: p.instead ?? [] };
   }
 
   const allowedFor = (k: MenuKitchen) => {
@@ -392,6 +403,55 @@ export function createPlanService(deps: PlanDeps) {
     return { record: p, view: computePlan(input(p, k, spent)) };
   }
 
+  /**
+   * Plain code over the draft, before anything is matched: a dish made of what a kitchen rule forbids is refused with
+   * the rule named (core/dish-rules.ts definingConflict), never planned with the ingredient quietly left out; a dish
+   * of a known kind missing what it cannot be made without (a cake's flour and sweetener) gets those lines added,
+   * visibly, at a standard amount to check, or as a staple the kitchen keeps when it is on its pantry list.
+   */
+  function checkDishes(p: PlanRecord, k: MenuKitchen, pantry: string[]) {
+    const forbidden = [...new Set([...k.diet.forbiddenAllergens.map((f) => f.allergen), ...p.draft.forbiddenAllergens])];
+    for (const dish of p.draft.dishes) {
+      const c = definingConflict(dish, forbidden, k.info.rules);
+      if (c) {
+        (p.refused ??= []).push({ dishId: dish.id, name: dish.name, ingredient: c.ingredient, allergen: c.allergen, rule: c.rule });
+        continue;
+      }
+      for (const m of missingEssentials(dish)) {
+        const staple = pantry.some((w) => w.toLowerCase() === m.add.name.toLowerCase() || m.add.searchTerms.some((t) => t.toLowerCase() === w.toLowerCase()));
+        dish.ingredients.push({ ...m.add, yieldPct: 100, amountBasis: `added by plain code: a ${m.kind} cannot be made without ${m.what}; a standard share per cover, check it`, pantry: staple, avoid: [] });
+        (p.added ??= []).push({ dishId: dish.id, dish: dish.name, key: m.add.key, name: m.add.name, what: m.what });
+      }
+    }
+    for (const r of p.refused ?? []) p.notes.push(`${r.name} cannot be made under the kitchen's rule "${r.rule.text}" (${r.rule.source}): its ${r.ingredient} is ${r.allergen.replace(/_/g, " ")}. It is not planned.`);
+    for (const a of p.added ?? []) p.notes.push(`${a.dish} had no ${a.what} in the draft: ${a.name} added at a standard amount to check.`);
+  }
+
+  /** Up to three dishes of the same kind that can be made instead of a refused one: drafted, then every ingredient checked against the kitchen's rules in master data. */
+  async function insteadOf(p: PlanRecord, k: MenuKitchen, drafter: PlanDeps["draft"], now: Date): Promise<void> {
+    const r = p.refused![0];
+    const dish = p.draft.dishes.find((x) => x.id === r.dishId);
+    const school = /school|koulu|päiväko|daycare|pupil|oppila/i.test(`${k.info.name} ${k.info.kind}`);
+    const text = `Three ${dish?.course ?? "main"} dishes for ${p.settings.covers ?? "the same number of"} ${school ? "pupils" : "covers"}, instead of ${r.name}, which needs ${r.ingredient} against the kitchen's rule "${r.rule.text}". The same slot on the menu${school ? ", child-friendly, a school lunch" : ""}, with no ${r.allergen.replace(/_/g, " ")}, each different from the others.`;
+    try {
+      const alt = await drafter(text, promptContext(k), now);
+      p.model.calls.push(...alt.calls.map((c) => ({ ...c, step: `instead ${c.step}` })));
+      const allowed = allowedFor(k);
+      const forbidden = [...new Set([...k.diet.forbiddenAllergens.map((f) => f.allergen), r.allergen])];
+      const out: InsteadDish[] = [];
+      for (const d of alt.draft.dishes) {
+        if (out.length >= 3 || definingConflict(d, forbidden, k.info.rules) || d.ingredients.some((i) => allergenInName([i.name, ...i.searchTerms].join(" "), forbidden))) continue;
+        const sets = await Promise.all(d.ingredients.filter((i) => !i.pantry).map((i) => findCandidates(catalog, i, k.diet, allowed, 4)));
+        const ok = sets.every((set) => set.candidates.some((c) => c.safety.verdict === "ok" && !nutritionFindings(k.mandate.nutritionRules ?? [], { productId: c.product.id, category: c.product.category, nutrition: c.product.nutrition ?? null }).length));
+        if (ok) out.push({ name: d.name, nameFi: d.nameFi, course: d.course, portion: d.portion, ingredients: d.ingredients.map((i) => i.name), checked: "every ingredient has a product in the range that passes the kitchen's allergen, diet and nutrition rules (master data); prices and delivery are checked when it is chosen" });
+      }
+      p.instead = out;
+    } catch (err) {
+      p.instead = [];
+      p.notes.push(`Dishes to make instead could not be drafted: ${(err as Error).message}`);
+    }
+  }
+
   async function plan(k: MenuKitchen, text: string, by: string, opts: { onProgress?: (e: PlanProgress) => void } = {}): Promise<{ record: PlanRecord; view: PlanView }> {
     return planFrom(k, text, by, deps.draft, { door: "menu", pantry: k.info.pantry, ...(opts.onProgress ? { onProgress: opts.onProgress } : {}) });
   }
@@ -494,13 +554,19 @@ export function createPlanService(deps: PlanDeps) {
     }
     // The delivery date: the earliest day a dish is served; never a day already past.
     const today = localNow(now).date;
+    checkDishes(p, k, opts.pantry);
     const days = [d.draft.serviceDate, ...d.draft.dishes.map((x) => x.serviceDate)].filter((x): x is string => !!x).sort();
     let deliverBy: string | null = days[0] ?? null;
     if (deliverBy && deliverBy < today) {
       p.notes.push(`The service day ${formatDay(deliverBy)} is already past, so the plan is for the earliest delivery instead. Change the date if that is wrong.`);
       deliverBy = null;
     }
-    if (!deliverBy) p.notes.push("No service day given: planned for the earliest delivery.");
+    // Never a day the gate will refuse: the mandate's lead time is checked here, before the day is offered.
+    const latest = latestDeliveryDay(now, k.mandate.delivery.maxLeadDays);
+    if (deliverBy && deliverBy > latest) {
+      p.notes.push(`The kitchen's rules let the agent order at most ${k.mandate.delivery.maxLeadDays} days ahead, so the plan is delivered by ${formatDay(latest)}, before the service day ${formatDay(deliverBy)}.`);
+      deliverBy = latest;
+    } else if (!deliverBy) p.notes.push("No service day given: planned for the earliest delivery.");
     else p.notes.push(`Delivered by ${formatDay(deliverBy)}, the ${days.length > 1 ? "first service day" : "service day"}, at the latest.`);
     p.settings.deliverBy = deliverBy;
     p.live.deliverBy = deliverBy;
@@ -521,7 +587,9 @@ export function createPlanService(deps: PlanDeps) {
 
     // Master data: candidates for every line, in parallel. No live call.
     const m0 = Date.now();
-    p.specs = buildSpecs(d.draft, opts.pantry);
+    // A refused dish is not planned at all: none of its lines is bought under its name.
+    const refusedIds = new Set((p.refused ?? []).map((r) => r.dishId));
+    p.specs = buildSpecs({ ...p.draft, dishes: p.draft.dishes.filter((x) => !refusedIds.has(x.id)) }, opts.pantry);
     const late: LineSpec[] = [];
     for (const spec of p.specs) {
       const e = early.get(spec.key);
@@ -537,6 +605,7 @@ export function createPlanService(deps: PlanDeps) {
     }
     await pick(p, late);
     p.timings.matchMs = Date.now() - m0;
+    if (p.refused?.length) await insteadOf(p, k, drafter, now);
     if (opts.onProgress) emit({ kind: "matched", planId, record: structuredClone(p), view: computePlan(input(p, k, 0)), ms: Date.now() - t0 });
 
     // Live: a short list, batched. Two products a line when the plan is small, else one, so a plan, its second
@@ -630,6 +699,7 @@ export function createPlanService(deps: PlanDeps) {
           break;
         case "deliverBy":
           if (!/^\d{4}-\d{2}-\d{2}$/.test(e.date) || e.date < localNow(deps.now()).date) throw new DockError(400, "invalid_date", "The delivery date must be today or later, as YYYY-MM-DD.");
+          if (e.date > latestDeliveryDay(deps.now(), k.mandate.delivery.maxLeadDays)) throw new DockError(422, "delivery_too_far", `The kitchen's rules let the agent order at most ${k.mandate.delivery.maxLeadDays} days ahead: the latest delivery day is ${formatDay(latestDeliveryDay(deps.now(), k.mandate.delivery.maxLeadDays))}.`, "delivery_deadline");
           if (e.date !== p.settings.deliverBy) {
             p.settings.deliverBy = e.date;
             if (p.requestId) {
@@ -765,7 +835,10 @@ export function createPlanService(deps: PlanDeps) {
       p.error = undefined;
     } catch (err) {
       if (!(err instanceof DockError)) throw err;
-      p.error = { code: err.code, message: err.message, rule: err.rule };
+      // The day was checked for every line when it was offered; if the wholesaler's answer changed since, say which line.
+      const pid = (err.details as { productId?: string } | undefined)?.productId;
+      const line = pid ? buying.find((l) => l.chosen!.products.some((x) => x.productId === pid)) : undefined;
+      p.error = { code: line ? "day_changed" : err.code, message: line ? `${line.name} (${line.chosen!.products.find((x) => x.productId === pid)!.name}) changed since the plan was offered: ${err.message}` : err.message, rule: err.rule };
     }
     p.updatedAt = deps.now().toISOString();
     void by;
