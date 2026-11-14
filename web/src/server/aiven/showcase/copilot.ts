@@ -5,6 +5,7 @@ import { aivenApi } from "./aiven-api";
 import { readOnlyQuery, readOnlyDbConfigured } from "./readonly-db";
 import { redactDeep } from "./redact";
 import { guardSql } from "./sql-guard";
+import { figuresFromRow, judgeAgent, scorecardSql } from "@/server/ops/scorecard";
 
 /**
  * The operations copilot. Staff ask in plain words; the answer is COMPUTED from data on Aiven, never written by a
@@ -110,6 +111,65 @@ async function sqlStep(label: string, sql: string): Promise<Step> {
 }
 
 const PLANS: Plan[] = [
+  {
+    id: "agents_failing",
+    title: "Which agents are failing",
+    match: (q) => /(agent|who).*(fail|struggl|misbehav|perform|doing|unhealthy|problem)|scorecard|(fail|failing|struggl).*(agent)/.test(q),
+    run: async ({ w }) => {
+      const win = /hour/.test(w.words) ? "1h" : /24|day|today/.test(w.words) ? "today" : "today";
+      const s = await sqlStep("the agent scorecard", scorecardSql(win));
+      if (s.error) return { steps: [s], answer: NOT_SAID, answerable: false };
+      const rows = s.rows.map((r) => judgeAgent(figuresFromRow(r), { label: String(r.agent_id), orgName: "", kind: "" }));
+      const failing = rows.filter((r) => r.status === "failing");
+      const escalating = rows.filter((r) => r.status === "escalating");
+      if (!rows.length) return { steps: [s], answer: `No agent came to the gate ${win === "1h" ? "in the last hour" : "today"}.` };
+      if (!failing.length) return { steps: [s], answer: `No agent is failing ${win === "1h" ? "in the last hour" : "today"}: ${rows.filter((r) => r.status === "performing").length} performing, ${escalating.length} escalating, of ${rows.length}. Statuses are decided in code from these rows (ops/scorecard.ts).` };
+      return { steps: [s], answer: `${failing.length} failing: ${failing.map((r) => `${r.agentId} (${r.reason.replace(/^Failing: /, "").replace(/\.$/, "")})`).join("; ")}. A person decides whether to suspend it, in Control.` };
+    },
+  },
+  {
+    id: "agents_escalating",
+    title: "Which agents need a person most often",
+    match: (q) => /need(s|ed)? a person|most often|escalat\w* (most|often)|(which|who).*(escalat|sign.?off)/.test(q) && !/waiting|pending|queue/.test(q),
+    run: async ({ w }) => {
+      const s = await sqlStep(
+        "escalations by agent",
+        `select agent_id,
+  count(*) filter (where kind = 'gate.escalated') as to_a_person,
+  count(*) filter (where kind in ('gate.allowed', 'gate.escalated', 'gate.refused')) as decisions,
+  count(*) filter (where kind = 'gate.escalated' and rule = 'per_order_limit') as over_limit,
+  count(*) filter (where kind = 'approval.granted') as approved,
+  count(*) filter (where kind = 'approval.denied') as declined
+from telemetry.ops_events
+where agent_id is not null and ts > ${w.sql}
+group by 1 having count(*) filter (where kind = 'gate.escalated') > 0
+order by 2 desc, 3 asc`,
+      );
+      if (s.error) return { steps: [s], answer: NOT_SAID, answerable: false };
+      if (!s.rows.length) return { steps: [s], answer: `No agent needed a person ${w.words}.` };
+      const top = s.rows[0];
+      const rate = n(top.decisions) ? Math.round((n(top.to_a_person) / n(top.decisions)) * 100) : 0;
+      return { steps: [s], answer: `${top.agent_id} needed a person most: ${n(top.to_a_person)} of ${n(top.decisions)} decisions (${rate} %), ${n(top.over_limit)} over its limit, ${n(top.approved)} approved and ${n(top.declined)} declined ${w.words}.${n(top.over_limit) && !n(top.declined) ? " Every one was approved: its limit may be too tight for what the kitchen asks, a suggestion to the kitchen rather than a fault." : ""}` };
+    },
+  },
+  {
+    id: "waiting_signoff",
+    title: "What is waiting for sign-off",
+    match: (q) => /(waiting|pending|queue|wait|open).*(sign|approv|person)|(sign.?off|approval)s?.*(waiting|pending|open)/.test(q),
+    run: async () => {
+      const s = await sqlStep(
+        "sign-offs asked and not answered",
+        `with asked as (select order_id, agent_id, min(ts) as at from telemetry.ops_events where kind = 'approval.requested' and ts > now() - interval '2 days' and order_id is not null group by 1, 2),
+done as (select distinct order_id from telemetry.ops_events where kind in ('approval.granted', 'approval.denied') and order_id is not null)
+select asked.order_id, asked.agent_id, asked.at as asked_at, round(extract(epoch from now() - asked.at) / 60) as waiting_min
+from asked left join done using (order_id) where done.order_id is null order by asked.at`,
+      );
+      if (s.error) return { steps: [s], answer: NOT_SAID, answerable: false };
+      if (!s.rows.length) return { steps: [s], answer: "Nothing is waiting for a person's sign-off." };
+      const oldest = s.rows[0];
+      return { steps: [s], answer: `${s.rows.length} order${s.rows.length === 1 ? "" : "s"} waiting for a person; the oldest, ${oldest.order_id} from ${oldest.agent_id}, for ${n(oldest.waiting_min)} min. Only the person the kitchen's mandate names can sign it, on their own phone.` };
+    },
+  },
   {
     id: "refusals_by_rule",
     title: "Refusals by rule",
@@ -334,7 +394,19 @@ order by rule, ts desc`,
   parts.push(down.length ? `${down.map((s) => `${s.service_name} is ${s.state}`).join(", ")}` : services.length ? `all ${services.length} services are RUNNING` : "service state could not be read");
   if (probes.rows.length) parts.push(failing.length ? `the app's last probe failed for ${failing.map((r) => r.service).join(", ")}` : `the app reached ${probes.rows.map((r) => r.service).join(", ")} on its last probe`);
   else parts.push("the app wrote no probe in the last 2 hours");
-  return { steps, answer: `${down.length || failing.length ? "Yes" : "Nothing unhealthy"}: ${parts.join("; ")}.` };
+  // The app's own alert table (ops/alerts.ts), evaluated in code every 30 s.
+  let breaches: { title: string; detail: string; since: string }[] = [];
+  try {
+    const [{ getRuntime }, { alertsNow }] = await Promise.all([import("@/server/runtime"), import("@/server/ops/agent-watch")]);
+    const a = await alertsNow(await getRuntime());
+    breaches = a.breaches;
+    steps.push({ kind: "api", label: "the app's alert table", query: "alertsNow(): the six thresholds in ops/alerts.ts over this server's last 15 minutes", path: "direct", as: "the app", columns: ["alert", "detail", "since"], rows: a.quiet ? [{ alert: "all quiet", detail: `${a.rules.length} rules`, since: a.at }] : a.breaches.map((b) => ({ alert: b.title, detail: b.detail, since: b.since })) });
+  } catch {
+    // the alert table is an addition; the services' state still answers
+  }
+  if (breaches.length) parts.push(`breaching: ${breaches.map((b) => `${b.title.toLowerCase()} (${b.detail})`).join("; ")}`);
+  else parts.push("the app's alerts are all quiet");
+  return { steps, answer: `${down.length || failing.length || breaches.length ? "Yes" : "Nothing unhealthy"}: ${parts.join("; ")}.` };
 }
 
 function pathOf(steps: Step[]): AnswerCard["path"] {

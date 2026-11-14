@@ -14,6 +14,7 @@ import { InMemoryAccountStore, type AccountStore } from "@/server/accounts/store
 import { ValioCatalog } from "@/server/valio/valio-catalog";
 import { inMemoryRecords, type Records } from "../records";
 import { TappedLedgerStore, noActions, type ActionStream } from "./actions";
+import { remembering } from "./recent-events";
 import { aivenSwitches, errMessage, kafkaConfig, log, pgSchema, valkeyUrl, type AivenSwitches } from "./env";
 import { checkServices, type HealthReport } from "./health";
 import { KafkaActionStream, TelemetrySink, kafkaClient } from "./kafka";
@@ -132,6 +133,8 @@ export async function selectAdapters(input: AdapterInput): Promise<Adapters> {
   } else if (switches.actions === "postgres") {
     handle.actions = new PgActionStream(handle.pool!);
   }
+  // Model calls and searches are remembered in memory too, for the agent scorecard without the database (ops/scorecard.ts).
+  handle.actions = remembering(handle.actions);
   if (switches.actions !== "off") ledgerStore = new TappedLedgerStore(ledgerStore, handle.actions);
 
   if (switches.cache === "valkey" || switches.bus === "valkey") handle.valkey = valkeyClient(valkeyUrl()!, "dock-app");

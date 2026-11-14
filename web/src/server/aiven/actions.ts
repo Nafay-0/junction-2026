@@ -15,6 +15,9 @@ import type { LedgerEntry, LedgerStore } from "@/core/ledger";
  *   kind       request.opened | intake.step | lookup.search | lookup.live | quote.issued
  *              | gate.allowed | gate.escalated | gate.refused | approval.requested | approval.granted
  *              | approval.denied | order.committed | partner_api.call | partner_api.cache_hit | budget.refused
+ *              | turn.started | turn.done | turn.correction | turn.model_fallback | turn.grounding_refusal | turn.paused
+ *              | search.done (smart search, server/search/telemetry.ts)
+ *   facts      (attrs.facts) counts, codes and milliseconds of a conversation turn or a search: never words
  *   key        the partition key above
  *   agentId, orgId, requestId, orderId   when known
  *   rule       the gate rule that decided (gate.refused, gate.escalated, budget.refused)
@@ -87,9 +90,33 @@ type RuleRow = { rule?: string; outcome?: string };
  * Turns ledger entries into action events. Keeps a little state (who opened which request, the total of each
  * order's decision) so decisions and commits written by "dock" are still attributed to the agent and carry EUR.
  */
+/** The language of a buyer's words, by plain signs only (letters and common words): fi, sv, en, or "other". */
+export function languageOf(words: string): "fi" | "sv" | "en" | "other" {
+  const s = ` ${words.toLowerCase()} `;
+  if (!/[a-zåäö]/.test(s)) return "other";
+  const fi = (s.match(/ (ja|on|ei|tarvi\w*|kiitos|meille|huomenna|maitoa|kpl|litraa|tilaa|että|kanssa|ilman)\b|ää|öö|yy/g) ?? []).length;
+  const sv = (s.match(/å| (och|är|inte|behöver|tack|till|mjölk|imorgon|utan|med)\b/g) ?? []).length;
+  const en = (s.match(/ (the|and|need|please|for|of|milk|tomorrow|without|with|litres?|we)\b/g) ?? []).length;
+  const best = Math.max(fi, sv, en);
+  if (!best) return /[äö]/.test(s) ? "fi" : "other";
+  return fi === best ? "fi" : sv === best ? "sv" : "en";
+}
+
+/** Conversation events in the ledger (type agent, data.event) that become their own telemetry kinds. */
+const TURN_KINDS: Record<string, string> = {
+  turn: "turn.started",
+  turn_done: "turn.done",
+  sheet_edit: "turn.correction",
+  model_fallback: "turn.model_fallback",
+  grounding_refusal: "turn.grounding_refusal",
+  paused: "turn.paused",
+};
+
 export class LedgerToActions {
   private readonly agentByRequest = new Map<string, string>();
   private readonly totalByOrder = new Map<string, number>();
+  /** The gate's last word per request (allowed, escalated, refused and its rule), for a turn's outcome. */
+  private readonly gateByRequest = new Map<string, { kind: string; rule?: string }>();
 
   /** Learn from entries that were written before this process started (no events are produced). */
   prime(entries: readonly LedgerEntry[]): void {
@@ -102,10 +129,47 @@ export class LedgerToActions {
       this.agentByRequest.set(e.requestId, agent);
       if (this.agentByRequest.size > 20_000) this.agentByRequest.delete(this.agentByRequest.keys().next().value!);
     }
+    if (e.type === "decision" && e.requestId) {
+      const outcome = String(e.data.outcome);
+      const rules = Array.isArray(e.data.rules) ? (e.data.rules as RuleRow[]) : [];
+      const kind = outcome === "auto_approve" ? "allowed" : outcome === "needs_human_approval" ? "escalated" : "refused";
+      const rule = kind === "refused" ? rules.find((r) => r.outcome === "fail")?.rule : kind === "escalated" ? rules.find((r) => r.outcome && r.outcome !== "pass" && r.outcome !== "fail")?.rule : undefined;
+      this.gateByRequest.set(e.requestId, { kind, ...(rule ? { rule } : {}) });
+      if (this.gateByRequest.size > 20_000) this.gateByRequest.delete(this.gateByRequest.keys().next().value!);
+    }
     if (e.type === "decision" && e.orderId && typeof e.data.totalCents === "number") {
       this.totalByOrder.set(e.orderId, e.data.totalCents);
       if (this.totalByOrder.size > 20_000) this.totalByOrder.delete(this.totalByOrder.keys().next().value!);
     }
+  }
+
+  /** Counts, codes and milliseconds of a turn event (never the words). */
+  private turnFacts(kind: string, d: Record<string, unknown>, door: string | undefined): Record<string, unknown> {
+    if (kind === "turn.started") {
+      const words = typeof d.words === "string" ? d.words : "";
+      return { door: door ?? null, via: typeof d.via === "string" ? d.via : null, input: d.action ? "tap" : words ? (door === "voice" || door === "call" ? "spoken" : "typed") : "other", lang: words ? languageOf(words) : null };
+    }
+    if (kind === "turn.done") {
+      const marks = (d.marks ?? {}) as Record<string, unknown>;
+      const requests = Array.isArray(d.requests) ? (d.requests as string[]) : [];
+      const orders = Array.isArray(d.orders) ? d.orders.length : 0;
+      const gates = requests.map((r) => this.gateByRequest.get(r)).filter(Boolean) as { kind: string; rule?: string }[];
+      const refused = gates.find((g) => g.kind === "refused");
+      const status = String(d.status ?? "done");
+      const outcome = refused ? "refused" : status === "waiting_approver" || gates.some((g) => g.kind === "escalated") ? "sign_off" : orders > 0 || gates.some((g) => g.kind === "allowed") ? "ordered" : status === "waiting_buyer" ? "asked" : status === "failed" ? "failed" : "answered";
+      return {
+        status,
+        outcome,
+        ...(refused?.rule ? { rule: refused.rule } : {}),
+        first_ms: num(marks.line) ?? num(marks.first_step),
+        end_ms: num(marks.done),
+        requests: requests.length,
+        orders,
+        cards: Array.isArray(d.cards) ? (d.cards as unknown[]).filter((c) => typeof c === "string").slice(0, 12) : [],
+      };
+    }
+    if (kind === "turn.correction") return { edit: (d.edit as { kind?: string } | undefined)?.kind ?? null, verified: d.verified === true };
+    return {};
   }
 
   toEvent(e: LedgerEntry): ActionEvent | undefined {
@@ -159,6 +223,18 @@ export class LedgerToActions {
       }
       case "order":
         return actionEvent({ ...base, kind: "order.committed", value: e.orderId ? cents(this.totalByOrder.get(e.orderId)) : undefined, ok: true, attrs: pick(d, []) });
+      case "agent": {
+        const ev = typeof d.event === "string" ? d.event : "";
+        const thread = (d.thread ?? {}) as { threadId?: string; turnId?: string; door?: string };
+        const tag = { ...(thread.turnId ? { turnId: thread.turnId } : {}), ...(thread.threadId ? { threadId: thread.threadId } : {}) };
+        const kind = TURN_KINDS[ev];
+        if (!kind) {
+          // Model and tool calls are already their own events (agent.model / agent.tool, thread/telemetry.ts); the
+          // ledger copy keeps its old kind, with the cost for the in-process scorecard and no words.
+          return actionEvent({ ...base, kind: "ledger.agent", attrs: { event: ev || undefined, ...tag, ...(ev === "model_call" && typeof d.costUsd === "number" ? { costUsd: d.costUsd } : {}) } });
+        }
+        return actionEvent({ ...base, kind, summary: turnSummary(kind, d), ok: kind === "turn.done" ? true : kind === "turn.started" || kind === "turn.correction" ? undefined : false, attrs: { ...tag, facts: this.turnFacts(kind, d, thread.door) } });
+      }
       case "refusal":
         return actionEvent({ ...base, kind: "gate.refused", rule: typeof d.rule === "string" ? d.rule : typeof d.code === "string" ? d.code : undefined, ok: false, attrs: pick(d, ["code", "status"]) });
       default:
@@ -166,6 +242,26 @@ export class LedgerToActions {
     }
   }
 }
+
+/** One plain sentence per turn event, with no words of the buyer in it (the ledger's own summary may quote them). */
+function turnSummary(kind: string, d: Record<string, unknown>): string {
+  switch (kind) {
+    case "turn.started":
+      return "The buyer spoke or tapped; the agent's turn started.";
+    case "turn.done":
+      return `The agent's turn finished (${String(d.status ?? "done")}).`;
+    case "turn.correction":
+      return `The buyer changed the agent's proposal on the order sheet (${String((d.edit as { kind?: string } | undefined)?.kind ?? "edit")}).`;
+    case "turn.model_fallback":
+      return "The agent's model did not answer in time; another model answered.";
+    case "turn.grounding_refusal":
+      return "A sentence the data does not back was not shown.";
+    default:
+      return "The day's model cap was reached.";
+  }
+}
+
+const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v) : null);
 
 function pick(d: Record<string, unknown>, keys: string[]): Record<string, unknown> {
   const out: Record<string, unknown> = {};

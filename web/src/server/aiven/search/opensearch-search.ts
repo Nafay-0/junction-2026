@@ -40,7 +40,7 @@ export function queryFacets(text: string): Set<string> {
 }
 
 /** One term as a disjunction over the fields that can carry it: exact folded, stemmed, compound part, typo. */
-function termQuery(t: string): unknown {
+export function termQuery(t: string): unknown {
   const clauses: unknown[] = [
     { multi_match: { query: t, fields: ["names.fi.folded", "names.sv.folded", "names.en.folded", "brand"], boost: 3 } },
     { multi_match: { query: t, fields: ["names.fi.stem", "names.sv.stem", "names.en.stem"], boost: 2 } },

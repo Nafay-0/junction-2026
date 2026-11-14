@@ -28,7 +28,11 @@ comment on table telemetry.events is
   'One row per countable event. kinds: request.opened, quote.issued, order.committed (value = EUR), '
   'approval.requested, approval.granted, approval.denied, gate.allowed, gate.refused (rule = rule id), '
   'partner_api.call (value = ms), partner_api.cache_hit, crashtest.score (value = score, attrs.run), '
-  'infra.check (rule = service, value = ms, ok).';
+  'infra.check (rule = service, value = ms, ok), search.done (rule = recall backend, value = ms, attrs.facts), '
+  'turn.started, turn.done, turn.correction, turn.model_fallback (attrs.turnId, attrs.facts: codes and ms, no words), '
+  'agent.model (value = ms, attrs.costUsd, attrs.turnId).';
+-- Panels group by the facts of a search or a turn (Grafana reads the raw table; the copilot reads ops_events.facts).
+create index if not exists events_turn_idx on telemetry.events ((attrs->>'turnId')) where attrs ? 'turnId';
 
 -- Read-only role for Grafana (created through the Aiven API as service user grafana_reader).
 grant usage on schema telemetry to grafana_reader;

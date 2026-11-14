@@ -7,7 +7,10 @@ import { getKnowledgeMap } from "@/server/knowledge/service";
 import { SmartSearch, type SearchCall, type SmartConfig } from "./finder";
 import { EMBED_MODEL, embedTexts, geminiKey, queryPrompt, warmGemini } from "./gemini";
 import { DecisionsJudge, type RelevanceJudge } from "./judge";
+import { metrics } from "@/server/aiven/metrics";
 import { SearchIndex } from "./recall";
+import { RecallRouter, type RecallBackendName, type RecallRouterStats } from "./recall-router";
+import { emitSearchEvent } from "./telemetry";
 import { loadVectorsFile, resolveVectorsFile, type ProductVectors } from "./vectors";
 
 /**
@@ -26,6 +29,12 @@ import { loadVectorsFile, resolveVectorsFile, type ProductVectors } from "./vect
  *   DOCK_SEARCH_EMBED_TIMEOUT_MS     the query embedding's deadline (default 700); late, recall goes on without vectors
  *   DOCK_SEARCH_VECTORS_PATH         the vectors file (default .data/valio/search-vectors.json.gz; pnpm search:vectors)
  *   DOCK_SEARCH_DAILY_CALLS          smart search's model calls per UTC day (server/limits.ts)
+ *   DOCK_SEARCH_RECALL_BACKEND       "memory" (default) or "opensearch": which recall backend answers first, the other
+ *                                    is the fallback (recall-router.ts); OpenSearch needs OPENSEARCH_URL and, for the
+ *                                    fallback role, the OpenSearch adapter on (DOCK_SEARCH=opensearch or DOCK_AIVEN=1)
+ *   DOCK_SEARCH_RECALL_TIMEOUT_MS    OpenSearch recall's deadline (default 400)
+ *   DOCK_SEARCH_RECALL_INDEX         the OpenSearch index or alias with the vectors (default dock-recall)
+ *   DOCK_SEARCH_RECALL_BACKEND=memory-only   never ask OpenSearch, even with OPENSEARCH_URL set
  *
  * Under vitest smart search is off whatever the environment says (lexical search, as the tests were written): a test
  * that wants it builds one with a scripted judge and sets it (setSmartSearchForTests). GEMINI_API_KEY is read from
@@ -41,10 +50,10 @@ const num = (name: string, fallback: number) => {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 };
 
-export type SmartStatus = { on: boolean; reason?: string; vectors?: { count: number; dim: number; model: string; from: string }; judge: boolean };
+export type SmartStatus = { on: boolean; reason?: string; vectors?: { count: number; dim: number; model: string; from: string }; judge: boolean; recall?: RecallRouterStats & { index?: string } };
 
-type Holder = { search: SmartSearch | null; status: SmartStatus; products: IndexedProduct[] };
-const g = globalThis as typeof globalThis & { __dockSmart?: Map<IndexedProduct[], Promise<Holder>>; __dockReady?: Set<IndexedProduct[]>; __dockSmartTest?: SmartSearch | null };
+type Holder = { search: SmartSearch | null; status: SmartStatus; products: IndexedProduct[]; router?: RecallRouter; recallIndex?: string };
+const g = globalThis as typeof globalThis & { __dockSmart?: Map<IndexedProduct[], Promise<Holder>>; __dockReady?: Set<IndexedProduct[]>; __dockSmartTest?: SmartSearch | null; __dockSmartHolders?: Holder[] };
 
 /** The model calls go through the daily caps and into the telemetry record. */
 function observe(call: SearchCall): void {
@@ -68,22 +77,43 @@ function embedder(dim: number) {
   };
 }
 
+/** The OpenSearch side of recall, when OPENSEARCH_URL is set (Aiven Runtime injects OPENSEARCH_URI; env.ts copies it). */
+async function openSearchRecall(): Promise<{ lists: import("./recall-router").ListsSource; index: string; ready: boolean } | undefined> {
+  const url = envValue("OPENSEARCH_URL") ?? envValue("OPENSEARCH_URI");
+  const backend = envValue("DOCK_SEARCH_RECALL_BACKEND");
+  if (!url || backend === "memory-only") return undefined;
+  // Asked for by name, or the OpenSearch adapter is on (DOCK_SEARCH=opensearch or DOCK_AIVEN=1, as deployed): a laptop
+  // with only the address in .env.local does not send searches to the hosted service.
+  const { openSearchAdapterOn } = await import("@/server/aiven/search/event-index");
+  if (backend !== "opensearch" && !envValue("DOCK_SEARCH_RECALL_INDEX") && !openSearchAdapterOn()) return undefined;
+  const { OpenSearchRecall, RECALL_ALIAS } = await import("@/server/aiven/search/opensearch-recall");
+  const index = envValue("DOCK_SEARCH_RECALL_INDEX") ?? RECALL_ALIAS;
+  const timeoutMs = num("DOCK_SEARCH_RECALL_TIMEOUT_MS", 400);
+  const lists = new OpenSearchRecall({ url, index, timeoutMs: timeoutMs + 200 });
+  // Not published yet (or unreachable): still the fallback, but this process waits for its own vectors at boot as before.
+  const ready = (await lists.health()).ok;
+  return { lists, index, ready };
+}
+
 async function build(products: IndexedProduct[]): Promise<Holder> {
   const testing = !!process.env.VITEST;
   if (envValue("DOCK_SMART_SEARCH") === "off") return { search: null, status: { on: false, reason: "DOCK_SMART_SEARCH=off", judge: false }, products };
+  const remote = testing ? undefined : await openSearchRecall().catch(() => undefined);
   let vectors: ProductVectors | null = null;
   let vfrom = "none";
-  if (!testing) {
+  const loadVectors = async () => {
     const src = await resolveVectorsFile();
-    if (src.from !== "none") {
-      try {
-        vectors = loadVectorsFile(src.file);
-        vfrom = src.from;
-      } catch (err) {
-        console.error(`search vectors not loaded: ${err instanceof Error ? err.message.slice(0, 160) : err}`);
-      }
+    if (src.from === "none") return;
+    try {
+      vectors = loadVectorsFile(src.file);
+      vfrom = src.from;
+    } catch (err) {
+      console.error(`search vectors not loaded: ${err instanceof Error ? err.message.slice(0, 160) : err}`);
     }
-  }
+  };
+  // With OpenSearch as a recall backend the vectors load after the index is built, so the first searches after a
+  // deploy are answered semantically by OpenSearch while this process is still reading its copy.
+  if (!testing && !remote?.ready) await loadVectors();
   const map = await getKnowledgeMap().catch(() => null);
   const index = new SearchIndex(products, map, vectors);
   const keyed = !testing && !!geminiKey();
@@ -91,12 +121,40 @@ async function build(products: IndexedProduct[]): Promise<Holder> {
   const judge: RelevanceJudge | undefined = judgeOn ? new DecisionsJudge() : undefined;
   if (keyed) warmGemini(); // a warm connection before the first search
   const config: Partial<SmartConfig> = { recallSize: num("DOCK_SEARCH_RECALL", 50), judgeTimeoutMs: num("DOCK_SEARCH_JUDGE_TIMEOUT_MS", 800), embedTimeoutMs: num("DOCK_SEARCH_EMBED_TIMEOUT_MS", 700), judge: judgeOn };
-  const search = new SmartSearch({ index, ...(judge ? { judge } : {}), ...(keyed && vectors ? { embed: embedder(vectors.meta.dim) } : {}), config, admit: () => admitSearchCall(), observe });
-  return {
-    search,
-    status: { on: true, judge: judgeOn, ...(vectors ? { vectors: { count: vectors.size, dim: vectors.meta.dim, model: vectors.meta.model ?? EMBED_MODEL, from: vfrom } } : {}), ...(!map ? { reason: "no knowledge map: kinds and uses are not used" } : !vectors ? { reason: "no search vectors: semantic recall is off (pnpm search:vectors)" } : !keyed ? { reason: "GEMINI_API_KEY not set: no judge, no query embedding" } : {}) },
-    products,
+  const primary: RecallBackendName = envValue("DOCK_SEARCH_RECALL_BACKEND") === "opensearch" ? "opensearch" : "memory";
+  const router = new RecallRouter(index, remote?.lists, {
+    primary,
+    timeoutMs: num("DOCK_SEARCH_RECALL_TIMEOUT_MS", 400),
+    onAnswer: (a) => {
+      metrics.inc(a.backend === "opensearch" ? "recall.opensearch" : "recall.memory");
+      if (a.fallback) metrics.inc("recall.fallback");
+    },
+  });
+  const embed = keyed && (vectors || remote) ? embedder((vectors as ProductVectors | null)?.meta.dim ?? 768) : undefined;
+  const search = new SmartSearch({ index, ...(judge ? { judge } : {}), ...(embed ? { embed } : {}), config, admit: () => admitSearchCall(), observe, recall: router, done: (req, r) => emitSearchEvent(req, r) });
+  const status = (): SmartStatus => {
+    const v = index.vectors;
+    return {
+      on: true,
+      judge: judgeOn,
+      ...(v ? { vectors: { count: v.size, dim: v.meta.dim, model: v.meta.model ?? EMBED_MODEL, from: vfrom } } : {}),
+      recall: { ...router.stats(), ...(remote ? { index: remote.index } : {}) },
+      ...(!map ? { reason: "no knowledge map: kinds and uses are not used" } : !v && !remote ? { reason: "no search vectors: semantic recall is off (pnpm search:vectors)" } : !v ? { reason: "vectors not in memory (yet): semantic recall is answered by OpenSearch" } : !keyed ? { reason: "GEMINI_API_KEY not set: no judge, no query embedding" } : {}),
+    };
   };
+  const holder: Holder = { search, get status() { return status(); }, products, router, ...(remote ? { recallIndex: remote.index } : {}) };
+  if (!testing && remote?.ready) {
+    void loadVectors().then(() => {
+      if (vectors) index.attachVectors(vectors);
+    });
+  }
+  return holder;
+}
+
+/** How recall was answered in this process: the order, counts per backend, fallbacks (for /api/health and the Platform page). */
+export function recallStats(): (RecallRouterStats & { index?: string }) | undefined {
+  for (const h of g.__dockSmartHolders ?? []) if (h.router) return { ...h.router.stats(), ...(h.recallIndex ? { index: h.recallIndex } : {}) };
+  return undefined;
 }
 
 /** The partner index a catalogue searches, when it is (or wraps) the partner's catalogue. */
@@ -125,7 +183,13 @@ export async function smartSearchFor(catalog: unknown, opts: { ifReady?: boolean
   if (!h) {
     const products = found.products;
     h = build(products);
-    void h.then(() => g.__dockReady!.add(products), () => {});
+    void h.then(
+      (built) => {
+        g.__dockReady!.add(products);
+        (g.__dockSmartHolders ??= []).push(built);
+      },
+      () => {},
+    );
     g.__dockSmart.set(products, h);
   }
   if (opts.ifReady && !g.__dockReady.has(found.products)) return null;

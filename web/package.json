@@ -79,6 +79,7 @@
     "mariadb:reproduce": "tsx scripts/mariadb-reproduce.ts",
     "search:vectors": "tsx scripts/search-vectors.ts",
     "search:publish": "tsx scripts/search-publish.ts",
+    "search:publish:opensearch": "tsx scripts/search-publish-opensearch.ts",
     "search:eval": "tsx eval/search/run.ts"
   },
   "dependencies": {

@@ -71,7 +71,7 @@ export type FindResult = {
   /** Hits the kitchen's nutrition rules leave out, each with the rule and the product's figure (`nutritionRules`). */
   outsideRules?: { productId: string; name: string; rule: "nutrition_rules"; reason: string; details: Record<string, unknown> }[];
   /** Candidates the judge saw, and the time and cost of the search. */
-  stats: { candidates: number; ms: number; judgeMs?: number; embedMs?: number; tokens?: number; costUsd?: number };
+  stats: { candidates: number; ms: number; judgeMs?: number; embedMs?: number; tokens?: number; costUsd?: number; recallMs?: number; recallBackend?: string; recallFallback?: string };
 };
 
 export interface ProductFinder {

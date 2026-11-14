@@ -120,6 +120,17 @@ function Body({ p }: { p: Panels }) {
         </Box>
       </div>
 
+      <div className="mt-4 grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
+        <SearchBox p={p} />
+        <ConversationBox p={p} />
+        <Box title="Orders by who decided" sql={p.panels.decidedBy}>
+          <Bars rows={p.panels.decidedBy?.rows ?? []} label="Orders by who decided" series={[{ key: "agent_alone", label: "the agent, alone", tone: "ink" }, { key: "person_approved", label: "a person approved", tone: "pale" }, { key: "person_declined", label: "a person declined", tone: "safety" }]} />
+        </Box>
+        <Box title="Watch, offers and corrections" sql={p.panels.counters}>
+          {(p.panels.counters?.rows ?? []).length ? <HBars rows={p.panels.counters!.rows} labelKey="kind" valueKey="n" /> : <p className="text-[0.84rem] text-ink-soft">None in this range.</p>}
+        </Box>
+      </div>
+
       <Section title="Agents: activity, sign-offs and refusals">
         <Panel className="px-3 py-2">
           <Rows columns={["agent_id", "requests", "committed", "value_eur", "signoffs", "refused"]} rows={p.panels.agents?.rows ?? []} max={15} />
@@ -141,6 +152,73 @@ function Body({ p }: { p: Panels }) {
         </Section>
       </div>
     </>
+  );
+}
+
+const ms = (v: unknown) => (v === null || v === undefined ? "–" : `${n(v).toLocaleString("fi-FI")} ms`);
+
+/** Smart search: time by stage, which recall backend answered, fallbacks, cost and "not sold" (search.done events). */
+function SearchBox({ p }: { p: Panels }) {
+  const r = p.panels.search?.rows[0] ?? {};
+  const total = n(r.searches);
+  const share = (x: unknown) => (total ? `${Math.round((n(x) / total) * 100)} %` : "–");
+  return (
+    <Box title="Search right now" sql={p.panels.search}>
+      {!total ? (
+        <p className="text-[0.84rem] text-ink-soft">No smart search in this range.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <Stat n={total} label="searches" sub={`${share(r.not_sold)} "not sold"`} />
+            <Stat n={share(r.on_opensearch)} label="recall on OpenSearch" sub={`${share(r.in_memory)} in memory`} />
+            <Stat n={n(r.fallbacks)} label="recall fallbacks" sub={`${n(r.judge_missed)} without the judge`} safety={total > 0 && n(r.fallbacks) / total > 0.05} />
+            <Stat n={`$${n(r.usd_per_1000).toFixed(2)}`} label="per 1,000 searches" />
+          </div>
+          <Rows
+            columns={["stage", "p50", "p90"]}
+            rows={[
+              { stage: "query embedding", p50: ms(r.embed_p50), p90: ms(r.embed_p90) },
+              { stage: "recall", p50: ms(r.recall_p50), p90: ms(r.recall_p90) },
+              { stage: "relevance judge", p50: ms(r.judge_p50), p90: ms(r.judge_p90) },
+              { stage: "end to end", p50: ms(r.total_p50), p90: ms(r.total_p90) },
+            ]}
+          />
+        </>
+      )}
+    </Box>
+  );
+}
+
+/** The conversation: turn time, failures, outcomes, model calls per turn (turn.* and agent.model events). */
+function ConversationBox({ p }: { p: Panels }) {
+  const r = p.panels.conversation?.rows[0] ?? {};
+  const turns = n(r.turns);
+  return (
+    <Box title="The conversation" sql={p.panels.conversation}>
+      {!turns ? (
+        <p className="text-[0.84rem] text-ink-soft">No conversation turn in this range.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <Stat n={turns} label="turns" sub={`${n(r.typed)} typed, ${n(r.spoken)} spoken`} />
+            <Stat n={r.turn_p50_s === null || r.turn_p50_s === undefined ? "–" : `${fmtCell(r.turn_p50_s)} s`} label="turn time, median" sub={`90 % within ${r.turn_p90_s === null || r.turn_p90_s === undefined ? "–" : `${fmtCell(r.turn_p90_s)} s`}`} />
+            <Stat n={n(r.failed)} label="failed or timed out" safety={n(r.failed) > 0} />
+            <Stat n={r.model_calls_per_turn === null || r.model_calls_per_turn === undefined ? "–" : fmtCell(r.model_calls_per_turn)} label="model calls per turn" sub={`$${n(r.model_usd).toFixed(4)} in all`} />
+          </div>
+          <HBars
+            rows={[
+              { outcome: "ordered", n: n(r.ordered) },
+              { outcome: "sent for sign-off", n: n(r.sign_off) },
+              { outcome: "refused by a rule", n: n(r.refused) },
+              { outcome: "asked a question", n: n(r.asked) },
+              { outcome: "answered", n: n(r.answered) },
+            ]}
+            labelKey="outcome"
+            valueKey="n"
+          />
+        </>
+      )}
+    </Box>
   );
 }
 

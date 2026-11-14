@@ -222,7 +222,8 @@ export class SearchIndex {
   readonly products: IndexedProduct[];
   readonly byId: Map<string, IndexedProduct>;
   readonly map: KnowledgeMap | null;
-  readonly vectors: ProductVectors | null;
+  /** Settable once after the build: the vectors can arrive after the index (loaded in the background at boot). */
+  vectors: ProductVectors | null;
   private readonly vocab = new Map<string, number>();
   private readonly vocabByLen = new Map<number, string[]>();
   private readonly kinds: KindEntry[] = [];
@@ -291,6 +292,10 @@ export class SearchIndex {
       l.push(t);
       this.vocabByLen.set(t.length, l);
     }
+  }
+
+  attachVectors(v: ProductVectors): void {
+    this.vectors = v;
   }
 
   /** The nearest word any product name or kind uses, for a word none does; undefined when it is known or too far. */
@@ -544,23 +549,54 @@ export class SearchIndex {
     return FAMILY_BRIDGES.some((b) => b.families.includes(f) && b.families.some((x) => x !== f && named.has(x)));
   }
 
-  /** Every source at once, each under the hard filter, fused. `queryVector`: the request's embedding, when there is one. */
-  recall(u: Understood, opts: { size: number; signals?: Signals; filter: (p: IndexedProduct) => boolean; queryVector?: Float32Array; category?: string; ids?: string[] }): Candidate[] {
+  /**
+   * The keyword and vector questions recall asks, for a backend that answers them elsewhere (OpenSearch): the same
+   * terms, modes and list sizes the in-process sources use. Undefined: that source is not asked.
+   */
+  recallPlan(u: Understood, opts: { size: number; signals?: Signals; queryVector?: Float32Array }): RecallPlan {
     const sig = { ...ALL_SIGNALS, ...(opts.signals ?? {}) };
-    const lists: { source: Source; weight: number; ids: string[] }[] = [];
+    const contentTerms = u.terms.filter((t) => !GENERIC.has(t));
+    return {
+      ...(sig.lexical ? { lexical: { terms: contentTerms.length ? contentTerms : u.terms, mode: "and" as const, limit: 100 } } : {}),
+      ...(sig.typo && Object.keys(u.corrections).length ? { typo: { terms: contentTerms.map((t) => u.corrections[t] ?? t), mode: "and" as const, limit: 80 } } : {}),
+      ...(sig.words && contentTerms.length > 1 ? { words: { terms: [...new Set(contentTerms.flatMap((t) => (u.corrections[t] ? [t, u.corrections[t]] : [t])))], mode: "or" as const, limit: 80 } } : {}),
+      ...(sig.vectors && opts.queryVector ? { vectors: { k: Math.max(opts.size, 60) } } : {}),
+    };
+  }
+
+  /**
+   * Every source at once, each under the hard filter, fused. `queryVector`: the request's embedding, when there is
+   * one. `external`: the keyword and vector lists as another backend answered them (OpenSearch, recallPlan); the
+   * hard filter is applied to them here all the same, and the code and kinds sources, the fusion, the quotas and
+   * the use lift are this same code either way, so both backends' candidates are comparable.
+   */
+  recall(u: Understood, opts: { size: number; signals?: Signals; filter: (p: IndexedProduct) => boolean; queryVector?: Float32Array; category?: string; ids?: string[] }, external?: ExternalLists): Candidate[] {
+    const sig = { ...ALL_SIGNALS, ...(opts.signals ?? {}) };
+    const lists: RankedList[] = [];
     const allow = opts.filter;
     const contentTerms = u.terms.filter((t) => !GENERIC.has(t));
+    const plan = this.recallPlan(u, opts);
+    const outside = (ids: string[] | undefined, limit: number) => (ids ?? []).filter((id) => {
+      const p = this.byId.get(id);
+      return !!p && allow(p);
+    }).slice(0, limit);
     if (sig.code && u.codes.length) lists.push({ source: "code", weight: 20, ids: u.codes.filter((id) => allow(this.byId.get(id)!)) });
     // Keywords from the inverted index: all the words first, then the misspelt ones corrected, then any of them.
-    if (sig.lexical) lists.push({ source: "lexical", weight: 1, ids: this.keywordRank(contentTerms.length ? contentTerms : u.terms, "and", allow, 100) });
-    if (sig.typo && Object.keys(u.corrections).length) lists.push({ source: "typo", weight: 0.9, ids: this.keywordRank(contentTerms.map((t) => u.corrections[t] ?? t), "and", allow, 80) });
-    if (sig.words && contentTerms.length > 1) lists.push({ source: "words", weight: 0.6, ids: this.keywordRank([...new Set(contentTerms.flatMap((t) => (u.corrections[t] ? [t, u.corrections[t]] : [t])))], "or", allow, 80) });
+    if (plan.lexical) lists.push({ source: "lexical", weight: 1, ids: external ? outside(external.lexical, plan.lexical.limit) : this.keywordRank(plan.lexical.terms, "and", allow, plan.lexical.limit) });
+    if (plan.typo) lists.push({ source: "typo", weight: 0.9, ids: external ? outside(external.typo, plan.typo.limit) : this.keywordRank(plan.typo.terms, "and", allow, plan.typo.limit) });
+    if (plan.words) lists.push({ source: "words", weight: 0.6, ids: external ? outside(external.words, plan.words.limit) : this.keywordRank(plan.words.terms, "or", allow, plan.words.limit) });
     const sims = new Map<string, number>();
-    if (sig.vectors && this.vectors && opts.queryVector) {
-      const near = this.vectors.nearest(opts.queryVector, Math.max(opts.size, 60), (id) => {
-        const p = this.byId.get(id);
-        return !!p && allow(p);
-      });
+    if (plan.vectors && (external ? external.vectors : this.vectors)) {
+      const k = plan.vectors.k;
+      const near = external
+        ? (external.vectors ?? []).filter((n) => {
+            const p = this.byId.get(n.id);
+            return !!p && allow(p);
+          }).slice(0, k)
+        : this.vectors!.nearest(opts.queryVector!, k, (id) => {
+            const p = this.byId.get(id);
+            return !!p && allow(p);
+          });
       for (const n of near) sims.set(n.id, n.sim);
       lists.push({ source: "vectors", weight: 1, ids: near.map((n) => n.id) });
     }
@@ -579,42 +615,57 @@ export class SearchIndex {
       ranked.sort((a, b) => b.s - a.s || a.id.localeCompare(b.id));
       lists.push({ source: "kinds", weight: 1, ids: [...new Set(ranked.map((r) => r.id))].slice(0, 200) });
     }
-    // Reciprocal rank fusion. Each word's own list counts once per product (its best rank).
-    const fused = new Map<string, Candidate>();
-    for (const l of lists) {
-      l.ids.forEach((id, rank) => {
-        const c = fused.get(id) ?? { id, score: 0, sources: [] };
-        const add = l.weight / (60 + rank);
-        if (l.source === "words" && c.sources.includes("words")) c.score += add * 0.5;
-        else c.score += add;
-        if (!c.sources.includes(l.source)) c.sources.push(l.source);
-        fused.set(id, c);
-      });
-    }
-    if (u.uses.length && this.map) {
-      for (const c of fused.values()) {
-        const uses = this.map.profile(c.id)?.uses ?? [];
-        const pos = Math.min(...u.uses.map((x) => (uses.indexOf(x) < 0 ? 99 : uses.indexOf(x))));
-        if (pos < 99) c.score *= 1.25 - Math.min(pos, 4) * 0.04;
-      }
-    }
-    // Every source keeps its own best few among the candidates, so one source's consensus on a stray word cannot
-    // crowd out another's right answer (the vectors' "disposable gloves" for "kertakäyttöhanskoja keittiöön").
-    const all = [...fused.values()].sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
-    const chosen = new Set<string>();
-    for (const l of lists) {
-      const quota = l.source === "code" ? l.ids.length : Math.ceil(opts.size * (QUOTA[l.source] ?? 0));
-      let n = 0;
-      for (const id of l.ids) {
-        if (n >= quota || chosen.size >= opts.size) break;
-        if (!chosen.has(id)) chosen.add(id);
-        n++;
-      }
-    }
-    for (const c of all) {
-      if (chosen.size >= opts.size) break;
-      chosen.add(c.id);
-    }
-    return all.filter((c) => chosen.has(c.id));
+    return fuseLists(lists, u, opts.size, this.map);
   }
+}
+
+export type RankedList = { source: Source; weight: number; ids: string[] };
+export type KeywordAsk = { terms: string[]; mode: "and" | "or"; limit: number };
+export type RecallPlan = { lexical?: KeywordAsk; typo?: KeywordAsk; words?: KeywordAsk; vectors?: { k: number } };
+/** Ranked ids per source from another backend, best first (vectors with their cosine similarity). */
+export type ExternalLists = { lexical?: string[]; typo?: string[]; words?: string[]; vectors?: { id: string; sim: number }[] };
+
+/**
+ * Reciprocal rank fusion of the sources' lists (in the order given: code, lexical, typo, words, vectors, kinds),
+ * the use lift, then each source's quota of its own best before the rest is filled by fused score. Shared by both
+ * recall backends.
+ */
+export function fuseLists(lists: RankedList[], u: Pick<Understood, "uses">, size: number, map: Pick<KnowledgeMap, "profile"> | null): Candidate[] {
+  // Reciprocal rank fusion. Each word's own list counts once per product (its best rank).
+  const fused = new Map<string, Candidate>();
+  for (const l of lists) {
+    l.ids.forEach((id, rank) => {
+      const c = fused.get(id) ?? { id, score: 0, sources: [] };
+      const add = l.weight / (60 + rank);
+      if (l.source === "words" && c.sources.includes("words")) c.score += add * 0.5;
+      else c.score += add;
+      if (!c.sources.includes(l.source)) c.sources.push(l.source);
+      fused.set(id, c);
+    });
+  }
+  if (u.uses.length && map) {
+    for (const c of fused.values()) {
+      const uses = map.profile(c.id)?.uses ?? [];
+      const pos = Math.min(...u.uses.map((x) => (uses.indexOf(x) < 0 ? 99 : uses.indexOf(x))));
+      if (pos < 99) c.score *= 1.25 - Math.min(pos, 4) * 0.04;
+    }
+  }
+  // Every source keeps its own best few among the candidates, so one source's consensus on a stray word cannot
+  // crowd out another's right answer (the vectors' "disposable gloves" for "kertakäyttöhanskoja keittiöön").
+  const all = [...fused.values()].sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
+  const chosen = new Set<string>();
+  for (const l of lists) {
+    const quota = l.source === "code" ? l.ids.length : Math.ceil(size * (QUOTA[l.source] ?? 0));
+    let n = 0;
+    for (const id of l.ids) {
+      if (n >= quota || chosen.size >= size) break;
+      if (!chosen.has(id)) chosen.add(id);
+      n++;
+    }
+  }
+  for (const c of all) {
+    if (chosen.size >= size) break;
+    chosen.add(c.id);
+  }
+  return all.filter((c) => chosen.has(c.id));
 }

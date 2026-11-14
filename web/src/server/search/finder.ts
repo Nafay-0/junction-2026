@@ -5,6 +5,7 @@ import { judgeLine } from "./docs";
 import { EMBED_USD_PER_M, GeminiError } from "./gemini";
 import type { RelevanceJudge, Verdict } from "./judge";
 import { ALL_SIGNALS, type Candidate, type SearchIndex, type Signals, type Understood } from "./recall";
+import type { RecallRouter } from "./recall-router";
 
 /**
  * Smart search: wide recall by cheap means, the hard rules in code first, then one relevance judgement over the
@@ -46,6 +47,10 @@ export type SmartDeps = {
   /** Asked before each paid call; false skips it (switched off, over today's cap). */
   admit?: (kind: SearchCall["kind"]) => boolean;
   observe?: (call: SearchCall) => void;
+  /** Where recall is answered (memory or OpenSearch, recall-router.ts); absent: this process's index, as before. */
+  recall?: RecallRouter;
+  /** Called once per finished search, for the search telemetry event (counts and times only). */
+  done?: (req: FindRequest, result: Detailed) => void;
   now?: () => number;
 };
 
@@ -87,7 +92,14 @@ export class SmartSearch implements ProductFinder {
     const now = (this.deps.now ?? Date.now)();
     const hit = this.cache.get(k);
     if (hit && now - hit.at < 120_000) return hit.p;
-    const p = this.run(req, cfg);
+    const p = this.run(req, cfg).then((r) => {
+      try {
+        this.deps.done?.(req, r);
+      } catch {
+        // telemetry is best effort
+      }
+      return r;
+    });
     this.cache.set(k, { at: now, p });
     p.catch(() => this.cache.delete(k));
     if (this.cache.size > 300) for (const key of [...this.cache.keys()].slice(0, 100)) this.cache.delete(key);
@@ -109,7 +121,7 @@ export class SmartSearch implements ProductFinder {
     let queryVector: Float32Array | undefined;
     // A product code said outright with hardly another word is a lookup: no embedding, no judge.
     const lookup = u.codes.length > 0 && u.terms.filter((t) => !CODE_WORDS.has(t)).length === 0;
-    const wantVector = cfg.signals.vectors !== false && !!ix.vectors && !!this.deps.embed && !lookup && (this.deps.admit?.("embed") ?? true);
+    const wantVector = cfg.signals.vectors !== false && (this.deps.recall ? this.deps.recall.canSearchVectors() : !!ix.vectors) && !!this.deps.embed && !lookup && (this.deps.admit?.("embed") ?? true);
     if (wantVector) {
       const e0 = performance.now();
       try {
@@ -128,7 +140,11 @@ export class SmartSearch implements ProductFinder {
       }
     }
 
-    const candidates: Candidate[] = ix.recall(u, { size: cfg.recallSize, signals: cfg.signals, filter, ...(queryVector ? { queryVector } : {}), ...(category ? { category } : {}), ...(req.ids ? { ids: req.ids } : {}) });
+    const recallOpts = { size: cfg.recallSize, signals: cfg.signals, filter, ...(queryVector ? { queryVector } : {}), ...(category ? { category } : {}), ...(req.ids ? { ids: req.ids } : {}) };
+    const r0 = performance.now();
+    const routed = this.deps.recall ? await this.deps.recall.recall(u, recallOpts) : undefined;
+    const candidates: Candidate[] = routed ? routed.candidates : ix.recall(u, recallOpts);
+    const recallMs = Math.round(performance.now() - r0);
     const products = new Map(candidates.map((c) => [c.id, ix.byId.get(c.id)!]));
 
     // The judge, with a deadline. Any failure leaves the fused ranking, and the result says which path answered.
@@ -230,7 +246,7 @@ export class SmartSearch implements ProductFinder {
       onlyStandins,
       notSold,
       unsure,
-      stats: { candidates: candidates.length, ms: Math.round(performance.now() - t0), ...(judgeMs !== undefined ? { judgeMs } : {}), ...(embedMs !== undefined ? { embedMs } : {}), tokens, costUsd: Math.round(costUsd * 1e6) / 1e6 },
+      stats: { candidates: candidates.length, ms: Math.round(performance.now() - t0), ...(judgeMs !== undefined ? { judgeMs } : {}), ...(embedMs !== undefined ? { embedMs } : {}), tokens, costUsd: Math.round(costUsd * 1e6) / 1e6, recallMs, recallBackend: routed?.backend ?? "memory", ...(routed?.fallback ? { recallFallback: routed.fallback } : {}) },
       candidates: candidates.map((c) => ({ id: c.id, sources: c.sources, ...(verdicts?.get(c.id) ? { verdict: verdicts.get(c.id)! } : {}) })),
       understood: u,
     };

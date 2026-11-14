@@ -30,6 +30,8 @@ export type HealthReport = {
   actions?: Record<string, number | string | boolean>;
   sink?: Record<string, number | string | boolean>;
   search?: Record<string, unknown>;
+  /** Smart search's recall: which backend answers first, how often each answered, fallbacks (server/search/recall-router.ts). */
+  recall?: Record<string, unknown>;
 };
 
 const TIMEOUT_MS = 3_000;
@@ -134,6 +136,7 @@ async function runChecks(h?: AivenHandle): Promise<HealthReport> {
     actions: sw && sw.actions !== "off" ? h?.actions.stats() : undefined,
     sink: h?.sink?.stats(),
     search: h?.routed ? { ...h.routed.routingStats() } : undefined,
+    recall: await import("@/server/search/service").then((m) => m.recallStats()).catch(() => undefined),
   };
 }
 

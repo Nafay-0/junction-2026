@@ -127,6 +127,52 @@ function metricPanel(title, metric, services, { unit = "percent", w = 8 } = {}) 
   };
 }
 
+
+function table(title, rawSql, { w = 12, h = 8, description } = {}) {
+  return { type: "table", id: nextId++, title, description, datasource: PG_DS, gridPos: place(w, h), targets: [sql("A", rawSql)], options: { showHeader: true, cellHeight: "sm" }, fieldConfig: { defaults: {}, overrides: [] } };
+}
+
+function bars(title, rawSql, { w = 8, h = 8, unit, description } = {}) {
+  return {
+    type: "bargauge",
+    id: nextId++,
+    title,
+    description,
+    datasource: PG_DS,
+    gridPos: place(w, h),
+    targets: [sql("A", rawSql)],
+    fieldConfig: { defaults: { unit, color: { mode: "continuous-BlYlRd" }, min: 0 }, overrides: [] },
+    options: { reduceOptions: { calcs: ["lastNotNull"], fields: "", values: true }, orientation: "horizontal", displayMode: "gradient", showUnfilled: true, valueMode: "color", namePlacement: "left" },
+  };
+}
+
+/** Per agent over the dashboard's time range: the scorecard's figures and status (the same thresholds as web/src/server/ops/scorecard.ts). */
+const AGENT_FIGURES = `WITH e AS (SELECT * FROM telemetry.events WHERE agent_id IS NOT NULL AND $__timeFilter(ts)),
+k AS (
+  SELECT agent_id,
+    count(*) FILTER (WHERE kind = 'request.opened') AS requests,
+    count(*) FILTER (WHERE kind = 'gate.allowed') AS alone,
+    count(*) FILTER (WHERE kind = 'gate.escalated') AS to_a_person,
+    count(*) FILTER (WHERE kind = 'gate.escalated' AND rule = 'per_order_limit') AS over_limit,
+    count(*) FILTER (WHERE kind = 'gate.refused') AS refused,
+    count(*) FILTER (WHERE kind = 'order.committed') AS committed,
+    count(*) FILTER (WHERE kind = 'turn.correction') AS corrections,
+    count(*) FILTER (WHERE kind = 'quote.issued') AS proposals,
+    coalesce(sum((attrs->>'costUsd')::float8) FILTER (WHERE kind = 'agent.model'), 0)
+      + coalesce(sum((attrs->'facts'->>'cost_usd')::float8) FILTER (WHERE kind = 'search.done'), 0) AS spend_usd,
+    count(*) FILTER (WHERE kind = 'lookup.live') AS live_calls
+  FROM e GROUP BY 1)
+SELECT agent_id AS "agent",
+  CASE WHEN refused >= 3 AND refused >= 0.3 * nullif(alone + to_a_person + refused, 0) THEN 'failing'
+       WHEN (to_a_person >= 2 AND to_a_person >= 0.5 * nullif(alone + to_a_person + refused, 0)) OR over_limit >= 2 THEN 'escalating'
+       WHEN requests + alone + to_a_person + refused = 0 THEN 'quiet' ELSE 'performing' END AS "status",
+  requests, alone, to_a_person AS "to a person", refused,
+  round(100.0 * to_a_person / nullif(alone + to_a_person + refused, 0), 0) AS "escalation %",
+  corrections AS "corrected", proposals AS "quotes",
+  round((spend_usd / nullif(committed, 0))::numeric, 4) AS "USD per order",
+  round(live_calls::numeric / nullif(committed, 0), 1) AS "live calls per order"
+FROM k ORDER BY 2, 3 DESC`;
+
 function buildDashboard() {
   const panels = [];
 
@@ -193,6 +239,59 @@ FROM telemetry.events WHERE kind IN ('partner_api.call', 'partner_api.cache_hit'
     options: { showHeader: true, cellHeight: "sm" },
     fieldConfig: { defaults: {}, overrides: [] },
   });
+
+  // Row: the agents at the door (the operations portal's scorecard, web/src/server/ops/scorecard.ts)
+  panels.push(row("Agents at the door: performing, escalating, failing"));
+  panels.push(table("Agent status", AGENT_FIGURES, { w: 24, h: 8, description: "Failing: a third of its decisions refused (at least 3). Escalating: half its decisions sent to a person (at least 2), or two orders over its own limit. The portal's Agents page shows the same with the reason in words and what a person might do." }));
+  panels.push(
+    bars("Escalation rate by agent", `SELECT agent_id AS "agent", round(100.0 * count(*) FILTER (WHERE kind = 'gate.escalated') / nullif(count(*), 0), 0) AS "to a person %" FROM telemetry.events WHERE kind IN ('gate.allowed', 'gate.escalated', 'gate.refused') AND agent_id IS NOT NULL AND $__timeFilter(ts) GROUP BY 1 ORDER BY 2 DESC`, { unit: "percent" }),
+    bars("Refusals by agent and rule", `SELECT agent_id || ' · ' || coalesce(rule, '?') AS "agent · rule", count(*) AS "refusals" FROM telemetry.events WHERE kind = 'gate.refused' AND agent_id IS NOT NULL AND $__timeFilter(ts) GROUP BY 1 ORDER BY 2 DESC LIMIT 15`),
+    table(
+      "Time to a decision",
+      `WITH r AS (SELECT agent_id, attrs->>'request_id' AS request_id,
+    extract(epoch FROM min(ts) FILTER (WHERE kind IN ('gate.allowed', 'gate.escalated', 'gate.refused')) - min(ts) FILTER (WHERE kind = 'request.opened')) AS s
+  FROM telemetry.events WHERE agent_id IS NOT NULL AND attrs ? 'request_id' AND $__timeFilter(ts) GROUP BY 1, 2)
+SELECT agent_id AS "agent", count(*) AS "decisions",
+  round(percentile_cont(0.5) WITHIN GROUP (ORDER BY s)::numeric, 1) AS "p50 s",
+  round(percentile_cont(0.9) WITHIN GROUP (ORDER BY s)::numeric, 1) AS "p90 s"
+FROM r WHERE s IS NOT NULL GROUP BY 1 ORDER BY 4 DESC`,
+      { w: 8 },
+    ),
+  );
+  panels.push(row("Search and the conversation"));
+  panels.push(
+    table(
+      "Search by stage (ms)",
+      `SELECT count(*) AS "searches",
+  round(percentile_cont(0.5) WITHIN GROUP (ORDER BY (attrs->'facts'->>'embed_ms')::float8)::numeric) AS "embed p50",
+  round(percentile_cont(0.9) WITHIN GROUP (ORDER BY (attrs->'facts'->>'recall_ms')::float8)::numeric) AS "recall p90",
+  round(percentile_cont(0.5) WITHIN GROUP (ORDER BY (attrs->'facts'->>'judge_ms')::float8)::numeric) AS "judge p50",
+  round(percentile_cont(0.5) WITHIN GROUP (ORDER BY (attrs->'facts'->>'total_ms')::float8)::numeric) AS "total p50",
+  round(percentile_cont(0.9) WITHIN GROUP (ORDER BY (attrs->'facts'->>'total_ms')::float8)::numeric) AS "total p90",
+  round(100.0 * count(*) FILTER (WHERE attrs->'facts'->>'backend' = 'opensearch') / nullif(count(*), 0)) AS "on OpenSearch %",
+  count(*) FILTER (WHERE (attrs->'facts'->>'fallback')::boolean) AS "fallbacks",
+  round((1000 * avg((attrs->'facts'->>'cost_usd')::float8))::numeric, 3) AS "USD per 1000",
+  count(*) FILTER (WHERE (attrs->'facts'->>'not_sold')::boolean) AS "not sold"
+FROM telemetry.events WHERE kind = 'search.done' AND $__timeFilter(ts)`,
+      { w: 12, h: 5 },
+    ),
+    table(
+      "Conversation turns",
+      `WITH t AS (SELECT attrs->>'turnId' AS turn, min(ts) FILTER (WHERE kind = 'turn.started') AS s, min(ts) FILTER (WHERE kind = 'turn.done') AS d,
+    max(attrs->'facts'->>'outcome') FILTER (WHERE kind = 'turn.done') AS outcome
+  FROM telemetry.events WHERE kind IN ('turn.started', 'turn.done') AND attrs ? 'turnId' AND $__timeFilter(ts) GROUP BY 1)
+SELECT count(*) AS "turns",
+  round(percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM d - s))::numeric, 1) AS "p50 s",
+  round(percentile_cont(0.9) WITHIN GROUP (ORDER BY extract(epoch FROM d - s))::numeric, 1) AS "p90 s",
+  count(*) FILTER (WHERE d IS NULL AND s < now() - interval '150 seconds') AS "failed or timed out",
+  count(*) FILTER (WHERE outcome = 'ordered') AS "ordered",
+  count(*) FILTER (WHERE outcome = 'sign_off') AS "sent for sign-off",
+  count(*) FILTER (WHERE outcome = 'refused') AS "refused",
+  count(*) FILTER (WHERE outcome = 'asked') AS "asked"
+FROM t WHERE s IS NOT NULL`,
+      { w: 12, h: 5 },
+    ),
+  );
 
   // Row 2: Aiven services, from the Aiven API
   panels.push(row("Aiven services (Aiven API, read-only token)"));
@@ -314,6 +413,36 @@ FROM telemetry.events WHERE kind IN ('partner_api.call', 'partner_api.cache_hit'
   };
 }
 
+
+// ---------------------------------------------------------------- alert rules (when this Grafana allows provisioning them)
+
+/** The app's own alert table (web/src/server/ops/alerts.ts), as Grafana rules over the same rows. */
+function alertRules(folderUid) {
+  const rule = (uid, title, rawSql, threshold, summary) => ({
+    uid,
+    title,
+    folderUID: folderUid,
+    ruleGroup: "aimopilot",
+    condition: "C",
+    for: "1m",
+    noDataState: "OK",
+    execErrState: "Error",
+    annotations: { summary },
+    labels: { app: "aimopilot" },
+    data: [
+      { refId: "A", relativeTimeRange: { from: 900, to: 0 }, datasourceUid: "dock-pg", model: { refId: "A", rawSql, format: "table", rawQuery: true, editorMode: "code" } },
+      { refId: "B", datasourceUid: "__expr__", model: { refId: "B", type: "reduce", expression: "A", reducer: "last" } },
+      { refId: "C", datasourceUid: "__expr__", model: { refId: "C", type: "threshold", expression: "B", conditions: [{ evaluator: { type: "gt", params: [threshold] } }] } },
+    ],
+  });
+  return [
+    rule("dock-turn-p90", "Conversation turns are slow", `SELECT coalesce(percentile_cont(0.9) WITHIN GROUP (ORDER BY extract(epoch FROM d - s)), 0) AS p90 FROM (SELECT min(ts) FILTER (WHERE kind = 'turn.started') s, min(ts) FILTER (WHERE kind = 'turn.done') d FROM telemetry.events WHERE kind IN ('turn.started', 'turn.done') AND ts > now() - interval '15 minutes' GROUP BY attrs->>'turnId') t WHERE d IS NOT NULL`, 20, "90 % of conversation turns took over 20 s in the last 15 minutes."),
+    rule("dock-search-fallback", "Search is answered by its fallback", `SELECT coalesce(count(*) FILTER (WHERE (attrs->'facts'->>'fallback')::boolean)::float8 / nullif(count(*), 0), 0) AS share FROM telemetry.events WHERE kind = 'search.done' AND ts > now() - interval '15 minutes' HAVING count(*) >= 5`, 0.05, "More than 5 % of searches answered by the fallback recall backend in 15 minutes."),
+    rule("dock-signoff-wait", "An order is waiting long for a person", `SELECT coalesce(max(extract(epoch FROM now() - a.ts) / 60), 0) AS minutes FROM telemetry.events a WHERE a.kind = 'approval.requested' AND a.ts > now() - interval '2 days' AND NOT EXISTS (SELECT 1 FROM telemetry.events b WHERE b.kind IN ('approval.granted', 'approval.denied') AND b.order_id = a.order_id)`, 30, "A sign-off has waited over 30 minutes."),
+    rule("dock-refusals", "An agent keeps getting refused", `SELECT coalesce(max(n), 0) AS refusals FROM (SELECT count(*) AS n FROM telemetry.events WHERE kind = 'gate.refused' AND ts > now() - interval '15 minutes' GROUP BY agent_id) x`, 4, "One agent was refused 5 or more times in 15 minutes: see its scorecard."),
+  ];
+}
+
 if (PRINT) {
   console.log(JSON.stringify(buildDashboard(), null, 2));
   process.exit(0);
@@ -385,4 +514,19 @@ await upsertDatasource({
 const put = await grafana("POST", "/api/dashboards/db", { dashboard: buildDashboard(), overwrite: true, message: "provisioned by infra/grafana/provision.mjs" });
 if (put.status >= 300) throw new Error(`dashboard: HTTP ${put.status} ${put.json.message ?? ""}`);
 console.log(`dashboard  ${put.json.status} · ${base}${put.json.url}`);
+// Alert rules: Grafana's provisioning API, when this plan allows it; otherwise the app's own alert table holds them.
+const folder = await grafana("POST", "/api/folders", { uid: "aimopilot", title: "AimoPilot" });
+if (folder.status >= 300 && folder.status !== 409 && folder.status !== 412) {
+  console.log(`alerts     not provisioned: folder HTTP ${folder.status} ${folder.json.message ?? ""}; the app's own alert table (Platform page) holds them`);
+} else {
+  let ok = 0;
+  let why = "";
+  for (const r of alertRules("aimopilot")) {
+    const existing = await grafana("GET", `/api/v1/provisioning/alert-rules/${r.uid}`);
+    const res = existing.status === 200 ? await grafana("PUT", `/api/v1/provisioning/alert-rules/${r.uid}`, r) : await grafana("POST", "/api/v1/provisioning/alert-rules", r);
+    if (res.status < 300) ok++;
+    else why = `HTTP ${res.status} ${res.json.message ?? ""}`;
+  }
+  console.log(ok ? `alerts     ${ok} rules provisioned in folder AimoPilot${why ? ` (some failed: ${why})` : ""}` : `alerts     not provisioned (${why}); the app's own alert table (Platform page) holds them`);
+}
 console.log(`login      user ${g.user}; password: Aiven Console > ${GRAFANA} > Overview (not printed here)`);
