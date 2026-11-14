@@ -135,6 +135,10 @@ function Scores({ rows: all, onDone }: { rows: ScoreRow[]; onDone: () => void })
               <span className="block text-[0.82rem] text-ink-soft">
                 {r.orgName}, {KIND[r.kind] ?? r.kind}
                 {r.suspended ? ", suspended" : ""}
+                {" · "}
+                <Link href={`/ops/orders?agent=${encodeURIComponent(r.agentId)}`} className="text-petrol underline decoration-petrol/30 underline-offset-4">
+                  its orders
+                </Link>
               </span>
               <span className="mt-1 block text-[0.86rem] leading-snug">{r.reason.replace(/^(Failing|Escalating|Performing): /, "")}</span>
               {r.notes.length > 0 && <span className="block text-[0.8rem] text-ink-soft">{r.notes.join("; ")}</span>}
@@ -247,7 +251,12 @@ function Queue({ q, now }: { q: EscalationQueue; now: number | undefined }) {
                 <td className="tabular">
                   {now === undefined ? `${w.waitingMin} min` : w.overThreshold ? <Badge tone="waiting">{since(w.requestedAt, now)}</Badge> : since(w.requestedAt, now)}
                 </td>
-                <td>{w.orgName}</td>
+                <td>
+                  {w.orgName}
+                  <Link href={`/ops/orders/${w.orderId}`} className="block text-[0.8rem] text-petrol underline decoration-petrol/30 underline-offset-4">
+                    the order&apos;s timeline
+                  </Link>
+                </td>
                 <td>
                   {w.agentLabel}
                   {w.agentSuspended ? " (suspended)" : ""}
