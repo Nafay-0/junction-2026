@@ -54,7 +54,9 @@ export async function openApproval(page: Page): Promise<string> {
 }
 
 export const TARGETS: Target[] = [
-  { id: "wall", path: "/", size: "wall", open: go("/", heading("Scan to become the approver")) },
+  { id: "landing", path: "/", size: "phone", open: go("/", heading(/An AI buyer for every kitchen/)) },
+  { id: "landing-laptop", path: "/", size: "laptop", open: go("/", heading(/An AI buyer for every kitchen/)) },
+  { id: "wall", path: "/wall", size: "wall", open: go("/wall", heading("Scan to become the approver")) },
   { id: "join", path: "/join", size: "phone", open: go("/join", heading(/Become the purchasing manager/)) },
   {
     id: "approver",

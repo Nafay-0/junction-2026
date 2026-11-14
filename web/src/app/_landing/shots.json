@@ -1,0 +1,219 @@
+{
+  "agent-home": {
+    "src": "/landing/agent-home.webp",
+    "w": 780,
+    "h": 1688,
+    "kind": "phone",
+    "caption": "The agent's home on a phone: it noticed before the kitchen that Monday's usual milk missed its cut-off, and asks once."
+  },
+  "agent-menu": {
+    "src": "/landing/agent-menu.webp",
+    "w": 1920,
+    "h": 1200,
+    "kind": "desktop",
+    "caption": "The menu planner in the agent: dishes for the covers, what the kitchen has, what must be ordered."
+  },
+  "agent-menu-sheet": {
+    "src": "/landing/agent-menu-sheet.webp",
+    "w": 1920,
+    "h": 1200,
+    "kind": "desktop",
+    "caption": "A menu chosen: each dish's ingredients matched to products, with the total for the covers."
+  },
+  "agent-outside": {
+    "src": "/landing/agent-outside.webp",
+    "w": 1920,
+    "h": 1200,
+    "kind": "desktop",
+    "caption": "Connect your own agent: the MCP address, the OpenAPI document, a mandate to try with."
+  },
+  "agent-seller": {
+    "src": "/landing/agent-seller.webp",
+    "w": 1920,
+    "h": 1200,
+    "kind": "desktop",
+    "caption": "The wholesaler's selling agent: signed offers it made, and the ones its guardrails held back with the rule."
+  },
+  "agent-seller-phone": {
+    "src": "/landing/agent-seller-phone.webp",
+    "w": 780,
+    "h": 1688,
+    "kind": "phone",
+    "caption": "The wholesaler's selling agent, as the kitchen sees it: one signed offer, cheaper per litre than its weekly milk, and a question."
+  },
+  "agent-voice": {
+    "src": "/landing/agent-voice.webp",
+    "w": 780,
+    "h": 1688,
+    "kind": "phone",
+    "caption": "Speaking to the agent: hold to talk, or leave the microphone open in a loud kitchen."
+  },
+  "agent-watch": {
+    "src": "/landing/agent-watch.webp",
+    "w": 780,
+    "h": 1688,
+    "kind": "phone",
+    "caption": "The watch on the kitchen's phone: a product that cannot come for its day, noticed before the kitchen, with substitutes."
+  },
+  "flow-lookup": {
+    "src": "/landing/flow-lookup.webp",
+    "w": 780,
+    "h": 1688,
+    "kind": "phone",
+    "caption": "The steps behind the reply opened: the request read, the products found, live price, stock and the order cut-off checked."
+  },
+  "flow-options": {
+    "src": "/landing/flow-options.webp",
+    "w": 780,
+    "h": 1688,
+    "kind": "phone",
+    "caption": "Options at fixed prices from the live price call: each with its total, price per litre and delivery day."
+  },
+  "flow-request": {
+    "src": "/landing/flow-request.webp",
+    "w": 780,
+    "h": 1688,
+    "kind": "phone",
+    "caption": "The request as the buyer typed it, and the agent working through it step by step."
+  },
+  "flow-signed": {
+    "src": "/landing/flow-signed.webp",
+    "w": 780,
+    "h": 1688,
+    "kind": "phone",
+    "caption": "Signed with a passkey: the stamp names who signed, and the order is placed at the quoted price."
+  },
+  "flow-signoff": {
+    "src": "/landing/flow-signoff.webp",
+    "w": 780,
+    "h": 1688,
+    "kind": "phone",
+    "caption": "The sign-off on the approver's phone: who asks, the total, why it stopped, approve with a passkey."
+  },
+  "gate-refused": {
+    "src": "/landing/gate-refused.webp",
+    "w": 1920,
+    "h": 1200,
+    "kind": "desktop",
+    "caption": "Six ways to make an agent misbehave, run against the live gate: each refused, each with the rule that refused it."
+  },
+  "hero-desktop-store": {
+    "src": "/landing/hero-desktop-store.webp",
+    "w": 1920,
+    "h": 1200,
+    "kind": "desktop",
+    "caption": "The store on a desk, with the kitchen's agent docked beside the catalogue in the same conversation."
+  },
+  "hero-phone-thread": {
+    "src": "/landing/hero-phone-thread.webp",
+    "w": 780,
+    "h": 1688,
+    "kind": "phone",
+    "caption": "The agent's answer to the milk request: the usual 10 L boxes missed the order cut-off, the 1 L cartons can make Monday."
+  },
+  "mail-changed": {
+    "src": "/landing/mail-changed.webp",
+    "w": 1200,
+    "h": 2044,
+    "kind": "mail",
+    "caption": "Something changed: a product that cannot come, why, and the substitutes, good, better, best."
+  },
+  "mail-receipt": {
+    "src": "/landing/mail-receipt.webp",
+    "w": 1200,
+    "h": 1982,
+    "kind": "mail",
+    "caption": "The receipt: each line, VAT, who decided, and a link to verify the wholesaler's signature."
+  },
+  "ops-agents": {
+    "src": "/landing/ops-agents.webp",
+    "w": 1920,
+    "h": 1200,
+    "kind": "desktop",
+    "caption": "Operations, Agents: each agent's status with the reason in words, and the orders waiting for a person."
+  },
+  "ops-live": {
+    "src": "/landing/ops-live.webp",
+    "w": 1920,
+    "h": 1200,
+    "kind": "desktop",
+    "caption": "Operations, Live: every agent at the door and what the gate decided, as it happens."
+  },
+  "ops-safeguards": {
+    "src": "/landing/ops-safeguards.webp",
+    "w": 1920,
+    "h": 1200,
+    "kind": "desktop",
+    "caption": "Operations, Safeguards: the gate's rules and how often each one fired."
+  },
+  "ops-watch": {
+    "src": "/landing/ops-watch.webp",
+    "w": 1920,
+    "h": 1200,
+    "kind": "desktop",
+    "caption": "Operations, Watch: what the kitchens' agents noticed before the kitchens did, and what each proposed."
+  },
+  "screen-approve-desktop": {
+    "src": "/landing/screen-approve-desktop.webp",
+    "w": 1920,
+    "h": 1200,
+    "kind": "desktop",
+    "caption": "The same sign-off page in a desktop browser."
+  },
+  "screen-ops-phone": {
+    "src": "/landing/screen-ops-phone.webp",
+    "w": 780,
+    "h": 1688,
+    "kind": "phone",
+    "caption": "The operations portal on a phone."
+  },
+  "screen-store-phone": {
+    "src": "/landing/screen-store-phone.webp",
+    "w": 780,
+    "h": 1688,
+    "kind": "phone",
+    "caption": "The catalogue on a phone: 17,546 products, searchable in Finnish, Swedish and English."
+  },
+  "screen-thread-desktop": {
+    "src": "/landing/screen-thread-desktop.webp",
+    "w": 1920,
+    "h": 1200,
+    "kind": "desktop",
+    "caption": "The agent as the whole workspace on a desk: the same conversation, the order OK'd and placed."
+  },
+  "steps-open": {
+    "src": "/landing/steps-open.webp",
+    "w": 780,
+    "h": 1688,
+    "kind": "phone",
+    "caption": "Every reply carries its steps, closed by default and one tap away."
+  },
+  "thread-signed": {
+    "src": "/landing/thread-signed.webp",
+    "w": 780,
+    "h": 1688,
+    "kind": "phone",
+    "caption": "Back in the thread: the order placed at the quoted price, OK'd by the named person."
+  },
+  "thread-waiting": {
+    "src": "/landing/thread-waiting.webp",
+    "w": 780,
+    "h": 1688,
+    "kind": "phone",
+    "caption": "Over the kitchen's limit: the order waits in the thread for the named person's OK."
+  },
+  "trace": {
+    "src": "/landing/trace.webp",
+    "w": 1920,
+    "h": 1200,
+    "kind": "desktop",
+    "caption": "The trace: one request replayed station by station, from the buyer's words to the signed order."
+  },
+  "wall": {
+    "src": "/landing/wall.webp",
+    "w": 1920,
+    "h": 1200,
+    "kind": "desktop",
+    "caption": "The wall: live requests passing the gate, the totals, and the code a visitor scans to become the approver."
+  }
+}

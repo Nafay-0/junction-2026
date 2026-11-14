@@ -82,7 +82,7 @@ test("wall: the demo note stays clear of other text once kitchens have joined (1
   await page.setViewportSize(VIEWPORT.wall);
   await page.route("**/api/v1/events**", (r) => r.abort());
   await page.route("**/ui-api/wall", (r) => r.fulfill({ json: wallFixture(Date.now()) })); // two kitchens joined
-  await page.goto("/");
+  await page.goto("/wall");
   await expect(page.getByText(/^Kitchens here now: 2/)).toBeVisible();
   const overlaps = await page.evaluate(() => {
     const note = [...document.querySelectorAll("aside p")].find((p) => p.textContent?.startsWith("A demo built for the Junction"));
