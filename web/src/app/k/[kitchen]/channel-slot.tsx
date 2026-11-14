@@ -13,7 +13,7 @@ export type ChannelSlotProps = {
   onText: (text: string) => void;
   onSubmit: (text: string) => void;
   disabled?: boolean;
-  /** Speech recognition language for the buyer's chosen product-name language: en-GB, fi-FI or sv-SE. */
+  /** Speech recognition language for the buyer's one language choice (the store's language switch): en-GB, fi-FI or sv-SE. */
   lang: string;
 };
 

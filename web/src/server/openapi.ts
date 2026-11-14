@@ -426,13 +426,13 @@ export const API: Operation[] = [
     operationId: "openIntake",
     summary: "Start an order from a structured need",
     description:
-      "The recommended way to start. Dock checks the need for likely mistakes (against the kitchen's own history), asks at most two typed questions that its memory cannot answer, and offers option cards with pros and cons. Every reply is `{ step }`: its `state` says what happens next and `next` names the call. Opens a purchase request; `step.requestId` is its id.",
+      "The recommended way to start. AimoPilot checks the need for likely mistakes (against the kitchen's own history), asks at most two typed questions that its memory cannot answer, and offers option cards with pros and cons. Every reply is `{ step }`: its `state` says what happens next and `next` names the call. Opens a purchase request; `step.requestId` is its id.",
     auth: true,
     body: IntakeBody,
     responses: {
       201: { description: "The first step.", schema: IntakeStepEnvelope },
       400: err("Invalid need."),
-      422: err("Dock cannot tell the product family or the amount (codes family_unknown, amount_unknown, nothing_to_repeat)."),
+      422: err("AimoPilot cannot tell the product family or the amount (codes family_unknown, amount_unknown, nothing_to_repeat)."),
       ...AUTH_ERRORS,
     },
   },
@@ -487,7 +487,7 @@ export const API: Operation[] = [
     path: "/api/v1/kitchen",
     operationId: "getKitchen",
     summary: "The kitchen's memory",
-    description: "What Dock remembers about the buyer organisation: order history, usual amounts per product family, rules people stated, and patterns learned from the history.",
+    description: "What AimoPilot remembers about the buyer organisation: order history, usual amounts per product family, rules people stated, and patterns learned from the history.",
     auth: true,
     responses: { 200: { description: "Kitchen memory.", schema: KitchenEnvelope }, ...AUTH_ERRORS },
   },
@@ -595,7 +595,7 @@ export function buildOpenApi(origin: string) {
     openapi: "3.1.1",
     jsonSchemaDialect: "https://json-schema.org/draft/2020-12/schema",
     info: {
-      title: "Dock",
+      title: "AimoPilot",
       version: "1.0.0",
       summary: "Open ordering gateway for AI purchasing agents.",
       description:

@@ -1,6 +1,6 @@
 # Operations portal and wall: design plan
 
-The wholesaler's side of Dock (`/ops/**`), the big screen (`/`) and the knowledge preview (`/knowledge`), built on the
+The wholesaler's side of AimoPilot (`/ops/**`), the big screen (`/`) and the knowledge preview (`/knowledge`), built on the
 shared system in `DESIGN.md` (tokens in `globals.css`, components in `_ui/`). This file records the plan, the review
 against generic defaults, and what the operations side added beside the system, for the system's owner to absorb.
 
@@ -23,12 +23,12 @@ hazard stripe: only a refusal, a suspension, or a sign-off waiting on a person.
 Sentence case. Codes, ids and hashes in the mono face, and only inside a details control.
 
 **Shell.** A petrol-deep rail on the left (it costs width, not height, which a 13-inch laptop needs for the trace),
-headed by the mark and the gatehouse status: Helsinki clock, ledger chain, sign-offs waiting, agents suspended.
+headed by the word mark (pilot light and name) and the gatehouse status: Helsinki clock, ledger chain, sign-offs waiting, agents suspended.
 Active item: a lime bar. The demo note sits at the rail's foot on every page. Content is left-aligned on mist.
 
 ```
 ┌────────────┬──────────────────────────────────────────────────────────────┐
-│ ◐ Dock     │ Page title (display)                     live, updated 14.05 │
+│ ▣ AimoPilot│ Page title (display)                     live, updated 14.05 │
 │ Operations │ one line: the question this page answers                     │
 │ 14.05.32   ├──────────────────────────────────────────────────────────────┤
 │ ◐ chain ok │                                                              │
@@ -77,7 +77,7 @@ wall still says what it does. Ground petrol-deep, type in paper, the scan panel 
 
 ```
 ┌────────────────────────────────────────────────────────────────┬────────────────┐
-│ ◐ Dock   AI buyers order here; plain code checks every order   │    23.54.12    │
+│ ▣ AimoPilot  AI buyers order here; plain code checks every order   │    23.54.12    │
 ├────────────────────────────────────────────────────────────────┼────────────────┤
 │ Asked     Priced     Price fixed   ▓GATE▓     Signed            │ SCAN (lime)    │
 │ Kaari   ━━━━━━━━━━━━━━━━━━━━━━━━━━━▓    ▓━━━━━━━ ◐ signed        │ ┌────────────┐ │
@@ -149,7 +149,7 @@ In `src/app/ops/_ui/` unless noted. All use the tokens unchanged.
 | `fi()` additions, `stamp()`, `country()` | `format.ts` | ISO stamps and dates to Helsinki words, unit codes (ST, KI, PAL…) to words, placeholder stock (999999…) to "an unreported amount", leftover codes to words. Worth moving into `_ui/plain.ts` so the store gets the same. |
 | `CrashMatrix`, `crashBoard()` | `_wall/crash-matrix.tsx`, `_wall/crash-board.ts` | The crash-test leaderboard (dark and light). |
 | Time rail | `(desk)/time-machine/time-machine.tsx` | The time machine's slider: a mark per moment a rule changed, shaped by kind (petrol mandate, lavender kitchen rule, hazard hold, safety suspension, hairline spend), the order as a pointer, the lime thumb as the one action. |
-| Wall motion | `_wall/wall.module.css` | The gate post's scan light, a row wash on change, the barrier arms; all off under reduced motion. |
+| Wall motion | `_wall/wall.css` (global, `wall-` prefix; CSS modules do not work with this build) | The gate post's scan light, a row wash on change, the barrier arms; all off under reduced motion. |
 
 Two gaps in the system the operations side worked around: a *dark-ground* `Tag`/`Field` (the wall and rail
 hand-roll them), and a *refused* tone for `Tag` (black with yellow type), used here for refusal chips.

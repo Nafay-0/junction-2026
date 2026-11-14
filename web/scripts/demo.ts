@@ -87,7 +87,7 @@ async function happyPath(): Promise<void> {
   let interruptions = 0;
   while (s.state === "needs_confirmation" || s.state === "needs_input") {
     interruptions += 1;
-    step(s.state, "Dock stops the buyer:");
+    step(s.state, "AimoPilot stops the buyer:");
     showStep(s);
     s = s.state === "needs_confirmation" ? await settle(agent, s, LAAKSO) : (await agent.intakeAnswers(s.requestId, LAAKSO, s.questions.map((q) => ({ questionId: q.id, optionId: q.options[0].id })))).body.step;
   }
@@ -205,7 +205,7 @@ async function returningKitchen(): Promise<void> {
   const agent = base.as(token, KITCHEN_ORG.agentId);
 
   const k = (await agent.kitchen()).body.kitchen;
-  step("memory", `What Dock remembers about ${k.name}:`);
+  step("memory", `What AimoPilot remembers about ${k.name}:`);
   for (const f of k.families) {
     const last = f.lastOrder;
     say(`      ${f.family}: ${f.orders} orders, ${f.usual.text}; last time ${last.lines.map((l) => `${l.packs} x ${l.productId}`).join(" + ")} on ${formatDay(last.placedAt.slice(0, 10))}`);
@@ -224,7 +224,7 @@ async function returningKitchen(): Promise<void> {
   // (a) 1,000 litres where the kitchen usually takes about 100.
   say("\n  (a) The agent sends 1,000 L where the kitchen usually orders about 100 L.");
   let s = (await agent.intakeOpen({ text: "1000 litres of lactose-free milk for " + formatDay(days[0]), item: { text: "lactose-free milk", category: "milk" }, quantity: { amount: 1000, unit: "L" }, deliverBy: days[0] }, SANNA)).body.step;
-  step(s.state, `Before any price lookup, Dock asks:`);
+  step(s.state, `Before any price lookup, AimoPilot asks:`);
   showStep(s);
   const tenfold = s.concerns.find((c) => c.code === "quantity_tenfold");
   if (tenfold) {
@@ -237,7 +237,7 @@ async function returningKitchen(): Promise<void> {
   // (b) No stated preference: one question, three options, one chosen, quoted, approved.
   say(`\n  (b) "100 litres of milk for ${formatDay(days[1])}", nothing said about price or CO2.`);
   s = await settle(agent, (await agent.intakeOpen({ item: { text: "milk", category: "milk" }, quantity: { amount: 100, unit: "L" }, deliverBy: days[1] }, SANNA)).body.step);
-  step(s.state, `Dock asks ${s.questions.length} question${s.questions.length === 1 ? "" : "s"}; the rest comes from memory:`);
+  step(s.state, `AimoPilot asks ${s.questions.length} question${s.questions.length === 1 ? "" : "s"}; the rest comes from memory:`);
   showStep(s);
   const requestB = s.requestId;
   if (s.state === "needs_input") {
@@ -433,12 +433,12 @@ async function fullLedger(): Promise<{ verification: { ok: boolean }; entries: u
 
 async function main() {
   const source = urlFlag >= 0 ? undefined : (await getRuntime()).catalogSource;
-  say(`Dock scripted buyer: ${urlFlag >= 0 ? `against ${baseUrl}` : "in-process (no server)"}; catalogue: ${source ? (source.kind === "valio" ? `the partner's real catalogue (${source.products} products) with its live price/availability API` : "the 12-product seed (no index or no VALIO_API_KEY)") : "whatever the server runs"}`);
+  say(`AimoPilot scripted buyer: ${urlFlag >= 0 ? `against ${baseUrl}` : "in-process (no server)"}; catalogue: ${source ? (source.kind === "valio" ? `the partner's real catalogue (${source.products} products) with its live price/availability API` : "the 12-product seed (no index or no VALIO_API_KEY)") : "whatever the server runs"}`);
   if (which === "all" || which === "happy") await happyPath();
   if (which === "all" || which === "kitchen") await returningKitchen();
   if (which === "all" || which === "attacks") await attacks();
   const { catalog } = (await base.ledger()).body;
-  say(`\nPartner API use for the whole run: ${catalog.liveCalls} live lookups by Dock, ${catalog.upstream ? `${catalog.upstream.httpRequests} HTTP requests to the partner (${catalog.upstream.cacheHits} answered from the cache)` : "none (seed catalogue)"}; ${catalog.searches} local master-data searches.`);
+  say(`\nPartner API use for the whole run: ${catalog.liveCalls} live lookups by AimoPilot, ${catalog.upstream ? `${catalog.upstream.httpRequests} HTTP requests to the partner (${catalog.upstream.cacheHits} answered from the cache)` : "none (seed catalogue)"}; ${catalog.searches} local master-data searches.`);
 }
 
 main()

@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useText } from "../_i18n/provider";
 import { CallScreen } from "./call-screen";
+import { DOORS_TEXT } from "./doors.text";
 import { ScanDoor } from "./scan-door";
 
 /**
@@ -18,6 +20,7 @@ export function DoorButtons({
   kitchen: string;
   disabled?: boolean;
 }) {
+  const tx = useText(DOORS_TEXT);
   const [open, setOpen] = useState<"call" | "scan" | null>(null);
   useEffect(() => {
     if (!open) return;
@@ -35,8 +38,8 @@ export function DoorButtons({
         className={btn}
         disabled={disabled}
         onClick={() => setOpen("call")}
-        aria-label="Call your agent (voice)"
-        title="Call your agent"
+        aria-label={tx.callButton}
+        title={tx.callTitle}
       >
         <svg
           width="22"
@@ -53,8 +56,8 @@ export function DoorButtons({
         className={btn}
         disabled={disabled}
         onClick={() => setOpen("scan")}
-        aria-label="Add a photo or document"
-        title="Add a photo or document"
+        aria-label={tx.scan}
+        title={tx.scan}
       >
         <svg
           width="22"
@@ -75,11 +78,7 @@ export function DoorButtons({
             className="fixed inset-0 z-50 overflow-y-auto bg-mist"
             role="dialog"
             aria-modal="true"
-            aria-label={
-              open === "call"
-                ? "Call with your agent"
-                : "Add a photo or document"
-            }
+            aria-label={open === "call" ? tx.callDialog : tx.scan}
           >
             {open === "call" ? (
               <CallScreen
@@ -93,16 +92,14 @@ export function DoorButtons({
               />
             ) : (
               <div className="mx-auto max-w-5xl px-4 py-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <h2 className="display text-[2rem]">
-                    Add a photo or document
-                  </h2>
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h2 className="display min-w-0 text-[2rem] hyphens-auto [overflow-wrap:anywhere]">{tx.scan}</h2>
                   <button
                     type="button"
                     onClick={() => setOpen(null)}
                     className="min-h-11 border-2 border-petrol px-3 font-semibold text-petrol"
                   >
-                    Close
+                    {tx.close}
                   </button>
                 </div>
                 <ScanDoor
@@ -113,7 +110,7 @@ export function DoorButtons({
                         className="font-semibold underline"
                         href={`/approve/${encodeURIComponent(o.approval.approvalId)}`}
                       >
-                        Open the sign-off
+                        {tx.openSignOff}
                       </a>
                     ) : null
                   }

@@ -1,0 +1,502 @@
+{
+  "dept-10": {
+    "kind": "department",
+    "widths": [
+      768,
+      1152,
+      1536
+    ],
+    "aspect": 1.7778,
+    "color": "#305c66"
+  },
+  "dept-11": {
+    "kind": "department",
+    "widths": [
+      768,
+      1152,
+      1536
+    ],
+    "aspect": 1.7778,
+    "color": "#1e4852"
+  },
+  "dept-17": {
+    "kind": "department",
+    "widths": [
+      768,
+      1152,
+      1536
+    ],
+    "aspect": 1.7778,
+    "color": "#234850"
+  },
+  "dept-18": {
+    "kind": "department",
+    "widths": [
+      768,
+      1152,
+      1536
+    ],
+    "aspect": 1.7778,
+    "color": "#244853"
+  },
+  "dept-20": {
+    "kind": "department",
+    "widths": [
+      768,
+      1152,
+      1536
+    ],
+    "aspect": 1.7778,
+    "color": "#194f5c"
+  },
+  "dept-21": {
+    "kind": "department",
+    "widths": [
+      768,
+      1152,
+      1536
+    ],
+    "aspect": 1.7778,
+    "color": "#315a61"
+  },
+  "dept-22": {
+    "kind": "department",
+    "widths": [
+      768,
+      1152,
+      1536
+    ],
+    "aspect": 1.7778,
+    "color": "#284a4f"
+  },
+  "dept-30": {
+    "kind": "department",
+    "widths": [
+      768,
+      1152,
+      1536
+    ],
+    "aspect": 1.7778,
+    "color": "#365f6a"
+  },
+  "dept-41": {
+    "kind": "department",
+    "widths": [
+      768,
+      1152,
+      1536
+    ],
+    "aspect": 1.7778,
+    "color": "#2d5765"
+  },
+  "dept-52": {
+    "kind": "department",
+    "widths": [
+      768,
+      1152,
+      1536
+    ],
+    "aspect": 1.7778,
+    "color": "#134554"
+  },
+  "dept-63": {
+    "kind": "department",
+    "widths": [
+      768,
+      1152,
+      1536
+    ],
+    "aspect": 1.7778,
+    "color": "#2b5868"
+  },
+  "dept-64": {
+    "kind": "department",
+    "widths": [
+      768,
+      1152,
+      1536
+    ],
+    "aspect": 1.7778,
+    "color": "#29525c"
+  },
+  "dept-67": {
+    "kind": "department",
+    "widths": [
+      768,
+      1152,
+      1536
+    ],
+    "aspect": 1.7778,
+    "color": "#1d4652"
+  },
+  "dept-77": {
+    "kind": "department",
+    "widths": [
+      768,
+      1152,
+      1536
+    ],
+    "aspect": 1.7778,
+    "color": "#164d5d"
+  },
+  "dept-84": {
+    "kind": "department",
+    "widths": [
+      768,
+      1152,
+      1536
+    ],
+    "aspect": 1.7778,
+    "color": "#0f4755"
+  },
+  "dept-85": {
+    "kind": "department",
+    "widths": [
+      768,
+      1152,
+      1536
+    ],
+    "aspect": 1.7778,
+    "color": "#1c4f5e"
+  },
+  "dept-90": {
+    "kind": "department",
+    "widths": [
+      768,
+      1152,
+      1536
+    ],
+    "aspect": 1.7778,
+    "color": "#32555b"
+  },
+  "hero": {
+    "kind": "hero",
+    "widths": [
+      768,
+      1152,
+      1536
+    ],
+    "aspect": 1.7778,
+    "color": "#465852"
+  },
+  "home": {
+    "kind": "hero",
+    "widths": [
+      768,
+      1152,
+      1536
+    ],
+    "aspect": 1.7778,
+    "color": "#2f515f"
+  },
+  "tile-bag-in-box": {
+    "kind": "tile",
+    "widths": [
+      240,
+      480,
+      720
+    ],
+    "aspect": 1,
+    "color": "#4b5954"
+  },
+  "tile-berry-tray": {
+    "kind": "tile",
+    "widths": [
+      240,
+      480,
+      720
+    ],
+    "aspect": 1,
+    "color": "#234455"
+  },
+  "tile-bread": {
+    "kind": "tile",
+    "widths": [
+      240,
+      480,
+      720
+    ],
+    "aspect": 1,
+    "color": "#354c4b"
+  },
+  "tile-butter": {
+    "kind": "tile",
+    "widths": [
+      240,
+      480,
+      720
+    ],
+    "aspect": 1,
+    "color": "#4e665d"
+  },
+  "tile-canned": {
+    "kind": "tile",
+    "widths": [
+      240,
+      480,
+      720
+    ],
+    "aspect": 1,
+    "color": "#3f5a61"
+  },
+  "tile-cheese-block": {
+    "kind": "tile",
+    "widths": [
+      240,
+      480,
+      720
+    ],
+    "aspect": 1,
+    "color": "#4f6050"
+  },
+  "tile-chocolate": {
+    "kind": "tile",
+    "widths": [
+      240,
+      480,
+      720
+    ],
+    "aspect": 1,
+    "color": "#1a404c"
+  },
+  "tile-cleaning": {
+    "kind": "tile",
+    "widths": [
+      240,
+      480,
+      720
+    ],
+    "aspect": 1,
+    "color": "#2a5c68"
+  },
+  "tile-coffee-tea": {
+    "kind": "tile",
+    "widths": [
+      240,
+      480,
+      720
+    ],
+    "aspect": 1,
+    "color": "#1c4049"
+  },
+  "tile-cold-cuts": {
+    "kind": "tile",
+    "widths": [
+      240,
+      480,
+      720
+    ],
+    "aspect": 1,
+    "color": "#45535b"
+  },
+  "tile-cookware": {
+    "kind": "tile",
+    "widths": [
+      240,
+      480,
+      720
+    ],
+    "aspect": 1,
+    "color": "#204b54"
+  },
+  "tile-cream-carton": {
+    "kind": "tile",
+    "widths": [
+      240,
+      480,
+      720
+    ],
+    "aspect": 1,
+    "color": "#305965"
+  },
+  "tile-disposables": {
+    "kind": "tile",
+    "widths": [
+      240,
+      480,
+      720
+    ],
+    "aspect": 1,
+    "color": "#3e5d60"
+  },
+  "tile-drinks": {
+    "kind": "tile",
+    "widths": [
+      240,
+      480,
+      720
+    ],
+    "aspect": 1,
+    "color": "#39574e"
+  },
+  "tile-eggs": {
+    "kind": "tile",
+    "widths": [
+      240,
+      480,
+      720
+    ],
+    "aspect": 1,
+    "color": "#3c595d"
+  },
+  "tile-fish": {
+    "kind": "tile",
+    "widths": [
+      240,
+      480,
+      720
+    ],
+    "aspect": 1,
+    "color": "#364951"
+  },
+  "tile-flour-sack": {
+    "kind": "tile",
+    "widths": [
+      240,
+      480,
+      720
+    ],
+    "aspect": 1,
+    "color": "#4d5c58"
+  },
+  "tile-frozen-veg": {
+    "kind": "tile",
+    "widths": [
+      240,
+      480,
+      720
+    ],
+    "aspect": 1,
+    "color": "#3a554f"
+  },
+  "tile-grain-pasta": {
+    "kind": "tile",
+    "widths": [
+      240,
+      480,
+      720
+    ],
+    "aspect": 1,
+    "color": "#2e5357"
+  },
+  "tile-ice-cream": {
+    "kind": "tile",
+    "widths": [
+      240,
+      480,
+      720
+    ],
+    "aspect": 1,
+    "color": "#415b62"
+  },
+  "tile-meat": {
+    "kind": "tile",
+    "widths": [
+      240,
+      480,
+      720
+    ],
+    "aspect": 1,
+    "color": "#3f4449"
+  },
+  "tile-milk-carton": {
+    "kind": "tile",
+    "widths": [
+      240,
+      480,
+      720
+    ],
+    "aspect": 1,
+    "color": "#416d7b"
+  },
+  "tile-oil": {
+    "kind": "tile",
+    "widths": [
+      240,
+      480,
+      720
+    ],
+    "aspect": 1,
+    "color": "#1a4b51"
+  },
+  "tile-pastry": {
+    "kind": "tile",
+    "widths": [
+      240,
+      480,
+      720
+    ],
+    "aspect": 1,
+    "color": "#3d4c48"
+  },
+  "tile-poultry": {
+    "kind": "tile",
+    "widths": [
+      240,
+      480,
+      720
+    ],
+    "aspect": 1,
+    "color": "#4b5253"
+  },
+  "tile-ready-meal": {
+    "kind": "tile",
+    "widths": [
+      240,
+      480,
+      720
+    ],
+    "aspect": 1,
+    "color": "#2d4a4d"
+  },
+  "tile-sauce-stock": {
+    "kind": "tile",
+    "widths": [
+      240,
+      480,
+      720
+    ],
+    "aspect": 1,
+    "color": "#3f6571"
+  },
+  "tile-spices": {
+    "kind": "tile",
+    "widths": [
+      240,
+      480,
+      720
+    ],
+    "aspect": 1,
+    "color": "#22494f"
+  },
+  "tile-sweets": {
+    "kind": "tile",
+    "widths": [
+      240,
+      480,
+      720
+    ],
+    "aspect": 1,
+    "color": "#364e55"
+  },
+  "tile-vegetables": {
+    "kind": "tile",
+    "widths": [
+      240,
+      480,
+      720
+    ],
+    "aspect": 1,
+    "color": "#3f5752"
+  },
+  "tile-yoghurt-tub": {
+    "kind": "tile",
+    "widths": [
+      240,
+      480,
+      720
+    ],
+    "aspect": 1,
+    "color": "#557984"
+  }
+}

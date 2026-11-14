@@ -1,0 +1,26 @@
+{
+  "schema": "dock-build-record/1",
+  "builtAt": "2026-11-13T23:51:15.260Z",
+  "source": "local",
+  "repository": null,
+  "commit": null,
+  "ref": null,
+  "run": null,
+  "runner": null,
+  "craci": {
+    "jobId": null,
+    "sbom": {
+      "location": null,
+      "format": "CycloneDX 1.7 (application/vnd.cyclonedx+json)",
+      "needs": "a CRACI API token (organisation admin: Settings > API tokens); available once the job is finished",
+      "fetched": null
+    },
+    "networkTrace": {
+      "location": null,
+      "fetched": null
+    },
+    "docs": "https://docs.craci.com/api/reference/"
+  },
+  "crashGate": null,
+  "note": "Built outside CI: no CRACI record exists for this build."
+}

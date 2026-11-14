@@ -377,7 +377,7 @@ export class RadarRegistry {
     };
     this.state.drills.push(d);
     const target = listingTarget(sourceOf("drill")!, this.deps);
-    this.log(`DRILL, not a real recall: Operations staff (${input.by}) published a drill notice "${drillTitle(d)}" about ${d.productName} (${d.productId}) on Dock's own drill page ${target.url}. The radar reads it the same way as a real notice.`, { action: "recall_drill_published", drill: true, drillId: d.drillId, productId: d.productId, url: `${target.url}/${d.slug}`, by: input.by }, `operator:${input.by}`);
+    this.log(`DRILL, not a real recall: Operations staff (${input.by}) published a drill notice "${drillTitle(d)}" about ${d.productName} (${d.productId}) on AimoPilot's own drill page ${target.url}. The radar reads it the same way as a real notice.`, { action: "recall_drill_published", drill: true, drillId: d.drillId, productId: d.productId, url: `${target.url}/${d.slug}`, by: input.by }, `operator:${input.by}`);
     this.store.save();
     this.lastDrillPoll = 0;
     setTimeout(() => void this.checkSource("drill", { force: true }), 800).unref?.();
@@ -404,7 +404,7 @@ export class RadarRegistry {
     for (const s of SOURCES.filter((x) => x.monitor && !x.drill)) {
       const st = this.state.sources[s.id];
       if (st.monitor?.monitorId) continue;
-      const name = `Dock recall radar: ${s.id}`;
+      const name = `AimoPilot recall radar: ${s.id}`;
       try {
         const found = (await this.deps.cd.listMonitors(name)).find((m) => m.name === name);
         const m =
@@ -474,7 +474,7 @@ export class RadarRegistry {
 }
 
 export function publisherOf(n: Notice): string {
-  if (n.drill) return "Dock drill page (not a real recall)";
+  if (n.drill) return "AimoPilot drill page (not a real recall)";
   if (n.sourceId === "exa-web") {
     try {
       return new URL(n.url).hostname.replace(/^www\./, "");

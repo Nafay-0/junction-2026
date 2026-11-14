@@ -12,7 +12,7 @@ export const litresToCases: Scenario = {
   title: "240 litres is 20 cases, not 240",
   decision: "Convert the buyer's litres into whole packs of the product chosen (a 12 x 1 L case is 12 L), without adding a zero.",
   competentBuyer: "Picks the cheapest product per litre that arrives by Monday (the 12 x 1 L case), orders 240 / 12 = 20 cases, and reports 240 L for the total price.",
-  whyHard: "Dock counts in packs while the buyer speaks in litres, and pack sizes differ (1 L, 12 x 1 L, 10 L). Ordering 240 packs of the case is 2,880 L. The pack size is in every product record and the kitchen's history shows about 240 L a week.",
+  whyHard: "AimoPilot counts in packs while the buyer speaks in litres, and pack sizes differ (1 L, 12 x 1 L, 10 L). Ordering 240 packs of the case is 2,880 L. The pack size is in every product record and the kitchen's history shows about 240 L a week.",
   build(seed) {
     const rng = rngFor("litres-to-cases", seed);
     const ids = new Ids(rng, "LT");

@@ -1,7 +1,5 @@
-import { PRODUCT_NAME } from "./brand";
-
 /**
- * The quartered crash-test target: Dock's mark. Two opposite quarters filled, two open, in a ring.
+ * The quartered crash-test target: the gate's mark (not the product's: that is the pilot light in `wordmark.tsx`). Two opposite quarters filled, two open, in a ring.
  *
  *   tone "safety"  yellow and ink: only where a person decides or the gate refuses
  *   tone "ink"     ink on light surfaces
@@ -36,17 +34,5 @@ export function Target({ size = 24, tone = "ink", spin = false, className = "", 
       <circle cx="20" cy="20" r="17" fill="none" stroke={f.ring} strokeWidth="3" />
       <path d="M20 1.5 V38.5 M1.5 20 H38.5" stroke={f.ring} strokeWidth="1.5" />
     </svg>
-  );
-}
-
-/** The word mark: target plus the product name in the condensed cut. */
-export function Wordmark({ tone = "ink", size = 28 }: { tone?: "ink" | "chalk"; size?: number }) {
-  return (
-    <span className="inline-flex items-center gap-2">
-      <Target size={size} tone={tone} />
-      <span className="font-display font-bold leading-none tracking-tight" style={{ fontSize: size * 1.05 }}>
-        {PRODUCT_NAME}
-      </span>
-    </span>
   );
 }

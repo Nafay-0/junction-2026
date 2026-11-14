@@ -15,13 +15,13 @@ export async function api<T>(method: "GET" | "POST", path: string, body?: unknow
       credentials: "same-origin",
     });
   } catch {
-    return { ok: false, status: 0, error: { code: "network", message: "No connection to Dock. Check the wifi and try again." } };
+    return { ok: false, status: 0, error: { code: "network", message: "No connection to AimoPilot. Check the wifi and try again." } };
   }
   let json: unknown;
   try {
     json = await res.json();
   } catch {
-    return { ok: false, status: res.status, error: { code: "bad_response", message: `Dock answered ${res.status} without JSON.` } };
+    return { ok: false, status: res.status, error: { code: "bad_response", message: `AimoPilot answered ${res.status} without JSON.` } };
   }
   const obj = json as T & { error?: ApiError };
   if (!res.ok || obj.error) return { ok: false, status: res.status, error: obj.error ?? { code: "http_error", message: `HTTP ${res.status}` }, data: obj };

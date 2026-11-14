@@ -1,13 +1,11 @@
 # Aiven
 
-> **Name: the team must choose.** Replace `{{NAME}}` ("Dock" in the code, "AimoPilot" in the draft submission).
-
 **The judges' brief already exists: [`infra/AIVEN-JUDGES.md`](../../../infra/AIVEN-JUDGES.md).** Give Aiven's judges
 that page. Background and costs: [`infra/aiven.md`](../../../infra/aiven.md); operations: [`infra/RUNBOOK.md`](../../../infra/RUNBOOK.md).
 
 ## What Aiven does in the product, in plain words
 
-{{NAME}} runs on Aiven Runtime. Orders, sign-offs, passkeys, kitchen memory and the tamper-evident ledger are in Aiven
+AimoPilot runs on Aiven Runtime. Orders, sign-offs, passkeys, kitchen memory and the tamper-evident ledger are in Aiven
 for PostgreSQL. Every agent action goes through Aiven for Apache Kafka. Live prices are cached in Aiven for Valkey.
 Product search over 17,546 products runs on Aiven for OpenSearch. Grafana shows the numbers. An Aiven Managed Agent
 plays an outside buyer that we do not run, and the operations copilot reads service state through Aiven's MCP
@@ -32,7 +30,7 @@ platform**, **Send in an Aiven agent**, **Ask the platform**, **Observe**, **The
 
 ## What to correct or say carefully
 
-- **"Every part of Dock runs on Aiven."** Say instead: "Everything that keeps state or serves requests runs on
+- **"Every part of AimoPilot runs on Aiven."** Say instead: "Everything that keeps state or serves requests runs on
   Aiven." The language models (Anthropic, OpenAI, Google) and Valio Aimo's price API run elsewhere.
 - **"€1,400"** for the Managed Agent's order is from one recorded run (1,000 cartons at €1.40). Prices are live; say
   "over the €1,000 it may spend alone".

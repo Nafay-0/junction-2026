@@ -9,26 +9,26 @@
 
 export function buyerAgentSystem(opts: { today: string; weekday: string; serverInstructions?: string }): string {
   return [
-    "You are a purchasing agent. You buy food for your organisation from a wholesaler through Dock, using the tools you have been given.",
+    "You are a purchasing agent. You buy food for your organisation from a wholesaler through AimoPilot, using the tools you have been given.",
     "",
-    "Your buyer's task is in the first message. Carry it out with Dock's tools: find products that fit, check price and availability, get a quote and place the order. Dock checks every order against the mandate your organisation signed for you; some orders wait for a person to sign off.",
+    "Your buyer's task is in the first message. Carry it out with AimoPilot's tools: find products that fit, check price and availability, get a quote and place the order. AimoPilot checks every order against the mandate your organisation signed for you; some orders wait for a person to sign off.",
     "",
-    "Some of Dock's questions are for the buyer, not for you: confirming a possible mistake in the request, or a question about what they want. The buyer answers those themselves; their answer and Dock's reply reach you in the conversation.",
+    "Some of AimoPilot's questions are for the buyer, not for you: confirming a possible mistake in the request, or a question about what they want. The buyer answers those themselves; their answer and AimoPilot's reply reach you in the conversation.",
     "",
     "When you are done, or cannot go further, stop calling tools and write a short message to the buyer saying what happened.",
     "",
     `Today is ${opts.weekday} ${opts.today} (Europe/Helsinki).`,
-    ...(opts.serverInstructions ? ["", "Dock's instructions for connecting agents:", opts.serverInstructions] : []),
+    ...(opts.serverInstructions ? ["", "AimoPilot's instructions for connecting agents:", opts.serverInstructions] : []),
   ].join("\n");
 }
 
 /** The user turn that tells the agent the buyer answered one of Dock's questions directly. */
 export function humanRelayMessage(summary: string, dockReply: string): string {
-  return `The buyer answered Dock directly: ${summary}\nDock's reply:\n${dockReply}`;
+  return `The buyer answered AimoPilot directly: ${summary}\nDock's reply:\n${dockReply}`;
 }
 
 /** The user turn when the buyer did not answer. */
-export const HUMAN_ABSENT_MESSAGE = "The buyer has not answered Dock's question.";
+export const HUMAN_ABSENT_MESSAGE = "The buyer has not answered AimoPilot's question.";
 
 /** What a blocked call returns to the model. */
 export function blockedHumanToolResult(tool: string): string {

@@ -8,6 +8,7 @@ import { useLive } from "../../_client/use-live";
 import { PRODUCT_NAME } from "../../_ui/brand";
 import { clockSeconds } from "../../_ui/plain";
 import { Target } from "../../_ui/target";
+import { Wordmark } from "../../_ui/wordmark";
 import { num } from "./format";
 import { useNow } from "./kit";
 
@@ -85,12 +86,9 @@ export function Rail() {
   return (
     <aside className="on-dark flex shrink-0 flex-col bg-petrol-deep text-paper lg:sticky lg:top-0 lg:h-dvh lg:w-[232px]">
       <div className="flex items-center justify-between gap-3 px-4 pb-3 pt-4 lg:block">
-        <Link href="/ops" className="flex items-center gap-2.5">
-          <Target size={30} tone="chalk" />
-          <span className="leading-none">
-            <span className="display block text-[1.6rem]">{PRODUCT_NAME}</span>
-            <span className="mt-0.5 block text-[0.82rem] text-paper/75">Wholesaler operations</span>
-          </span>
+        <Link href="/ops" className="block leading-none" aria-label={`${PRODUCT_NAME}, wholesaler operations`}>
+          <Wordmark tone="paper" size={28} />
+          <span className="mt-1.5 block text-[0.82rem] text-paper/75">Wholesaler operations</span>
         </Link>
         {/* The gatehouse: what a person on the desk needs to know before anything else. */}
         <dl className="flex items-center gap-4 text-[0.85rem] lg:mt-4 lg:block lg:space-y-1.5 lg:border-t lg:border-paper/15 lg:pt-3">

@@ -1,8 +1,5 @@
 # Submission video (at most 2:00, strictly enforced; this plan ends at 1:54)
 
-> **Name: the team must choose.** Replace `{{NAME}}` everywhere ("Dock" in the code, "AimoPilot" in the draft
-> submission).
-
 Rules (`research/05-official-briefs.md`): public on YouTube or Vimeo, at most 2:00. Upload by Sunday 09:00 so there is
 time to check it plays logged out. Burn the captions in: tired viewers watch without sound.
 
@@ -20,7 +17,7 @@ time to check it plays logged out. Burn the captions in: tired viewers watch wit
 | # | Time | Screen to record | On-screen text (caption) | Narration, word for word |
 |---|---|---|---|---|
 | 1 | 0:00 to 0:09 | Dark kitchen still, or just the wall at `/` with its QR code | "Soon your kitchen's AI agent will order the food." | "Soon a kitchen's AI agent will order its food. But who allowed it to spend that money, and who answers if it's wrong?" |
-| 2 | 0:09 to 0:17 | Title card: {{NAME}} and the sentence | "The agent can ask for anything. It can only buy what the kitchen signed for." | "{{NAME}} is the door a wholesaler opens for AI purchasing agents. The agent can ask for anything. It can only buy what the kitchen signed for." |
+| 2 | 0:09 to 0:17 | Title card: AimoPilot and the sentence | "The agent can ask for anything. It can only buy what the kitchen signed for." | "AimoPilot is the door a wholesaler opens for AI purchasing agents. The agent can ask for anything. It can only buy what the kitchen signed for." |
 | 3 | 0:17 to 0:29 | Phone: scanning the wall's QR code, **Create my passkey and start**, Face ID, the approver home | "One scan, one passkey: you are the kitchen's approver" | "Scan the code, and your phone becomes the approver of a hotel kitchen. Its agent may spend five hundred euros alone." |
 | 4 | 0:29 to 0:45 | Laptop: `/k/kaari/order`, asking for 1,000 L of lactose-free milk for Monday; the mistake check "1,000 L where you usually order about 100 L"; then the option cards | "Valio Aimo's own example. A mistake check from the kitchen's own history. Options ranked good, better, best." | "Here is Valio Aimo's own example: a thousand litres of lactose-free milk by Monday. This kitchen usually orders about a hundred, so the agent checks first. Then it shows options, good, better, best, with real products and live prices." |
 | 5 | 0:45 to 0:56 | The order lane reaching the gate: the black-and-yellow panel, "needs a person's sign-off" | "The gate is plain code, not the AI." | "The wholesaler signs a fixed price. The order is more than the agent may spend alone, so the gate stops it. The gate is plain code, not the AI." |

@@ -18,7 +18,7 @@ export function Story() {
     <>
       <PageHead
         title="The platform"
-        purpose="Everything Dock runs on is an Aiven service, each with one job, chosen for a reason. Is each one alive, and what did it do in the last hour? Every number here is read live from the service itself or from Aiven's API."
+        purpose="Everything AimoPilot runs on is an Aiven service, each with one job, chosen for a reason. Is each one alive, and what did it do in the last hour? Every number here is read live from the service itself or from Aiven's API."
         right={o && <LiveMark at={whenSeconds(o.at)} error={live.error} />}
       />
       <PlatformTabs />
@@ -56,10 +56,10 @@ function Body({ o }: { o: PlatformOverview }) {
         <section aria-labelledby="send" className="on-dark flex flex-col justify-between gap-4 bg-petrol-deep px-6 py-5 text-paper">
           <div>
             <h2 id="send" className="display text-[2rem] leading-[1.02]">
-              An agent Dock does not run, on Aiven, buying through the open door
+              An agent AimoPilot does not run, on Aiven, buying through the open door
             </h2>
             <p className="mt-2 max-w-[62ch] text-[1rem] leading-snug text-paper/85">
-              A purchasing agent on Aiven Managed Agents, with its own model, connects to Dock&apos;s MCP door and asks for 1 000 L of milk. It meets the same gate as every other agent, and its order stops for a person&apos;s sign-off. Every step shows here as it happens.
+              A purchasing agent on Aiven Managed Agents, with its own model, connects to AimoPilot&apos;s MCP door and asks for 1 000 L of milk. It meets the same gate as every other agent, and its order stops for a person&apos;s sign-off. Every step shows here as it happens.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
@@ -115,7 +115,7 @@ function Body({ o }: { o: PlatformOverview }) {
           <p className="mt-3 text-[0.92rem]">
             The full Grafana dashboard (Aiven login):{" "}
             <a href={o.grafanaUrl} target="_blank" rel="noreferrer" className="font-semibold text-petrol underline underline-offset-2">
-              Dock overview
+              AimoPilot overview
             </a>
             . The same questions, drawn inside the portal:{" "}
             <Link href="/ops/platform/observe" className="font-semibold text-petrol underline underline-offset-2">
@@ -263,7 +263,7 @@ function Diagram({ s }: { s: (k: string) => ServiceCard | undefined }) {
         </text>
       </g>
       {/* runtime */}
-      {node("dock-app", 285, 20, 230, 116, "Aiven Runtime: Dock", "the gate, MCP door, REST, portals", true)}
+      {node("dock-app", 285, 20, 230, 116, "Aiven Runtime: AimoPilot", "the gate, MCP door, REST, portals", true)}
       <text x="294" y="80" fontSize="10.5" fill="var(--color-paper)">
         plain code checks every order
       </text>

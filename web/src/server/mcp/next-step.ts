@@ -35,7 +35,7 @@ const BY_CODE: Record<string, string> = {
   connector_rate_limited:
     "This connector address has reached its limit for now (error.details.retryAfterSeconds says when it frees up). Tell the buyer plainly and stop; do not loop or retry before then.",
   form_not_answered:
-    "Dock's form was closed without an answer (your client may not be able to show it). Ask the buyer Dock's question in the chat in plain words, wait for their reply, and call the same tool again with their answer and relay: true. Never answer for them.",
+    "AimoPilot's form was closed without an answer (your client may not be able to show it). Ask the buyer AimoPilot's question in the chat in plain words, wait for their reply, and call the same tool again with their answer and relay: true. Never answer for them.",
   buyer_declined: "The buyer did not answer. Do not answer for them and do not go around the question; tell them the order waits for their answer, and call get_intake_step when they are ready.",
 };
 
@@ -111,14 +111,14 @@ export function nextStepForIntake(step: StepLike): string {
   switch (step.state) {
     case "needs_confirmation": {
       const asks = step.concerns.map((c) => `"${c.message}" (choices: ${[...(c.confirmable ? ["confirm"] : []), ...c.corrections.map((x) => `${x.id} = ${x.label}`)].join("; ")})`).join(" and ");
-      return `Dock found a likely mistake. Ask the buyer: ${asks}. Then call respond_to_concerns with ${id}, by (the buyer's name) and one response per concern key. ${RELAY} Until the buyer answers, quotes and orders for this request are refused.`;
+      return `AimoPilot found a likely mistake. Ask the buyer: ${asks}. Then call respond_to_concerns with ${id}, by (the buyer's name) and one response per concern key. ${RELAY} Until the buyer answers, quotes and orders for this request are refused.`;
     }
     case "needs_input": {
       const asks = step.questions.map((q) => `"${q.text}" (options: ${q.options.map((o) => `${o.id} = ${o.label}`).join("; ")})`).join(" and ");
       return `Ask the buyer: ${asks}. Then call answer_questions with ${id}, by (the buyer's name) and one answer per questionId. ${RELAY}`;
     }
     case "options_ready": {
-      const pre = step.preselected ? ` Dock pre-selected ${step.preselected.optionId} (${step.preselected.reason}).` : "";
+      const pre = step.preselected ? ` AimoPilot pre-selected ${step.preselected.optionId} (${step.preselected.reason}).` : "";
       return `Show the buyer the ${step.options.length} options (step.options: title, total, delivery, pros and cons, and signOff for any that need a person's sign-off).${pre} Call choose_option with ${id} and the optionId the buyer picks; it returns a signed fixed-price quote.`;
     }
     case "quoted": {
