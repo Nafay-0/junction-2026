@@ -436,9 +436,12 @@ function Outcome({ view }: { view: ApprovalView }) {
       <div className={`stamp mt-2 inline-flex items-center gap-3.5 self-start rounded-xl border-2 py-3 pl-3.5 pr-5 ${stampLook}`}>
         {placed ? <ShieldCheck aria-hidden size={34} strokeWidth={1.9} /> : declined ? <CircleX aria-hidden size={34} strokeWidth={1.9} /> : <Target size={34} tone="safety" />}
         <span className="min-w-0">
-          <span className="display block text-[1.9rem] leading-none">{placed ? tx.stampSigned : declined ? tx.stampDeclined : tx.stampNotPlaced}</span>
+          {/* The stamp's word, unless the heading under it already says the same ("Declined" twice reads as a stutter). */}
+          {(placed ? tx.stampSigned : declined ? tx.stampDeclined : tx.stampNotPlaced) !== (placed ? tx.placed : declined ? tx.declined : tx.approvedNotPlaced) && (
+            <span className="display block text-[1.9rem] leading-none">{placed ? tx.stampSigned : declined ? tx.stampDeclined : tx.stampNotPlaced}</span>
+          )}
           {o && (
-            <span className="mt-1 block text-[0.92rem] font-semibold">
+            <span className="mt-1 block text-[0.92rem] font-semibold first:mt-0 first:text-[1.05rem]">
               {o.signedBy}, {at(o.atText)}
             </span>
           )}
