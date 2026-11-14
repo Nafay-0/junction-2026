@@ -47,7 +47,7 @@ export const CARDS_TEXT = defineText({
     declinedBy: (name?: string) => `${name ?? "The approver"} declined it. Nothing was ordered.`,
   },
   fi: {
-    label: { best_price: "Edullisin", lowest_carbon: "Pienin hiilijalanjälki", most_reliable: "Varmin toimitus", same_as_last_time: "Sama kuin viimeksi" } as Record<string, string>,
+    label: { best_price: "Edullisin", lowest_carbon: "Pienin hiili­jalanjälki", most_reliable: "Varmin toimitus", same_as_last_time: "Sama kuin viimeksi" } as Record<string, string>,
     rank: { best: "Paras", better: "Parempi", good: "Hyvä" } as Record<string, string>,
     readBackTitle: "Onko määrä oikein?",
     asksBecause: (reason: string) => `AimoPilot varmistaa, koska: ${reason}.`,
@@ -55,7 +55,7 @@ export const CARDS_TEXT = defineText({
     notRight: "Väärin? Sano tai kirjoita määrä uudelleen.",
     checkTitle: "Tarkista ensin",
     checkTitles: {
-      quantity_tenfold: "Kymmenkertainen määrä?",
+      quantity_tenfold: "Kymmen­kertainen määrä?",
       quantity_unusual: "Tavallisesta poikkeava määrä",
       unit_confusion: "Litrat vai pakkaukset?",
       unit_unclear: "Yksikkö on epäselvä",

@@ -405,7 +405,9 @@ async function attacks(): Promise<void> {
   const refused = results.filter((r) => r.reply.status >= 400).length;
   say(`\n      ${refused} of ${results.length} attempts refused, each with a named rule.`);
 
-  // Not a refusal but a guardrail: one need split into orders under the per-order limit goes to a person.
+  // Not a refusal but a guardrail: one need split into orders under the per-order limit goes to a person. These two
+  // are placed without the intake's questions, so the gate's own mistake check may stop the first one before the
+  // splitting rule has anything to add; the lines below say which rule sent each order to a person.
   // (A mandate with a €200 per-order limit, so the demo stays inside this week's remaining budget.)
   const tight = base.as(await mandateToken({ perOrderLimitCents: 20_000 }), DEMO_ORG.agentId);
   const half = roomyPacks(12_000);
@@ -415,7 +417,9 @@ async function attacks(): Promise<void> {
   const second = await tight.quote(splitReq, [{ productId: roomy.id, quantity: half }]);
   const two = await tight.placeOrder(splitReq, second.body.quoteToken, pick(second.body));
   step("split", `One need, two orders of ${formatEur(half * roomyPrice)} under the €200 limit: the first ${one.body.order.status}, the second ${two.body.order.status}.`);
-  indent(two.body.order.decision.rules.filter((r) => r.rule === "order_splitting" && r.outcome !== "pass").map((r) => `order_splitting (${r.outcome}): ${(r as { reason?: string }).reason ?? ""}`));
+  for (const [which, o] of [["first", one.body.order], ["second", two.body.order]] as const) {
+    indent(o.decision.rules.filter((r) => (r.rule === "order_splitting" || r.rule === "human_confirmation") && r.outcome !== "pass").map((r) => `${which}: ${r.rule} (${r.outcome}): ${(r as { reason?: string }).reason ?? ""}`));
+  }
 
   const ledger = await fullLedger();
   const copy = structuredClone(ledger.entries) as LedgerEntry[];

@@ -192,7 +192,7 @@ export function BasketPage() {
             <dl className="mt-4 grid grid-cols-3 gap-px bg-line">
               {measures.map((x) => (
                 <div key={x.label} className="min-w-0 bg-paper py-2 pr-2 [&:not(:first-child)]:pl-3">
-                  <dt className="break-words text-[0.8rem] text-ink-soft hyphens-auto">{x.label}</dt>
+                  <dt className="break-words text-[0.8rem] text-ink-soft hyphens-manual">{x.label}</dt>
                   <dd className="display text-[1.5rem] tabular">{x.value}</dd>
                   {x.note && <dd className="text-[0.78rem] text-ink-soft">{x.note}</dd>}
                 </div>

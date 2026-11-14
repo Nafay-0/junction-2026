@@ -9,6 +9,7 @@ import type { Proposer } from "./propose";
 import { applyScopedRules, recall, usageLines, type RecallQuery } from "./recall";
 import { fromHistory } from "./signals";
 import type { MemoryIndex } from "./vectors";
+import { expressible, type MandatePatch } from "../mandates";
 import { writeMemory, type WriteReport } from "./writer";
 
 /**
@@ -247,39 +248,56 @@ export function createMemoryService(deps: MemoryServiceDeps) {
 
     /**
      * Safety rules the gate does not enforce yet: offered for the kitchen's signed mandate. A kitchen-wide allergen
-     * rule becomes a forbidden allergen; a diet rule for every family a required attribute. Family- or site-scoped
-     * rules stay in memory: the mandate's attributes apply to every product.
+     * rule becomes a forbidden allergen; a diet rule for every family a required attribute. Only what the mandate can
+     * state is offered (server/mandates.ts expressible): a word outside its vocabulary, or a rule that holds for one
+     * family or site only, is marked intake_only, a preference the intake uses and the gate does not enforce.
      */
     async mandateOffers(orgId: string, mandate: Pick<Mandate, "forbiddenAllergens" | "requiredAttributes">) {
       return withOrg(orgId, async () => {
         const p = await load(orgId);
         const at = now().toISOString();
-        const offers = p.memory!.items.filter((m) => m.status === "active" && m.strength === "rule" && isSafetyFact(m.fact) && !m.scope && !m.family && m.mandate?.status !== "declined").flatMap((m): { item: MemoryItem; patch: { forbiddenAllergens?: string[]; requiredAttributes?: string[] } }[] => {
+        const offers: { item: MemoryItem; patch: Required<MandatePatch> }[] = [];
+        for (const m of p.memory!.items) {
+          if (m.status !== "active" || m.strength !== "rule" || !isSafetyFact(m.fact) || m.mandate?.status === "declined") continue;
           const f = m.fact;
-          if (f.kind === "allergen" && !mandate.forbiddenAllergens.includes(f.allergen)) return [{ item: m, patch: { forbiddenAllergens: [f.allergen] } }];
-          if (f.kind === "diet" && !mandate.requiredAttributes.includes(f.claim)) return [{ item: m, patch: { requiredAttributes: [f.claim] } }];
-          if (f.kind === "allergen" || f.kind === "diet") m.mandate = { status: "added", at: m.mandate?.at ?? at };
-          return [];
-        });
-        for (const o of offers) if (!o.item.mandate) o.item.mandate = { status: "offered", at };
+          if (f.kind !== "allergen" && f.kind !== "diet") continue;
+          const patch = m.scope || m.family ? undefined : expressible(f.kind === "allergen" ? { forbiddenAllergens: [f.allergen] } : { requiredAttributes: [f.claim] });
+          if (!patch) {
+            if (m.mandate?.status !== "intake_only") m.mandate = { status: "intake_only", at };
+            continue;
+          }
+          const inMandate = patch.forbiddenAllergens.every((a) => mandate.forbiddenAllergens.includes(a)) && patch.requiredAttributes.every((c) => mandate.requiredAttributes.includes(c));
+          if (inMandate) {
+            if (m.mandate?.status !== "added") m.mandate = { status: "added", at: m.mandate?.at ?? at };
+            continue;
+          }
+          // Not in the mandate the kitchen presents now (a rule recorded as added whose mandate is no longer the current one is offered again).
+          m.mandate = { status: "offered", at: m.mandate?.status === "offered" ? m.mandate.at : at };
+          offers.push({ item: m, patch });
+        }
         await save(p);
         return offers.map((o) => ({
           itemId: o.item.id,
           text: o.item.text,
           patch: o.patch,
-          line: `"${o.item.text}" is remembered, but only memory enforces it. Add it to the signed mandate so the gate refuses any order that breaks it, whoever's agent sends it.`,
+          line: `"${o.item.text}" is remembered, but only the intake applies it. Add it to the signed mandate and the kitchen's mandate is signed again with it: the gate then refuses any order that breaks it, whoever's agent sends it, and the kitchen's earlier mandates stop working.`,
         }));
       });
     },
 
-    async decideMandate(orgId: string, itemId: string, decision: "added" | "declined", by: string) {
+    /**
+     * Record the kitchen's decision on an offer. "added" is recorded only with the reissue that made it true
+     * (server/mandate-reissue.ts): the mandate that now states the rule, and when it was signed.
+     */
+    async decideMandate(orgId: string, itemId: string, decision: "added" | "declined", by: string, reissued?: { mandateId: string; at: string }) {
+      if (decision === "added" && !reissued) throw new DockError(409, "mandate_not_reissued", "A rule is recorded as added only once the kitchen's mandate has been signed again with it.");
       return withOrg(orgId, async () => {
         const p = await load(orgId);
         const m = find(p, itemId);
-        m.mandate = { status: decision, at: now().toISOString(), by };
-        m.history.push({ at: now().toISOString(), change: decision === "added" ? "added to the signed mandate" : "kept in memory only, not the mandate", by });
+        m.mandate = { status: decision, at: reissued?.at ?? now().toISOString(), by, ...(reissued ? { mandateId: reissued.mandateId } : {}) };
+        m.history.push({ at: now().toISOString(), change: reissued ? `added to the signed mandate: the mandate was signed again as ${reissued.mandateId}, and earlier mandates no longer work` : "kept in memory only, not the mandate: the intake applies it, the gate does not", by });
         await save(p);
-        log(person(by), `${by} ${decision === "added" ? "added" : "did not add"} ${publicText(m)} to the kitchen's mandate.`, { action: "mandate", itemId, decision });
+        log(person(by), reissued ? `${by} added ${publicText(m)} to the kitchen's signed mandate (${reissued.mandateId}): the gate enforces it from now on.` : `${by} kept ${publicText(m)} out of the kitchen's mandate: the intake applies it, the gate does not.`, { action: "mandate", itemId, decision, ...(reissued ? { mandateId: reissued.mandateId } : {}) });
         return overview(p);
       });
     },

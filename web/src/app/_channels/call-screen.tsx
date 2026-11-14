@@ -4,11 +4,12 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { IntakeView } from "@/core/intake";
 import type { PublicOrder } from "@/core/orders";
-import { LangSwitch, useText } from "../_i18n/provider";
+import { LangSwitch, useLang, useText } from "../_i18n/provider";
 import { Target } from "../_ui/target";
 import { CALL_TEXT } from "./call-screen.text";
 import { OrderCard, ReadBack, StepCards, type Act } from "./cards";
 import { useCall, type Mode } from "./use-call";
+import { agentNameL } from "../_i18n/kitchen-words";
 
 /**
  * "Call your agent": a phone call with the kitchen's purchasing agent, by voice, through the same flow as typing.
@@ -60,6 +61,7 @@ export function CallAgent(props: Omit<CallProps, "onClose"> & { label?: string }
 
 export function CallScreen({ kitchen, signOffHref, renderSignOff, onStep, onOrder, onClose, defaultMode = "push_to_talk", langSwitch = false }: CallProps) {
   const tx = useText(CALL_TEXT);
+  const { lang } = useLang();
   const c = useCall(kitchen, { onStep, onOrder });
   const v = c.view;
   const [mode, setMode] = useState<Mode>(defaultMode);
@@ -82,7 +84,7 @@ export function CallScreen({ kitchen, signOffHref, renderSignOff, onStep, onOrde
   const typing = v.phase === "typed";
   const act: Act = (name, args, label) => void c.tap(name, args, label);
   const signOffLink = v.order && v.order.status === "pending_approval" && v.order.approval ? signOffHref?.(v.order) : undefined;
-  const agentName = v.start?.kitchen.agentName ?? tx.yourAgent;
+  const agentName = v.start?.kitchen.agentName ? agentNameL(v.start.kitchen.agentName, lang) : tx.yourAgent;
 
   const cards = (
     <div className="space-y-3">
@@ -117,7 +119,7 @@ export function CallScreen({ kitchen, signOffHref, renderSignOff, onStep, onOrde
       <header className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-[0.95rem] text-ink-soft">{v.start?.kitchen.name ?? tx.yourKitchen}</p>
-          <h1 className="display text-[2rem] leading-[1.05] text-ink hyphens-auto [overflow-wrap:anywhere]">{live || v.phase === "ringing" ? agentName : tx.callYourAgent}</h1>
+          <h1 className="display text-[2rem] leading-[1.05] text-ink hyphens-manual [overflow-wrap:break-word]">{live || v.phase === "ringing" ? agentName : tx.callYourAgent}</h1>
         </div>
         {live && (
           <div className="text-right tabular" aria-live="off">

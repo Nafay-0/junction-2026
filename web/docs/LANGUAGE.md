@@ -20,6 +20,24 @@ header and from every phone page. The operations portal and the wall stay in Eng
   Where a message comes with a code (a rule id, a concern code, a product problem code), the screen translates the
   code at the edge; free text from the server is shown as it came. The list of what is still English is at the end.
 
+## Words the interface controls, though the server writes them in English
+
+`src/app/_i18n/kitchen-words.ts`: the kitchen's display name ("Hotel Saimaa kitchen, Espoo" becomes "Hotel Saimaa,
+Espoo"), its agent's name ("Kaari's buyer agent" becomes "Ostoagentti" / "Inköpsagenten") and the example requests
+on buttons (store and menu planner). The store shell hands every page this localized view of the kitchen; the
+ledger author and anything sent to the server stay as the server wrote them. A translated example sent to the
+offline example reader is read as its English original; in the planner's recorded mode (no model) the buttons fill
+the original words, the only ones the recordings answer. Product names the server writes in English (order lines,
+option cards, standing orders) are swapped for the catalogue's Finnish or Swedish name by product id
+(`k/[kitchen]/names.ts`, master data, no live call).
+
+## Long words
+
+Headings, buttons and labels in Finnish and Swedish use manual hyphenation only: the texts carry soft hyphens
+(U+00AD) at compound boundaries ("hankinta\u00ADpäällikkö", "inloggnings\u00ADnyckel"), because the browser's own
+Finnish hyphenation breaks words in the wrong place ("hankintapäälli-köksi"). Never put a soft hyphen in a text that
+is sent to the server (example requests, assistant suggestions).
+
 ## Voice
 
 - Finnish is written the way a Finnish food-service wholesaler writes to professional kitchens: plain, correct, the

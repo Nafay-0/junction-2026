@@ -5,6 +5,7 @@ import Valkey from "iovalkey";
 import { SEED_PRODUCTS } from "@/core/seed";
 import { clientAddress, dailyUsage } from "./limits";
 import type { Runtime } from "./runtime";
+import { demoKeySource } from "./dev-fixtures";
 import { lastIndexResolution, pgClient } from "./valio/index-store";
 
 /**
@@ -140,8 +141,10 @@ export async function healthReport(rt: Runtime, req?: Request) {
       publicUrl: env("DOCK_PUBLIC_URL") ?? null,
       passkeyRpId: env("DOCK_WEBAUTHN_RP_ID") ?? null,
       wholesalerKey: keyed("DOCK_WHOLESALER_JWK"),
-      demoOrgKey: env("DOCK_DEMO_ORG_JWK") ? "fixed" : "public dev key",
-      demoKitchenKey: env("DOCK_DEMO_KITCHEN_JWK") ? "fixed" : "public dev key",
+      // "public dev key": anyone with the repository can sign for the demo organisations (local runs only).
+      // "process key": a public site with no JWK configured; the repository's key is not trusted there.
+      demoOrgKey: demoKeySource("DOCK_DEMO_ORG_JWK"),
+      demoKitchenKey: demoKeySource("DOCK_DEMO_KITCHEN_JWK"),
       demoTapApproval: /^(1|true|yes|on)$/i.test(env("DOCK_DEMO_TAP_APPROVAL") ?? ""),
     },
   };

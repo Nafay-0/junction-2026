@@ -12,6 +12,7 @@ import { KITCHEN_ORG, demoKitchenKeyPair } from "../../../demo-kitchen";
 import { DEMO_ORG, demoOrgKeyPair } from "../../../dev-fixtures";
 import { fakeValioApi, type FakeScenario } from "../../../valio/fake-api";
 import { ValioLiveClient } from "../../../valio/live-client";
+import { admission } from "../../../ops/onsite";
 import { ValioCatalog } from "../../../valio/valio-catalog";
 
 const COOL = ["coolTemperature"];
@@ -102,6 +103,7 @@ export async function menuTestDock(scenarios: Record<string, FakeScenario> = MEN
     wholesalerKey: await generateEd25519KeyPair("test-wholesaler"),
     notifier: outbox,
     now: () => MENU_NOW,
+    admit: admission(() => dock), // as the server runtime wires it: the operations layer's check on every session
   });
   return { dock, valio, api, outbox };
 }

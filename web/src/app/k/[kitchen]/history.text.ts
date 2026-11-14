@@ -35,7 +35,7 @@ export const HISTORY_TEXT = defineText({
     signedBy: (name: string, role: string) => `Hyväksyi ${name} (${role})`,
     method: { passkey: " pääsyavaimella", link_token: " kertakäyttölinkillä", demo_tap: " demokosketuksella, ei varmennettu" } as Record<string, string>,
     waitingFor: (name: string, role: string) => `Odottaa: ${name} (${role})`,
-    fromHistory: "Keittiön tilaushistoriasta",
+    fromHistory: "Keittiön tilaus­historiasta",
     declined: "Hylätty, mitään ei tilattu",
     refused: "Portti torjui, mitään ei tilattu",
     basketAsked: (rest: string) => `Ostoskori, tilattu käsin: ${rest}`,
@@ -61,7 +61,7 @@ export const HISTORY_TEXT = defineText({
   sv: {
     byAgent: "Lagd av agenten på egen hand, inom fullmakten",
     signedBy: (name: string, role: string) => `Godkänd av ${name} (${role})`,
-    method: { passkey: " med inloggningsnyckel", link_token: " med en engångslänk", demo_tap: " med ett demotryck, inte verifierat" } as Record<string, string>,
+    method: { passkey: " med inloggnings­nyckel", link_token: " med en engångslänk", demo_tap: " med ett demotryck, inte verifierat" } as Record<string, string>,
     waitingFor: (name: string, role: string) => `Väntar på ${name} (${role})`,
     fromHistory: "Från kökets beställningshistorik",
     declined: "Avslagen, inget beställt",

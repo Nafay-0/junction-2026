@@ -10,6 +10,7 @@ import { passkeyProblemL } from "../_ui/passkey.text";
 import { fiMoney } from "../_ui/plain";
 import { PhoneNotice, PhoneProblem, bigButton } from "../_ui/phone";
 import { JOIN_TEXT } from "./join-flow.text";
+import { placeNameL } from "../_i18n/kitchen-words";
 
 type Identity = { kitchenName: string; city: string; approverName: string; agentName: string };
 type Start = {
@@ -106,7 +107,7 @@ export function JoinFlow() {
 
   if (start.current && !skipCurrent)
     return (
-      <PhoneNotice title={tx.already(start.current.approverName)} body={tx.alreadyBody(start.current.kitchenName)}>
+      <PhoneNotice title={tx.already(start.current.approverName)} body={tx.alreadyBody(placeNameL(start.current.kitchenName, lang))}>
         <Link href="/approver" className={`mt-6 ${bigButton("go")}`}>
           {tx.goToMine}
         </Link>
@@ -122,7 +123,7 @@ export function JoinFlow() {
   return (
     <div className="flex flex-1 flex-col">
       <p className="text-[1rem] font-semibold text-petrol">{tx.eyebrow}</p>
-      <h1 className="display mt-2 text-[2.6rem] leading-[0.98] text-ink hyphens-auto [overflow-wrap:anywhere]">{tx.title(id.kitchenName, id.city)}</h1>
+      <h1 className="display mt-2 text-[2.6rem] leading-[0.98] text-ink hyphens-manual [overflow-wrap:break-word]">{tx.title(placeNameL(id.kitchenName, lang), id.city)}</h1>
       <div className="mt-5 bg-paper p-4">
         <p className="leading-snug">{tx.intro(<strong>{id.approverName}</strong>, <strong className="tabular">{fiMoney(start.perOrderLimit)}</strong>)}</p>
       </div>

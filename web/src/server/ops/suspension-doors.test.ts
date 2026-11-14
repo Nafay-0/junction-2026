@@ -10,14 +10,19 @@ import { calls, voiceLimits } from "../channels/voice/calls";
 import { runTool } from "../channels/voice/tools";
 import { KITCHEN_ORG } from "../demo-kitchen";
 import { getRuntime, resetRuntime } from "../runtime";
-import { SUSPENSION_RULE, suspensions } from "./suspensions";
+import { resolveKitchen } from "../console-kitchens";
+import { overview } from "../kitchen-portal";
+import { InMemoryRecordStore } from "../records";
+import { doorLog } from "./door";
+import { STORE_PAGE_READ } from "./onsite";
+import { SUSPENSION_RULE, suspensions, type Suspension } from "./suspensions";
 
 /**
- * Every door ends at the same operations check. `suspension.test.ts` covers REST, MCP and the on-site console,
- * which all pass through `authenticate` in server/http.ts. These are the doors that call Dock in-process, with no
- * HTTP request to authenticate: the voice call, the photo door, the menu planner and the buyer's answer link.
- * A suspended agent (or organisation) must be refused there too, with the same named rule, and nothing may be
- * opened, quoted or ordered.
+ * Every door ends at the same operations check, because the core asks it: `authenticate` runs the admission hook
+ * the runtime wires in (core/orders.ts DockDeps.admit, server/ops/onsite.ts). `suspension.test.ts` covers REST, MCP
+ * and the on-site console. These are the doors that call Dock in-process, with no HTTP request: the voice call, the
+ * photo door, the menu planner and the buyer's answer link. They used to verify the mandate themselves and never
+ * asked, so a suspended agent could go on ordering through them.
  */
 const day = () => nextDeliveryDay(nextDeliveryDay(localNow(new Date()).date, [1, 2, 3, 4, 5])!, [1, 2, 3, 4, 5])!;
 
@@ -108,5 +113,43 @@ describe("a suspended agent is refused at every in-process door", () => {
     expect(res.status).toBe(403);
     expect((await res.json()).error.rule).toBe(SUSPENSION_RULE);
     expect((await dock.intake.get(a.session, step.requestId).catch(() => step)).state).toBe("needs_confirmation");
+  });
+
+  it("any session at all: verifying a mandate against the runtime's Dock is refused, with no door having to remember", async () => {
+    const { dock } = await getRuntime();
+    const k = (await resolveKitchen("kaari"))!;
+    await expect(dock.authenticate(k.mandateToken, k.agentId)).resolves.toMatchObject({ agentId: KITCHEN_ORG.agentId });
+    await suspend("agent");
+    await expect(dock.authenticate(k.mandateToken, k.agentId)).rejects.toMatchObject(refusal);
+    await expect(dock.authenticate(k.mandateToken, k.agentId, { via: "rest", transport: "rest", path: "/api/v1/orders", method: "POST" })).rejects.toMatchObject(refusal);
+    // The one entrance let through says so itself: the kitchen's own people reading their records in the store,
+    // whose home page then shows the suspension. It opens, quotes and orders nothing.
+    const reading = await dock.authenticate(k.mandateToken, k.agentId, STORE_PAGE_READ);
+    expect(reading.agentId).toBe(KITCHEN_ORG.agentId);
+    expect((await overview((await resolveKitchen("kaari"))!)).suspension).toMatchObject({ scope: "agent", reason: "Ordering in a loop" });
+    // Refusals are in the door log once each, written by admission.
+    expect(doorLog(dock).all().filter((c) => !c.ok && c.rule === SUSPENSION_RULE)).toHaveLength(2);
+  });
+
+  it("a suspension outlives a restart, and so does its lifting", async () => {
+    const store = new InMemoryRecordStore<Suspension>(); // stands for the database a new process reads
+    let { dock } = await getRuntime();
+    await suspensions(dock).restore(store);
+    const s = await suspend("org");
+    await suspensions(dock).saved();
+
+    resetRuntime(); // the process restarts: a new Dock, a new registry, nothing in memory
+    ({ dock } = await getRuntime());
+    const k = (await resolveKitchen("kaari"))!;
+    await expect(dock.authenticate(k.mandateToken, k.agentId)).resolves.toBeDefined(); // not yet restored
+    expect(await suspensions(dock).restore(store)).toBe(1);
+    await expect(dock.authenticate(k.mandateToken, k.agentId)).rejects.toMatchObject({ ...refusal, code: "organisation_suspended" });
+
+    suspensions(dock).resume(s.suspensionId, { by: "Riikka (ops)" });
+    await suspensions(dock).saved();
+    resetRuntime();
+    ({ dock } = await getRuntime());
+    expect(await suspensions(dock).restore(store)).toBe(0);
+    await expect(dock.authenticate(k.mandateToken, k.agentId)).resolves.toBeDefined();
   });
 });

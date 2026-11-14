@@ -198,11 +198,13 @@ export function menuRules(def: Pick<Def, "diet" | "rules">, consoleMandate: Pick
   };
 }
 
-export async function resolveMenuKitchen(slug: string, rt: Pick<Runtime, "catalog"> & Partial<Pick<Runtime, "kitchens">>, now = new Date()): Promise<MenuKitchen | undefined> {
+export async function resolveMenuKitchen(slug: string, rt: Pick<Runtime, "catalog"> & Partial<Pick<Runtime, "kitchens" | "mandates">>, now = new Date()): Promise<MenuKitchen | undefined> {
   const def = DEFS[slug as MenuKitchenInfo["slug"]];
   if (!def) return undefined;
   const profile = await rt.kitchens?.getProfile(def.orgId);
-  const derived = menuRules(def, CONSOLE_MANDATE[def.slug](now), profile, now);
+  // The console mandate as it stands now: with what the kitchen added by reissuing it (server/mandates.ts).
+  const consoleMandate = rt.mandates ? rt.mandates.restrict(CONSOLE_MANDATE[def.slug](now)) : CONSOLE_MANDATE[def.slug](now);
+  const derived = menuRules(def, consoleMandate, profile, now);
   g.__dockMenuTokens ??= new Map();
   const cacheKey = `${slug}|${derived.diet.mandateAllergens.join(",")}`;
   let hit = g.__dockMenuTokens.get(cacheKey);

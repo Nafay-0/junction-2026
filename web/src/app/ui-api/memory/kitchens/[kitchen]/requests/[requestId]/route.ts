@@ -1,4 +1,5 @@
 import { DockError } from "@/core/errors";
+import { STORE_PAGE_READ } from "@/server/ops/onsite";
 import { getRuntime } from "@/server/runtime";
 import { interactionFromIntake } from "@/server/memory/intake-events";
 import { kitchenMemoryRoute, type ResolvedKitchen } from "@/server/memory/http";
@@ -13,7 +14,7 @@ import { kitchenMemoryRoute, type ResolvedKitchen } from "@/server/memory/http";
  */
 async function intakeOf(k: ResolvedKitchen, requestId: string) {
   const { dock } = await getRuntime();
-  const session = await dock.authenticate(k.mandateToken, k.agentId);
+  const session = await dock.authenticate(k.mandateToken, k.agentId, STORE_PAGE_READ);
   if (!/^req_[a-z0-9]+$/.test(requestId)) throw new DockError(404, "intake_not_found", "No such request.");
   return dock.intake.get(session, requestId);
 }
