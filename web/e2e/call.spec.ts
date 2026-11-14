@@ -102,12 +102,22 @@ async function hold(page: Page, ms = 900, button = talk(page)) {
   await page.mouse.up();
 }
 
-// One live call per kitchen: hang up at the end of each test so the next one gets the line.
+// One live call per kitchen: every call a test started is ended afterwards, so the next test gets the line (a call
+// that is reconnecting or switching provider has no hang-up button to press).
+const started = new Map<Page, { kitchen: string; callId: string }[]>();
+test.beforeEach(async ({ page }) => {
+  started.set(page, []);
+  page.on("response", async (res) => {
+    const m = /\/ui-api\/voice\/([^/]+)\/call$/.exec(new URL(res.url()).pathname);
+    if (!m || res.request().method() !== "POST") return;
+    const body = (await res.json().catch(() => ({}))) as { callId?: string };
+    if (body.callId) started.get(page)?.push({ kitchen: m[1], callId: body.callId });
+  });
+});
 test.afterEach(async ({ page }) => {
-  for (const name of ["Hang up", "End call"]) {
-    const b = page.getByRole("button", { name }).first();
-    if (await b.isVisible().catch(() => false)) await b.click().catch(() => {});
-  }
+  await page.goto("about:blank").catch(() => {}); // the page's own timers (a reconnect, a fallback) stop with it
+  for (const c of started.get(page) ?? []) await page.request.post(`/ui-api/voice/${c.kitchen}/call/${c.callId}`, { data: { op: "end", reason: "test over" } }).catch(() => {});
+  started.delete(page);
 });
 
 // Chromium's fake microphone (a tone) and no permission prompt; "refused" below makes the browser refuse instead.
@@ -199,6 +209,8 @@ test.describe("with a microphone", () => {
     const fake: Fake = { sent: [], sockets: 0 };
     await fakeGemini(page, fake);
     await signIn(page);
+    // The earlier tests' calls are already in this kitchen's thread: start it over, so what is checked is this call's.
+    expect((await page.request.post(`/ui-api/kitchens/${tester.username}/thread/reset`)).ok()).toBe(true);
     await page.goto(`/k/${tester.username}/order`);
     const composer = page.getByRole("button", { name: "Hold to talk" }).first();
     await composer.click(); // a tap on the microphone starts the call
