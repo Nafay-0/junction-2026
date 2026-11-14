@@ -6,7 +6,6 @@ import { cookies } from "next/headers";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { CallJoin } from "../_channels/call-join";
-import { CallPage } from "../_channels/call-page";
 import { LangProvider } from "../_i18n/provider";
 import { pick } from "../_i18n/lang";
 import { chosenLang, requestLang } from "../_i18n/server";
@@ -20,9 +19,11 @@ export async function generateMetadata(): Promise<Metadata> {
 export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#f2f7f8" };
 
 /**
- * /call: what the call QR code opens on a phone. A visitor who has joined calls their own kitchen's agent;
- * one who has not joins first (one passkey tap), then lands here again in the call.
- * /call?k=<kitchen> calls an account's kitchen (a stage kitchen's too) on a phone signed in to that account.
+ * /call: what the "talk to your agent" QR code opens on a phone. There is one way to talk to the agent by voice: the
+ * microphone in the kitchen's own conversation, hands-free. So this page only finds the kitchen and goes there
+ * (`?talk=1` shows the microphone first): a visitor who has joined goes to their own kitchen; one who has not joins
+ * first (one passkey tap), then lands here again and goes on. /call?k=<kitchen> is an account's kitchen (a stage
+ * kitchen's too) on a phone signed in to that account.
  */
 export default function Call(props: PageProps<"/call">) {
   return (
@@ -60,11 +61,11 @@ async function Which({ searchParams }: PageProps<"/call">) {
     // QR code does for it (a one-time link, /k/handoff). Anyone else is sent to sign in.
     const signedIn = await rt.accounts.session((await cookies()).get(ACCOUNT_COOKIE)?.value);
     if (signedIn?.account.username !== k) redirect(`/k?as=${encodeURIComponent(k)}`);
-    return <CallPage kitchen={k} visitor />;
+    redirect(`/k/${encodeURIComponent(k)}?talk=1`);
   }
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   const account = await rt.passkeys.sessionApprover(token);
   const sandbox = account ? await rt.sandboxes.forApprover(account.approverId) : undefined;
   if (!sandbox) return <CallJoin />;
-  return <CallPage kitchen={sandbox.sandboxId} visitor />;
+  redirect(`/k/${encodeURIComponent(sandbox.sandboxId)}?talk=1`);
 }

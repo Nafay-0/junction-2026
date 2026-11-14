@@ -1,9 +1,9 @@
 /**
- * The voice door's evaluation: recorded requests sent to a realtime voice model exactly as the call screen sends
- * them (push-to-talk, the same server-made session, the same browser socket classes), and every tool call the
- * model makes run through the real server tools (runTool: the interpreter, the read-back, the intake, the gate)
- * against the demo kitchen "kaari" in this process. What is scored is what AimoPilot put to the caller, not what
- * the model said.
+ * The voice door's evaluation: recorded requests sent to a realtime voice model exactly as the store's microphone
+ * sends them (hands-free, the same server-made session, the same browser socket classes), and every relay the model
+ * makes run through the real voice door (thread/voice-bridge.ts heardTurn: the heard words into the kitchen's own
+ * conversation, the same engine as typing) against the demo kitchen "kaari" in this process. What is scored is what
+ * the engine understood and did with the words heard, not what the model said.
  *
  *   pnpm eval:voice [--set orig|dev|held] [--model gemini-3.8-live|gpt-realtime-2.1|...] [--only d0] [--flow] [--out file]
  *
@@ -128,7 +128,8 @@ async function main() {
   const out = flag(args, "--out") ?? path.join(ROOT, "results", `${set}-${model}${flow ? "-flow" : ""}.json`);
 
   const { startCall } = await import("@/server/channels/voice/start");
-  const { runTool } = await import("@/server/channels/voice/tools");
+  const { heardTurn, nextSpoken } = await import("@/server/thread/voice-bridge");
+  const { threadStore } = await import("@/server/thread/engine");
   const { calls } = await import("@/server/channels/voice/calls");
   const { getRuntime } = await import("@/server/runtime");
   const { LiveSocket } = await import("@/app/_channels/live-socket");
@@ -140,7 +141,8 @@ async function main() {
   const today = localNow(new Date()).date;
 
   async function runClip(file: string, t: Truth): Promise<Row> {
-    const start = await startCall(undefined, KITCHEN, { mode: "push_to_talk", model });
+    const start = await startCall(undefined, KITCHEN, { model, lang: t.lang === "fi" ? "fi" : t.lang === "sv" ? "sv" : "en" });
+    const call = calls().get(start.callId)!;
     const live = start.live!;
     const facts = emptyFacts();
     addFacts(facts, start.context);
@@ -159,12 +161,19 @@ async function main() {
     let cost = 0;
     let promptTokens = 0;
     let lastHeardAt = 0;
-    const log: { name: string; args: unknown; state: string; say?: string; refused?: string; need?: unknown; reason?: string; ms: number }[] = [];
+    const log: { name: string; args: unknown; state: string; say?: string; refused?: string; need?: unknown; reason?: string; agentTurnId?: string; ms: number }[] = [];
     let turnDone: (() => void) | undefined;
     let ready: () => void = () => {};
     const readyP = new Promise<void>((r) => (ready = r));
-    let lastReply: Awaited<ReturnType<typeof runTool>> | undefined;
+    let lastReply: { state: string; say: string; agentTurnId?: string } | undefined;
     let order: { status: string; totalCents: number } | undefined;
+    /** The engine's turn for the request: what it understood (the understood card) and where it ended. */
+    const turnOf = async (id?: string) => {
+      if (!id) return undefined;
+      const store = await threadStore();
+      const th = store.peek(KITCHEN);
+      return th ? store.agentTurn(th, id) : undefined;
+    };
     let replies = 0;
 
     const sock: InstanceType<typeof LiveSocket> | InstanceType<typeof RealtimeSocket> = new (live.provider === "openai" ? RealtimeSocket : LiveSocket)(live.wsUrl, live.token, live.model, {
@@ -201,15 +210,34 @@ async function main() {
           const responses = [];
           for (const fc of fcs) {
             const t0 = Date.now();
-            const r = await runTool(KITCHEN, { callId: start.callId, name: fc.name, args: fc.args ?? {}, heard: words && phase === "turn" ? { text: words, turn } : undefined, via: "speech" });
-            addFacts(facts, r.forModel);
+            // The voice door: the heard words into the kitchen's conversation; the first answer back, then what follows.
+            const r = phase === "turn" && words ? await heardTurn(KITCHEN, call, { text: words, turn, modelWords: typeof fc.args?.words === "string" ? fc.args.words : undefined }) : { state: "ignored" as const, say: "", lang: "en" as const, agentTurnId: undefined as string | undefined };
+            addFacts(facts, { say: r.say });
             lastReply = r;
-            if (r.screen.order) order = { status: r.screen.order.status, totalCents: r.screen.order.totalCents };
-            log.push({ name: fc.name, args: fc.args, state: r.forModel.state, say: r.forModel.say, refused: r.forModel.refused as string | undefined, need: r.screen.pending?.need ?? r.screen.step?.need, reason: r.screen.pending?.reason, ms: Date.now() - t0 });
-            responses.push({ id: fc.id, name: fc.name, response: r.forModel });
+            log.push({ name: fc.name, args: fc.args, state: r.state, say: r.say, agentTurnId: r.agentTurnId, ms: Date.now() - t0 });
+            responses.push({ id: fc.id, name: fc.name, response: { say: r.say } });
+            if ((r.state === "working" || r.state === "waiting") && r.agentTurnId) {
+              const id = r.agentTurnId;
+              void (async () => {
+                for (let i = 0; i < 20; i++) {
+                  const n = await nextSpoken(KITCHEN, call, id, 15_000);
+                  if (n.say) {
+                    addFacts(facts, { say: n.say });
+                    lastReply = n;
+                    log.push({ name: "next", args: {}, state: n.state, say: n.say, agentTurnId: id, ms: Date.now() - t0 });
+                    sock.text(`[AimoPilot] ${n.say}`);
+                  }
+                  if (n.state === "reply" || n.state === "ignored") break;
+                }
+              })();
+            }
           }
           pendingTools = false;
           if (phase === "turn") toolDone = true;
+          void turnOf(lastReply?.agentTurnId).then((a) => {
+            const o = a?.cards.find((c) => c.type === "order");
+            if (o?.type === "order") order = { status: o.status, totalCents: o.totalCents };
+          });
           sock.toolResponse(responses);
         })();
       },
@@ -239,33 +267,41 @@ async function main() {
         };
       });
 
-    /** Speak one push-to-talk turn at real-time pace, then wait for the agent's answer (and any tool round trips). */
+    /** Speak one utterance at real-time pace, then silence so the provider hears the end, then wait for the answer. */
     async function speak(pcm16: Int16Array) {
-      turn += 1;
       heard = "";
       heardFinal = undefined;
       said = "";
+      turn += 1;
       const pcm = resample(pcm16, 16000, sock.inputRate);
       const chunk = sock.inputRate / 10;
-      sock.activityStart();
       for (let i = 0; i < pcm.length; i += chunk) {
         sock.audio(b64(pcm.subarray(i, i + chunk)));
         await sleep(100);
       }
-      sock.activityEnd();
       endAt = Date.now();
+      const quiet = b64(new Int16Array(chunk));
       const toolsBefore = log.length;
-      // The answer may come after one or more tool calls; each tool round trip ends with another model turn.
-      const until = Date.now() + 25_000;
+      const until = Date.now() + 40_000;
+      // Silence keeps flowing (a real microphone never stops), so the provider's turn detection sees the pause.
+      let talking = true;
+      void (async () => {
+        while (talking && !closed) {
+          sock.audio(quiet);
+          await sleep(100);
+        }
+      })();
       while (Date.now() < until && !closed) {
         await waitTurn(until - Date.now());
         await sleep(300);
         if (pendingTools) continue;
-        // A model that reasons asynchronously (gemini-3.8-live-extended-thinking) ends a turn before its tool call:
-        // keep listening while nothing has been said or called for this turn yet.
         if (log.length === toolsBefore && !said.trim()) continue;
+        // Wait for the engine's reply to be said, not just the acknowledgement.
+        const last = log.at(-1);
+        if (last && (last.state === "working" || last.state === "waiting") && last.state !== "waiting") continue;
         break;
       }
+      talking = false;
       await sleep(200);
       calls().heartbeat(start.callId, KITCHEN);
     }
@@ -283,8 +319,8 @@ async function main() {
       calls().end(start.callId, KITCHEN, "eval: did not start");
       return row;
     }
-    // Greeting, as the call screen does it.
-    sock.text("[call connected] The caller is Ravintola Kaari.");
+    // Greeting, as the store's microphone does it.
+    sock.text("[call connected]");
     await waitTurn(12_000);
     while (pendingTools) await sleep(200);
     await sleep(300);
@@ -296,25 +332,27 @@ async function main() {
     const firstSoundMs = firstSound;
     const answerSoundMs = answerSound;
     const toolMs = toolAt;
-    const submit = log.find((l) => l.name === "submit_request" && l.state !== "refused");
-    const readBack = submit?.state === "read_back" ? (submit.need as { item: { text: string; category?: string }; quantity?: { amount: number; unit: string }; deliverBy?: string }) : undefined;
+    const submit = log.find((l) => l.name === "relay" && l.agentTurnId);
+    const engineTurn = await turnOf(submit?.agentTurnId);
+    const understood = engineTurn?.cards.find((c) => c.type === "understood");
+    const readBack = understood?.type === "understood" ? { item: { text: understood.item }, quantity: understood.amount, deliverBy: understood.deliverOn ?? understood.deliverBy } : undefined;
+    void submit;
 
-    // Score what AimoPilot put to the caller.
+    // Score what the engine understood from the words heard.
     const q = readBack?.quantity;
     let outcome: string;
     let why = "";
     if (closed && !submit) outcome = "infra";
     else if (t.expect === "order") {
       if (readBack && q) {
-        const itemText = `${readBack.item.text} ${readBack.item.category ?? ""}`.toLowerCase();
+        const itemText = `${readBack.item.text}`.toLowerCase();
         const itemOk = (t.item ?? []).some((s) => itemText.includes(s.toLowerCase()));
         const amountOk = q.amount === t.amount && q.unit === t.unit;
         const want = t.when === "tomorrow" ? addDaysIso(today, 1) : undefined;
         const dayOk = t.weekday ? !!readBack.deliverBy && WEEKDAYS[isoWeekday(readBack.deliverBy) - 1] === t.weekday : want ? readBack.deliverBy === want : true;
         outcome = amountOk && itemOk && dayOk ? "right" : "wrong";
         why = [amountOk ? "" : `amount ${q.amount} ${q.unit}`, itemOk ? "" : `item ${readBack.item.text}`, dayOk ? "" : `day ${readBack.deliverBy ?? "none"}`].filter(Boolean).join("; ");
-        if (outcome === "wrong" && submit?.reason?.startsWith("the transcript heard")) outcome = "asked";
-      } else outcome = "asked";
+      } else outcome = log.some((l) => l.state === "asked") ? "asked" : "asked";
     } else if (t.expect === "ask") outcome = readBack && q ? "wrong" : "right";
     else outcome = submit ? (readBack && q ? "wrong" : "asked") : "right";
     if (t.expect === "ask" && readBack && q) why = `invented ${q.amount} ${q.unit}`;
@@ -330,18 +368,22 @@ async function main() {
       flowLog = [];
       const t0 = endAt;
       for (let step = 0; step < 6 && !order && !closed; step++) {
-        const r = lastReply;
-        const state = r?.forModel.state;
-        const kind = state === "read_back" ? "yes" : state === "needs_confirmation" ? "intended" : state === "options_ready" ? "first" : state === "quoted" ? "place" : state === "needs_input" ? "answer" : undefined;
+        const a = await turnOf(log.filter((l) => l.agentTurnId).at(-1)?.agentTurnId);
+        if (!a || a.status !== "waiting_buyer") break;
+        const anomaly = a.cards.some((c) => c.type === "anomaly" && !c.answered);
+        const question = a.cards.find((c) => c.type === "question");
+        const kind = anomaly ? "intended" : question ? "answer" : a.cards.some((c) => c.type === "options" && !c.chosen) ? (/shall i order|tilaanko|ska jag beställa/i.test(lastReply?.say ?? "") ? "yes" : "first") : a.cards.some((c) => c.type === "price") ? "place" : undefined;
         if (!kind) break;
-        const text = kind === "answer" ? String(r?.screen.step?.questions?.[0]?.options?.[0]?.label ?? "the first one") : REPLIES[kind][t.lang] ?? REPLIES[kind].en;
-        flowLog.push(`${state} -> "${text}"`);
+        const text = kind === "answer" && question?.type === "question" ? String(question.questions[0]?.options[0]?.label ?? "the first one") : REPLIES[kind][t.lang] ?? REPLIES[kind].en;
+        flowLog.push(`${a.status} -> "${text}"`);
         replies += 1;
         const before = log.length;
         await speak(replyClip(text, t.lang));
-        if (log.length === before) flowLog.push(`(no tool call; agent said: ${said.trim().slice(0, 100)})`);
-        // States only: what was said can name catalogue products, which result files must not hold.
-        else flowLog.push(...log.slice(before).map((l) => `${l.name}: ${l.state}${l.refused ? ` (${l.refused})` : ""}`));
+        if (log.length === before) flowLog.push(`(no relay; agent said: ${said.trim().slice(0, 100)})`);
+        else flowLog.push(...log.slice(before).map((l) => `${l.name}: ${l.state}`));
+        const done = await turnOf(log.filter((l) => l.agentTurnId).at(-1)?.agentTurnId);
+        const o = done?.cards.find((c) => c.type === "order");
+        if (o?.type === "order") order = { status: o.status, totalCents: o.totalCents };
       }
       if (order) orderMs = Date.now() - t0;
     }
@@ -356,10 +398,9 @@ async function main() {
       snr: t.snr ?? null,
       said: t.said,
       heard: requestHeard,
-      toModel: submit ? (submit.args as { request?: string })?.request : undefined,
+      toModel: submit ? (submit.args as { words?: string })?.words : undefined,
       readBack: readBack ? `${q ? `${q.amount} ${q.unit}` : "?"} ${readBack.item.text}${readBack.deliverBy ? ` for ${readBack.deliverBy}` : ""}` : undefined,
-      reason: submit?.reason || undefined,
-      state: submit?.state ?? (log.length ? log.map((l) => `${l.name}:${l.state}`).join(",") : "no tool call"),
+      state: engineTurn?.status ?? (log.length ? log.map((l) => `${l.name}:${l.state}`).join(",") : "no tool call"),
       agentSaid: requestSaid.slice(0, 300),
       outcome,
       why: why || undefined,

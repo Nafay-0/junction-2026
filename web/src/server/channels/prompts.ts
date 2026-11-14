@@ -1,60 +1,10 @@
 /**
- * Every word the two doors send to a model lives in this file: the voice agent's instructions and tool
- * descriptions (Gemini Live), and the reader for photos, PDFs and pasted text.
+ * Words the two doors send to a model: the speech recogniser's vocabulary, and the reader for photos, PDFs and
+ * pasted text. The live voice model's brief is thread/voice-brief.ts.
  */
 
 // ---------- voice: the call ----------
-
-export type CallContext = {
-  kitchenName: string;
-  agentName: string;
-  /** Who usually calls: "Kitchen staff at Ravintola Kaari". */
-  caller: string;
-  today: string; // "Saturday 2026-11-14 (Europe/Helsinki)"
-  calendar: string; // the next two weeks with weekday names in en/fi/sv
-  /** From the kitchen's memory, in plain sentences, each already a fact Dock holds. */
-  standingRules: string[];
-  usualOrders: string[];
-  pushToTalk: boolean;
-  maxMinutes: number;
-};
-
-export function voiceSystem(c: CallContext): string {
-  return `You are ${c.agentName}, the purchasing agent of ${c.kitchenName}, on a voice call with the kitchen. You buy from a food wholesaler through AimoPilot. You never decide anything yourself: AimoPilot's tools do the work and decide what happens; you relay between the kitchen and the tools.
-
-How you speak:
-- Answer in English or Finnish: Finnish when the caller speaks Finnish, otherwise English. You understand Swedish, but answer a Swedish caller in English (the call screen tells them so). A tool result with "speakIn" names the language to speak: speak only that language, translating AimoPilot's English sentence (keep every figure as it is).
-- Be brief: one short sentence, two at most. The kitchen is busy and loud, and everything is also on the caller's screen.
-- Never read a list aloud. The options, products and details are on the screen; say only what the "say" field says.
-- Say numbers with their units, and money in euros.
-
-What you may say (this is a hard rule):
-- Only say products, brands, prices, amounts, pack sizes, dates, times and names of people that appear in this instruction or in a tool result from this call. Never estimate, round up, or fill in a figure or a product yourself. If you do not have it from a tool, say you do not have it.
-- Every tool result has a "say" field: say it, in the caller's language, and add no facts to it. You may shorten long product names. If it has an "ask" field, ask that question and then wait for the caller.
-- AimoPilot may send you a message starting with "[AimoPilot check]". Follow it at once: it means something you said did not match a tool result.
-- Messages starting with "[AimoPilot update]" or "[call connected]" come from the screen, not from the caller. Never pass them to submit_request.
-
-What you must do:
-- When the caller asks for anything to buy, call submit_request at once with their request word for word, including any correction they made ("no, make that two hundred"). Never fill in a quantity, product, date or preference they did not say, and never call it for your own words or a greeting.
-- Call a tool without saying anything first ("let me check" is not needed): the screen shows that AimoPilot is working.
-- AimoPilot then reads the request back in one sentence. Say that sentence and wait. If the caller says it is wrong or gives a new amount, call submit_request again with what they said.
-- Questions, read-backs, option choices and placing an order are the caller's decisions. Only call confirm_read_back, respond_to_check, answer_question, choose_option or place_order right after the caller has said that answer out loud in their last turn. Never answer for them, never assume yes, and never call one of these in the same turn you asked the question.
-- If you did not catch what the caller said, or heard only noise or other people, ask them to repeat it. Do not guess.
-- Choosing an option (choose_option) orders it: AimoPilot fixes the price and sends it to its gate at once. place_order is only for a fixed price shown earlier that the caller now says to order. AimoPilot's gate then decides: it is either placed, refused with a reason, or waits for a named person to sign off on their phone. Say which, as the tool result says.
-- If the caller says goodbye or that they are done, say goodbye in one short sentence.
-
-${c.pushToTalk ? "The caller holds a button while speaking (push-to-talk), so each of their turns is complete when you hear it." : "The call is hands-free: wait for the caller to finish before answering."}
-The call ends by itself after ${c.maxMinutes} minutes.
-
-When the call connects you receive "[call connected]". Then greet the kitchen by its name ("Hello, ${c.kitchenName}") in one short sentence, in English unless you know otherwise, and ask what they need. You may name their most usual order in a few words ("the usual milk?"), from the memory below; do not list the rest.
-
-${c.today}
-${c.calendar}
-
-What AimoPilot remembers about ${c.kitchenName} (facts you may use):
-Standing rules: ${c.standingRules.length ? c.standingRules.join(" ") : "none stated."}
-Usual orders: ${c.usualOrders.length ? c.usualOrders.join(" ") : "no earlier orders."}`;
-}
+// The live voice model's brief and its one tool live next to the kitchen agent's playbook: thread/voice-brief.ts.
 
 /**
  * Words the speech recogniser is biased towards (Gemini customVocabulary, OpenAI keywords): what kitchens order
@@ -69,47 +19,6 @@ export const VOICE_VOCABULARY = [
   "voi", "voita", "jogurtti", "jogurttia", "rahka", "rahkaa", "juusto", "juustoa", "kananmuna", "kananmunia", "litraa", "kiloa", "laatikkoa", "kpl",
   "mjölk", "laktosfri", "havredryck", "grädde", "matlagningsgrädde", "gräddfil", "smör", "kvarg", "ost", "ägg", "liter", "kilo", "lådor",
   "AimoPilot",
-];
-
-const S = (description: string) => ({ type: "STRING", description });
-
-/** Gemini Live function declarations (OpenAPI-subset schema, as the Live API takes them). */
-export const VOICE_TOOLS = [
-  {
-    name: "submit_request",
-    description: "Hand the caller's purchase request to AimoPilot, word for word as they said it. AimoPilot reads it, checks for likely mistakes and finds the options.",
-    parameters: { type: "OBJECT", properties: { request: S("The caller's request in their own words and language, without additions.") }, required: ["request"] },
-  },
-  {
-    name: "confirm_read_back",
-    description: "The caller has just said yes to the amount AimoPilot asked you to read back. Only after they said so.",
-    parameters: { type: "OBJECT", properties: {} },
-  },
-  {
-    name: "respond_to_check",
-    description: "Pass on the caller's answer to one of AimoPilot's checks: 'confirm' if they said it is intended, or the id of the correction they picked.",
-    parameters: { type: "OBJECT", properties: { key: S("The check's key from the tool result."), choice: S("'confirm' or a correction id from the tool result.") }, required: ["key", "choice"] },
-  },
-  {
-    name: "answer_question",
-    description: "Pass on the caller's answer to one of AimoPilot's questions.",
-    parameters: { type: "OBJECT", properties: { questionId: S("The question id from the tool result."), optionId: S("The option id the caller picked.") }, required: ["questionId", "optionId"] },
-  },
-  {
-    name: "choose_option",
-    description: "The caller picked one of the options AimoPilot offered. AimoPilot fixes the price and orders it: its gate places it or sends it to a named person.",
-    parameters: { type: "OBJECT", properties: { optionId: S("The option id from the tool result.") }, required: ["optionId"] },
-  },
-  {
-    name: "place_order",
-    description: "The caller said to order it: a fixed price shown earlier, or the order sheet with several items. AimoPilot's gate decides what happens.",
-    parameters: { type: "OBJECT", properties: {} },
-  },
-  {
-    name: "check_order",
-    description: "Where the current request or order stands now, for example whether the sign-off has happened.",
-    parameters: { type: "OBJECT", properties: {} },
-  },
 ];
 
 // ---------- scan: photos, PDFs, pasted text ----------

@@ -399,6 +399,18 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
       run.anotherDayFor = another;
     }
   }
+  // "Yes" to the voice door's read-back of an order it held (pipeline.ts spokenHold): exactly that order, the same as
+  // its tap. Any other words leave it to the agent; either way the read-back is asked once.
+  const readBack = (thread as unknown as { spokenReadBack?: import("./pipeline").SpokenReadBack }).spokenReadBack;
+  if (readBack && !body.action && body.text) {
+    delete (thread as unknown as { spokenReadBack?: unknown }).spokenReadBack;
+    const { yesOrNo } = await import("@/server/channels/speech");
+    const last = [...thread.turns].reverse().find((x) => x.role === "agent" && x.turnId !== run.turnId && x.replyTo !== "");
+    if (last?.turnId === readBack.turnId && body.text.trim().split(/\s+/).length <= 8 && yesOrNo(body.text) === "yes") {
+      body = { ...body, action: readBack.optionId ? { type: "choose", requestId: readBack.requestId, optionId: readBack.optionId } : { type: "place", requestId: readBack.requestId }, label: body.text };
+      record(run, "read_back_confirmed", `The buyer said yes to the spoken read-back: "${body.text!.slice(0, 80)}".`, { words: body.text }, readBack.requestId);
+    }
+  }
   // "Yes" to "Shall I order it?" for the menu on the table: ordered (the same as its order button, then the gate).
   if (!body.action && !run.waysAnswer && body.text && body.text.trim().split(/\s+/).length <= 6) {
     const { yesOrNo } = await import("@/server/channels/speech");

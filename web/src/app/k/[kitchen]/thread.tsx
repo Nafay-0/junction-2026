@@ -1,6 +1,6 @@
 "use client";
 
-import { Menu, Mic, PhoneOff, X } from "lucide-react";
+import { Menu, Mic, MicOff, PhoneOff, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { LangSwitch, useText } from "../../_i18n/provider";
@@ -35,99 +35,100 @@ export function ThreadLog({ className = "" }: { className?: string }) {
 // ---------- the composer: words, the microphone, a photo ----------
 
 /**
- * Speaking is a mode of this thread (docs/doors.md): the microphone starts a call with the kitchen's agent on the
- * voice door's own recogniser (primed with the kitchen's words, a spoken read-back of amount, product and day before
- * anything is priced; no browser speech recognition anywhere). While the call is on, the composer holds to talk (or
- * listens, with the open microphone), the log shows what is heard and what the agent says, and every step lands in
- * this same thread as the buyer's turn and the cards (server/thread/voice-bridge.ts). Hanging up leaves the buyer
- * here, typing; a read-back that was never confirmed goes back into the field.
+ * Talking is a mode of this thread, and there is one way to do it (docs/doors.md): the microphone starts a
+ * hands-free conversation in place, on the voice door's own recogniser (no browser speech recognition anywhere).
+ * While it is on, this bar over the composer says what the call is doing (listening, hearing the buyer, working,
+ * the agent speaking, waiting for an OK, reconnecting), shows the live level, and has mute and end. Everything said
+ * lands in this same thread as ordinary turns (server/thread/voice-bridge.ts); hanging up leaves the buyer here,
+ * typing.
  */
-function VoiceBar({ onEnded }: { onEnded: (pendingWords?: string) => void }) {
+function VoiceBar({ onEnded }: { onEnded: () => void }) {
   const voice = useVoiceMode();
   const tx = useText(VOICE_MODE_TEXT);
   if (!voice || !callOn(voice)) return null;
   const v = voice.view;
-  const approver = v.order?.status === "pending_approval" ? v.order.approval?.approver?.name : undefined;
-  const state: VoiceState = v.phase === "recovering" ? "reconnecting" : v.phase === "ringing" ? "thinking" : voice.status === "listening" ? "listening" : voice.status === "speaking" ? "speaking" : voice.status === "thinking" ? "thinking" : voice.status === "waiting" ? "waiting" : "idle";
-  const label = v.phase === "ringing" ? tx.calling : v.phase === "recovering" ? tx.reconnecting : voice.status === "paused" ? tx.paused : voice.status === "waiting" && approver ? tx.waitingFor(approver) : voice.status === "ready" ? tx.holdToTalk : undefined;
-  const live = v.phase === "connected";
-  const end = () => {
-    const words = v.pending ? ((v.pending.need as { text?: string }).text ?? "") : undefined;
-    voice.hangUp();
-    onEnded(words);
-  };
-  const switchMode = () => {
-    const next = v.mode === "push_to_talk" ? "hands_free" : "push_to_talk";
-    const id = voice.callId() ?? undefined;
-    voice.hangUp("switching mode");
-    void voice.call(next, id);
-  };
+  const st = voice.status;
+  const state: VoiceState = st === "reconnecting" ? "reconnecting" : st === "speaking" ? "speaking" : st === "hearing" || st === "listening" ? "listening" : st === "waiting" ? "waiting" : st === "muted" || st === "paused" ? "idle" : "thinking";
+  const label = { starting: tx.calling, listening: tx.listening, hearing: tx.hearing, working: tx.working, speaking: tx.speaking, waiting: v.waitingFor ? tx.waitingFor(v.waitingFor) : tx.working, reconnecting: tx.reconnecting, muted: tx.muted, paused: tx.paused }[st];
+  const caption = v.heard || v.saying;
   return (
-    <div className="mb-2 space-y-2" data-voice-mode={v.mode}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span data-status={v.phase === "recovering" ? "recovering" : voice.status} onClick={voice.status === "paused" ? voice.resume : undefined}>
+    <div className="mb-2 space-y-1.5 rounded-[1.25rem] bg-paper/90 p-2 ring-1 ring-lavender-mid" data-voice-mode="hands_free" data-voice-status={st}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex min-w-0 items-center gap-2" onClick={st === "paused" ? voice.resume : undefined}>
           <VoiceStatus state={state} label={label} />
+          {v.phase === "live" && <Level read={voice.level} muted={v.muted} label={tx.level} />}
         </span>
-        <span className="flex items-center gap-1.5">
-          {live && (
-            <button type="button" className={buttonClass("quiet", "sm")} onClick={switchMode} aria-pressed={v.mode === "hands_free"}>
-              {v.mode === "push_to_talk" ? tx.handsFree : tx.pushToTalk}
-            </button>
-          )}
-          <button type="button" className={buttonClass("secondary", "sm", "!bg-bad !text-paper")} onClick={end} aria-label={tx.endCall}>
+        <span className="flex shrink-0 items-center gap-1.5">
+          <button type="button" className={buttonClass("quiet", "sm")} onClick={() => voice.setMuted(!v.muted)} aria-pressed={v.muted} disabled={v.phase !== "live"}>
+            {v.muted ? <MicOff aria-hidden size={16} /> : <Mic aria-hidden size={16} />} {v.muted ? tx.unmute : tx.mute}
+          </button>
+          <button
+            type="button"
+            className={buttonClass("secondary", "sm", "!bg-bad !text-paper")}
+            onClick={() => {
+              voice.hangUp();
+              onEnded();
+            }}
+            aria-label={tx.endCall}
+          >
             <PhoneOff aria-hidden size={16} /> {tx.endCall}
           </button>
         </span>
       </div>
-      {live && v.mode === "push_to_talk" && (
-        // A large target for a thumb in a loud room; the composer's microphone does the same.
-        <button
-          type="button"
-          aria-pressed={v.talking}
-          onPointerDown={(e) => {
-            e.preventDefault();
-            (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-            voice.pressTalk();
-          }}
-          onPointerUp={() => voice.releaseTalk()}
-          onPointerCancel={() => voice.releaseTalk()}
-          onContextMenu={(e) => e.preventDefault()}
-          onKeyDown={(e) => {
-            if ((e.key === " " || e.key === "Enter") && !e.repeat) {
-              e.preventDefault();
-              voice.pressTalk();
-            }
-          }}
-          onKeyUp={(e) => (e.key === " " || e.key === "Enter") && voice.releaseTalk()}
-          className={`flex h-16 w-full touch-none select-none items-center justify-center gap-2.5 rounded-full text-[1.1rem] font-semibold shadow-sm transition-colors [-webkit-touch-callout:none] ${v.talking ? "bg-lavender-deep text-paper ring-4 ring-lavender-mid" : "bg-petrol text-paper"}`}
-        >
-          <Mic aria-hidden size={24} />
-          {v.talking ? (v.latched ? tx.tapToStop : tx.listening) : tx.holdToTalk}
-        </button>
+      {caption ? (
+        <p className={`truncate px-1 text-[0.92rem] leading-snug ${v.heard ? "italic text-petrol-deep" : "text-ink-soft"}`} aria-live="off">
+          {caption}
+        </p>
+      ) : (
+        <p className="px-1 text-[0.8rem] leading-snug text-ink-soft">{v.notice ?? `${tx.hint} ${tx.languages}`}</p>
       )}
-      {(v.notice || v.phase === "ringing") && <p className="px-1 text-[0.8rem] leading-snug text-ink-soft">{v.notice ?? tx.languages}</p>}
     </div>
   );
 }
 
-function useVoiceDoor(onStarted: () => void): { state: MicState; heard: string; onDown: () => void; onUp: () => void } {
+/** The microphone's live level: five bars that follow the buyer's voice (still when muted). */
+function Level({ read, muted, label }: { read: () => number; muted: boolean; label: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      const lvl = muted ? 0 : Math.min(1, read() * 4);
+      const bars = ref.current?.children;
+      if (bars) for (let i = 0; i < bars.length; i++) (bars[i] as HTMLElement).style.transform = `scaleY(${Math.max(0.15, Math.min(1, lvl * (1 + i * 0.35) - i * 0.12))})`;
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [read, muted]);
+  return (
+    <span ref={ref} aria-hidden title={label} className="inline-flex h-5 items-center gap-[3px] text-lavender-deep" data-voice-level>
+      {[0, 1, 2, 3, 4].map((i) => (
+        <span key={i} className="h-full w-[3px] origin-center rounded-full bg-current transition-transform duration-75" style={{ transform: "scaleY(0.15)" }} />
+      ))}
+    </span>
+  );
+}
+
+/** The composer's microphone: one tap starts the hands-free conversation in place, a second tap ends it. */
+function useVoiceDoor(onStarted: () => void, onEnded: () => void): { state: MicState; onTap: () => void } {
   const voice = useVoiceMode();
-  if (!voice) return { state: "off", heard: "", onDown: () => undefined, onUp: () => undefined };
-  const v = voice.view;
-  if (callOn(voice)) {
-    if (v.phase !== "connected" || v.mode !== "push_to_talk") return { state: "processing", heard: "", onDown: () => undefined, onUp: () => undefined };
-    const heard = v.lines.findLast((l) => l.who === "you" && !l.final)?.text ?? "";
-    return { state: v.talking ? "listening" : "idle", heard, onDown: voice.pressTalk, onUp: voice.releaseTalk };
-  }
-  // No call yet: a tap on the microphone starts one. On release, which every phone counts as the user's gesture
-  // (iOS opens the microphone and plays audio only inside one).
+  if (!voice) return { state: "off", onTap: () => undefined };
+  const p = voice.view.phase;
+  if (p === "starting" || p === "reconnecting") return { state: "starting", onTap: () => undefined };
+  if (p === "live")
+    return {
+      state: "live",
+      onTap: () => {
+        voice.hangUp();
+        onEnded();
+      },
+    };
+  // Inside the tap, which every phone counts as the user's gesture (iOS opens the microphone and plays audio only inside one).
   return {
     state: "idle",
-    heard: "",
-    onDown: () => undefined,
-    onUp: () => {
+    onTap: () => {
       onStarted();
-      void voice.call("push_to_talk");
+      void voice.call();
     },
   };
 }
@@ -168,37 +169,28 @@ export function ThreadComposer({ id = "need", size = "md", standalone = false, p
   };
   const voice = useVoiceMode();
   const vtx = useText(VOICE_MODE_TEXT);
+  const byUser = useRef(false);
+  const onEnded = () => {
+    byUser.current = true;
+    toast.show(vtx.ended);
+  };
   const mic = useVoiceDoor(() => {
     if (standalone) shared.setPanelOpen(true);
-  });
-  // The microphone refused or the call over: say so once, and carry on typing here.
-  const micProblem = voice?.view.micProblem;
+  }, onEnded);
+  // A call that ends by itself (the microphone refused, the line lost and not recovered, the time limit, the screen
+  // locked): say why, once, in a plain sentence; the buyer carries on typing here, the conversation as it was.
+  const phase = voice?.view.phase;
+  const endReason = voice?.view.endReason;
   useEffect(() => {
-    if (micProblem === "denied") toast.show(vtx.micBlocked, "bad");
-  }, [micProblem, toast, vtx.micBlocked]);
-  // A call that ends by itself (dropped after two reconnects, the time limit, no voice connection): say why, and the
-  // buyer carries on typing here; a read-back still waiting goes back into the field.
-  const setDraft = agent.setDraft;
-  const wasOn = useRef(false);
-  const byUser = useRef(false);
-  const on = callOn(voice);
+    if (phase !== "ended") return;
+    if (!byUser.current && endReason) toast.show(endReason, "bad");
+    byUser.current = false;
+  }, [phase, endReason, toast]);
+  // Arrived from the "talk on your phone" code (?talk=1): the microphone is the way in; say so above the composer.
+  const [talkHint, setTalkHint] = useState(false);
   useEffect(() => {
-    if (wasOn.current && !on && !byUser.current && voice) {
-      const words = voice.view.pending ? ((voice.view.pending.need as { text?: string }).text ?? "") : "";
-      if (words) setDraft(words);
-      toast.show(voice.view.endReason ?? voice.view.notice ?? vtx.ended, "bad");
-    }
-    if (!on) byUser.current = false;
-    wasOn.current = on;
-  }, [on, voice, setDraft, toast, vtx.ended]);
-  const onEnded = (pendingWords?: string) => {
-    byUser.current = true;
-    if (pendingWords) {
-      agent.setDraft(pendingWords);
-      toast.show(vtx.readBackLeft);
-    } else toast.show(vtx.ended);
-    fieldRef.current?.focus();
-  };
+    if (!standalone && new URLSearchParams(window.location.search).get("talk") === "1") queueMicrotask(() => setTalkHint(true));
+  }, [standalone]);
 
   const onFile = async (f: File | undefined) => {
     if (!f) return;
@@ -248,6 +240,7 @@ export function ThreadComposer({ id = "need", size = "md", standalone = false, p
         </div>
       )}
       {!standalone && <VoiceBar onEnded={onEnded} />}
+      {talkHint && !callOn(voice) && <p className="mb-2 rounded-full bg-lavender px-4 py-2 text-[0.88rem] font-medium text-lavender-deep">{vtx.talkHere}</p>}
       <Composer
         id={id}
         value={agent.draft}
@@ -258,7 +251,7 @@ export function ThreadComposer({ id = "need", size = "md", standalone = false, p
         busy={thread.posting || reading}
         label={label ?? (agent.followUp ? tx.labelChange : agent.product ? tx.labelProduct : tx.labelAsk)}
         placeholder={placeholder ?? (agent.followUp ? tx.phChange : agent.product ? tx.phProduct : tx.phAsk)}
-        mic={{ state: mic.state, onDown: mic.onDown, onUp: mic.onUp, heard: mic.heard }}
+        mic={mic}
         onPhoto={() => file.current?.click()}
         hint={standalone || !hint ? undefined : tx.hint}
       />

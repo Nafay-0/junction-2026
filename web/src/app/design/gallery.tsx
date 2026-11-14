@@ -190,9 +190,9 @@ function ThreadDemo() {
               onSubmit={() => setDraft("")}
               label="Tell the agent what the kitchen needs"
               placeholder="Tell the agent what the kitchen needs"
-              mic={{ state: mic, onDown: () => setMic("listening"), onUp: () => setMic("idle"), heard: mic === "listening" ? "sata litraa maitoa torstaiksi" : undefined }}
+              mic={{ state: mic, onTap: () => setMic(mic === "live" ? "idle" : "live") }}
               onPhoto={() => {}}
-              hint="Hold the microphone to talk. Nothing is ordered until the gate has checked it."
+              hint="Tap the microphone once and talk, hands-free. Nothing is ordered until the gate has checked it."
             />
           </div>
         </div>

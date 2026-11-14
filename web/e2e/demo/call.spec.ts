@@ -1,342 +1,198 @@
-import { expect, test, type Page } from "@playwright/test";
-import { addPasskey, engine, joinAsApprover, watchErrors } from "../support/dock";
-import { expectNothingOrdered, micLog, stubLiveService, wrapMicrophone, type MicMode } from "../support/call-stubs";
-import { card, composer, threadLog, visitorKitchen } from "../support/thread";
+import { expect, test, type Page, type WebSocketRoute } from "@playwright/test";
+import { addPasskey, engine, watchErrors } from "../support/dock";
+import { wrapMicrophone, type MicMode } from "../support/call-stubs";
+import { composer, threadLog, visitorKitchen } from "../support/thread";
 
 /**
- * The call screen (/call, src/app/_channels/call-screen.tsx + use-call.ts), up to the point where a voice is
- * needed. Every test makes its own visitor kitchen (passkey join) and calls it from the same phone.
- *
- * Since main acb274e speaking is also a mode of the store's thread (_channels/voice-mode.tsx): the composer's
- * microphone starts the call, the voice bar holds to talk, and when the call ends by itself (dropped, the time limit,
- * no answer, offline) the buyer is told why and carries on typing in the same composer. The tests at the end drive
- * that mode on the visitor's own Order page.
+ * Talking to the agent: one way, hands-free, in the kitchen's own conversation (docs/doors.md). The composer's
+ * microphone starts it in place; the voice bar says what the call is doing, shows the live level, and has mute and
+ * end; everything said lands in the thread as ordinary turns, the buyer's marked as spoken.
  *
  * What is real and what is stubbed:
- *   - real: the server's call endpoint, the call registry, the line caps, the token the server mints (test-only
- *     scripted tokens: DOCK_VOICE_SCRIPTED=1 on the hermetic server, no key, no network), the typed fallback, the
- *     reader (scripted provider, e2e/fixtures/recordings.json), the intake and the ledger.
- *   - stubbed: the Gemini Live WebSocket (page.routeWebSocket on Google's real URL; nothing leaves the machine), and
- *     where a test says so, the OpenAI WebRTC offer the browser sends through this server (answered 503 here).
- *   - microphone: Chromium and Firefox use the browser's fake audio device (playwright.config.ts flags). WebKit has
- *     none in Playwright: the "allowed" test skips there; the refused cases reject getUserMedia from an init script
- *     on every engine; the connection tests give WebKit a silent WebAudio stream instead of a microphone.
+ *   - real: the store, the call endpoint and registry, the token the server mints (test-only scripted tokens,
+ *     DOCK_VOICE_SCRIPTED=1 on the hermetic server), the voice door (heard words into the thread engine), the engine
+ *     with its scripted reader and agent (e2e/fixtures/recordings.json), the cards, the ledger.
+ *   - stubbed: the Gemini Live service itself. The test answers the browser's socket as the Live API does: the
+ *     buyer's words as input transcription, a relay tool call, and the agent's audio and transcript for whatever the
+ *     page gives it to say. So the page's whole hands-free loop runs, with no voice session paid for.
+ *   - microphone: Chromium's fake audio device; WebKit gets a silent WebAudio stream (no fake device in Playwright).
+ * Firefox is not run here (Playwright's Firefox intermittently never opens the call; the phones at the venue are
+ * Safari and Chrome).
  */
 
-const callButton = (page: Page) => page.getByRole("button", { name: "Call", exact: true });
-const typedField = (page: Page) => page.getByRole("textbox", { name: "What the kitchen needs" });
+/** 0.4 s of 24 kHz silence per chunk: the page plays it as the agent's voice. */
+const SILENCE = Buffer.alloc(24000 * 0.4 * 2).toString("base64");
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- the provider's wire messages, read loosely
+type Wire = Record<string, any>;
 
-/** Join as a visitor kitchen's approver, open /call: the idle call screen of this phone's own kitchen. */
-async function openOwnCall(page: Page, mic: MicMode, opts: { live?: boolean } = {}) {
-  await addPasskey(page);
-  await wrapMicrophone(page, mic);
-  // The server mints (scripted) voice tokens now: whatever a test does, the Live socket never leaves the machine.
-  // A test that stubs the service itself passes { live: false }.
-  if (opts.live !== false) await stubLiveService(page, "silent");
-  await joinAsApprover(page);
-  await page.goto("/call");
-  await expect(page.getByRole("heading", { name: "Call your agent" })).toBeVisible();
-  // Before the call starts the header says "Your kitchen", not the kitchen's name (it comes with the call's start).
-  await expect(page.getByText("Your kitchen", { exact: true })).toBeVisible();
-  await expect(callButton(page)).toBeVisible();
-}
+type Live = {
+  sockets: number;
+  ws?: WebSocketRoute;
+  /** Every "[AimoPilot] ..." the page gave the agent to say, and every relay response. */
+  told: string[];
+  relayed: Wire[];
+  /** Say this as the buyer: input transcription, then the relay call (as Gemini's turn detection does). */
+  buyer: (words: string) => void;
+  /** Keep the agent "speaking" for `chunks` x 0.4 s on the next thing it says. */
+  longNext: (chunks: number) => void;
+  /** The provider's barge-in: the buyer started talking over the agent. */
+  interrupt: () => void;
+  dropAfterConnect?: boolean;
+};
 
-/** The typed fallback is on screen and the voice controls are not. */
-async function expectTypedFallback(page: Page) {
-  await expect(typedField(page)).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByRole("button", { name: "Send" })).toBeVisible();
-  await expect(page.getByText("Type what the kitchen needs.")).toBeVisible();
-  await expect(page.getByRole("button", { name: /Hold to talk/ })).toHaveCount(0);
-  // The typed call is this phone's own visitor kitchen (named by the server's call start).
-  await expect(page.getByText(/^Hotel /).first()).toBeVisible();
-}
-
-const realOrSyntheticMic = (name: string): MicMode => (name === "webkit" ? "synthetic" : "real");
-
-/**
- * Firefox under Playwright: in about one call in five (more with four workers) the call never gets past "Calling…"
- * or "Connecting…", before the call request is even sent, and the getUserMedia wrapper above is sometimes not the
- * function the page calls (a refused microphone then still rings). Seen on 14 Nov in four runs on firefox-phone and
- * firefox-desktop, never on Chromium or WebKit; the cause is not found (Firefox's fake media device with the
- * page's AudioContext ring is the suspect). The phones at the venue are Safari and Chrome, so the voice tests
- * run on Chromium and WebKit; on Firefox only the QR join test runs. Remove this once a Firefox run is clean.
- */
-function skipFirefoxVoice(info: import("@playwright/test").TestInfo) {
-  test.skip(engine(info) === "firefox", "Firefox under Playwright intermittently never opens the call (stuck at 'Calling…'); voice covered on Chromium and WebKit");
-}
-test.beforeEach(({}, info) => {
-  if (!/QR code on a phone/.test(info.title)) skipFirefoxVoice(info);
-});
-
-test("the call QR code on a phone that has not joined: one passkey tap, then the call screen of its own kitchen", async ({ page }) => {
-  const errors = watchErrors(page);
-  const passkey = await addPasskey(page);
-  await page.goto("/call");
-  await expect(page.getByRole("heading", { name: /^Call the purchasing agent of Hotel / })).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByText("A demo on synthetic data")).toBeVisible();
-  await page.getByRole("button", { name: "Create passkey and call" }).click();
-  await expect(callButton(page)).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByRole("heading", { name: "Call your agent" })).toBeVisible();
-  expect(await passkey.count()).toBe(1);
-  expect(errors).toEqual([]);
-});
-
-test("microphone allowed (fake device): the call connects, the agent's hello is heard, hanging up offers typing; nothing is ordered", async ({ page }, info) => {
-  test.skip(engine(info) === "webkit", "WebKit in Playwright has no fake microphone device, so 'permission granted' cannot be produced there");
-  const errors = watchErrors(page);
-  const live = await stubLiveService(page, "answer");
-  await openOwnCall(page, "real", { live: false });
-  await callButton(page).click();
-  // Connected: the server reserved the line and minted the (scripted) token; the browser opened the Live socket with
-  // it and sent only the model name (the setup is locked in the token).
-  await expect(page.getByText("Connected. The agent is saying hello…")).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByRole("button", { name: /Hold to talk/ })).toBeVisible();
-  expect(await micLog(page)).toMatchObject({ calls: 1, ok: 1, errors: [] });
-  expect(live.urls[0]).toMatch(/access_token=scripted-/);
-  expect(JSON.parse(live.setups[0])).toEqual({ setup: { model: "models/gemini-3.8-live" } });
-  await page.getByRole("button", { name: "Hang up" }).click();
-  await expect(page.getByText(/Call ended/).first()).toBeVisible();
-  await expectNothingOrdered(page.request);
-  expect(errors).toEqual([]);
-});
-
-for (const [name, mic, words] of [
-  ["refused ('Don't allow')", "NotAllowedError", "The microphone is blocked for this page. Allow it in the browser's site settings, or type instead."],
-  ["missing (no device)", "NotFoundError", "No microphone was found. Type instead."],
-] as const) {
-  test(`microphone ${name}: the screen says which, offers typing, and no voice session is asked for`, async ({ page }) => {
-    const errors = watchErrors(page);
-    const callPosts: string[] = [];
-    page.on("request", (r) => {
-      if (r.method() === "POST" && /\/ui-api\/voice\/[^/]+\/call$/.test(r.url())) callPosts.push(r.postData() ?? "");
-    });
-    await openOwnCall(page, mic);
-    await callButton(page).click();
-    await expectTypedFallback(page);
-    await expect(page.getByText(words)).toBeVisible();
-    expect(await micLog(page)).toMatchObject({ calls: 1, ok: 0, errors: [mic] });
-    // Only the typed call was opened: no voice line was reserved for a call that has no microphone.
-    expect(callPosts.map((b) => JSON.parse(b || "{}").mode)).toEqual(["typed"]);
-    await expectNothingOrdered(page.request);
-    expect(errors).toEqual([]);
-  });
-}
-
-test("the call endpoint fails (500 with no body): 'The call could not start', then typing", async ({ page }, info) => {
-  const errors = watchErrors(page);
-  await openOwnCall(page, realOrSyntheticMic(engine(info)));
-  // Stub: only the voice call POST fails; the typed fallback's POST goes to the real server.
-  await page.route(/\/ui-api\/voice\/[^/]+\/call$/, (route) => (JSON.parse(route.request().postData() || "{}").mode === "typed" ? route.fallback() : route.fulfill({ status: 500, body: "" })));
-  await callButton(page).click();
-  await expectTypedFallback(page);
-  await expect(page.getByText("The call could not start.")).toBeVisible();
-  await expectNothingOrdered(page.request);
-  expect(errors).toEqual([]);
-});
-
-test("the call endpoint cannot be reached (request aborted): 'No connection to AimoPilot', then typing", async ({ page }, info) => {
-  const errors = watchErrors(page);
-  await openOwnCall(page, realOrSyntheticMic(engine(info)));
-  await page.route(/\/ui-api\/voice\/[^/]+\/call$/, (route) => (JSON.parse(route.request().postData() || "{}").mode === "typed" ? route.fallback() : route.abort("internetdisconnected")));
-  await callButton(page).click();
-  await expectTypedFallback(page);
-  await expect(page.getByText("No connection to AimoPilot. Check the network and try again.")).toBeVisible();
-  await expectNothingOrdered(page.request);
-  expect(errors).toEqual([]);
-});
-
-// ---------- speaking as a mode of the thread ----------
-
-/** The visitor's own Order page with its microphone (wrapped) and the Live service stubbed; the call not started. */
-async function threadWithVoice(page: Page, mic: MicMode, behaviour: "answer" | "silent") {
-  await addPasskey(page);
-  // Every toast the page shows (they last about 4 s), so a test can read what the buyer was told afterwards.
-  await page.addInitScript(() => {
-    const w = window as unknown as { __told: string[] };
-    w.__told = [];
-    new MutationObserver(() => {
-      for (const el of document.querySelectorAll("[aria-live=polite] > p")) {
-        const t = (el.textContent ?? "").trim();
-        if (t && !w.__told.includes(t)) w.__told.push(t);
+async function fakeLive(page: Page, opts: { dropAfterConnect?: boolean } = {}): Promise<Live> {
+  const live: Live = { sockets: 0, told: [], relayed: [], buyer: () => {}, longNext: () => {}, interrupt: () => {}, ...opts };
+  let long = 2;
+  await page.routeWebSocket(/generativelanguage\.googleapis\.com/, (ws) => {
+    live.sockets += 1;
+    live.ws = ws;
+    const n = live.sockets;
+    let fc = 0;
+    const send = (m: unknown) => ws.send(JSON.stringify(m));
+    const speak = (text: string) => {
+      const chunks = long;
+      long = 2;
+      for (let i = 0; i < chunks; i++) send({ serverContent: { modelTurn: { parts: [{ inlineData: { mimeType: "audio/pcm;rate=24000", data: SILENCE } }] } } });
+      send({ serverContent: { outputTranscription: { text } } });
+      setTimeout(() => send({ serverContent: { turnComplete: true } }), 50);
+    };
+    live.buyer = (words) => {
+      send({ serverContent: { inputTranscription: { text: words } } });
+      setTimeout(() => send({ toolCall: { functionCalls: [{ id: `fc${++fc}`, name: "relay", args: { words } }] } }), 200);
+    };
+    live.longNext = (c) => void (long = c);
+    live.interrupt = () => send({ serverContent: { interrupted: true } });
+    ws.onMessage((raw) => {
+      const m = JSON.parse(String(raw)) as Wire;
+      if (m.setup) {
+        send({ setupComplete: {} });
+        if (live.dropAfterConnect && n === 1) setTimeout(() => ws.close({ code: 1011, reason: "Internal error" }), 4000);
+        return;
       }
-    }).observe(document, { subtree: true, childList: true, characterData: true });
+      const t = m.realtimeInput?.text as string | undefined;
+      if (t === "[call connected]") return speak("Hello. What do you need?");
+      if (t?.startsWith("[AimoPilot] ")) {
+        live.told.push(t.slice(12));
+        return speak(t.slice(12));
+      }
+      if (m.toolResponse) {
+        const r = m.toolResponse.functionResponses?.[0]?.response as Wire;
+        live.relayed.push(r);
+        if (r?.say) speak(String(r.say));
+        else setTimeout(() => send({ serverContent: { turnComplete: true } }), 50);
+      }
+    });
   });
-  await wrapMicrophone(page, mic);
-  const live = await stubLiveService(page, behaviour);
-  const kitchen = await visitorKitchen(page);
-  await page.goto(`/k/${kitchen}/order`);
-  await expect(threadLog(page)).toBeVisible();
-  return { kitchen, live };
+  return live;
 }
 
-const voiceBar = (page: Page) => page.locator("[data-voice-mode]").filter({ visible: true });
-const voiceStatus = (page: Page) => voiceBar(page).locator("[data-status]");
+const mic = (page: Page) => page.getByRole("button", { name: /^(Talk to your agent \(hands-free\)|End the call)$/ }).filter({ visible: true }).first();
+const bar = (page: Page) => page.locator("[data-voice-mode]").filter({ visible: true }).first();
+const statusOf = (page: Page) => bar(page).getAttribute("data-voice-status");
 
-/** A tap on the composer's microphone starts the call; connected when the bar's status is "ready". */
-async function startThreadCall(page: Page) {
-  await page.getByRole("button", { name: "Hold to talk" }).filter({ visible: true }).first().click();
-  await expect(voiceBar(page)).toBeVisible({ timeout: 20_000 });
+/** A visitor kitchen of this phone's own, its conversation open, the microphone ready. */
+async function ownKitchen(page: Page, micMode: MicMode) {
+  await addPasskey(page);
+  await wrapMicrophone(page, micMode);
+  const slug = await visitorKitchen(page);
+  await page.goto(`/k/${slug}?talk=1`);
+  await expect(threadLog(page)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("Tap the microphone and talk: the agent hears you and answers out loud.")).toBeVisible();
+  return slug;
 }
 
-/** Connected: only a live call offers the switch to an open microphone (and the big hold-to-talk button). */
-const connected = (page: Page) => expect(voiceBar(page).getByRole("button", { name: "Open microphone" })).toBeVisible({ timeout: 20_000 });
+const micFor = (name: string): MicMode => (name === "webkit" ? "synthetic" : "real");
+test.beforeEach(({}, info) => {
+  test.skip(engine(info) === "firefox", "Playwright's Firefox intermittently never opens the call; voice is covered on Chromium and WebKit");
+});
 
-/** Everything the buyer was told in toasts so far (read out politely; each lasts about 4 s). */
-const told = (page: Page) => page.evaluate(() => (window as unknown as { __told: string[] }).__told.join(" | "));
-
-/** The second provider (OpenAI over WebRTC, set up through this server) is unavailable here: its offer is answered 503. */
-async function noSecondProvider(page: Page) {
-  const offers: string[] = [];
-  await page.route(/\/ui-api\/voice\/[^/]+\/call\/[^/]+$/, (route) => {
-    if (JSON.parse(route.request().postData() || "{}").op !== "rtc") return route.fallback();
-    offers.push(route.request().url());
-    return route.fulfill({ status: 503, json: { error: { code: "voice_unavailable", message: "test: no voice session" } } });
-  });
-  return offers;
-}
-
-/**
- * The voice service accepts the socket and never answers. After 6 s the call is moved to the second provider (here
- * unavailable), then it reconnects to the first, and so on; the call gives up by itself. The first provider's call
- * is ended as the second is asked for: the route below lets that end land first (see the test.fail further down).
- */
-async function endLandsFirst(page: Page) {
-  await page.route(/\/ui-api\/voice\/[^/]+\/call$/, async (route) => {
-    if (JSON.parse(route.request().postData() || "{}").avoid) await new Promise((r) => setTimeout(r, 700));
-    await route.fallback();
-  });
-}
-
-test("in the thread, the voice service answers nothing: the call gives up by itself and the buyer types in the same composer", async ({ page }, info) => {
-  test.setTimeout(120_000);
+test("one tap: hands-free in the same conversation; the words land as a spoken turn, the agent's reply is said; mute; end", async ({ page }, info) => {
   const errors = watchErrors(page);
-  const { live } = await threadWithVoice(page, realOrSyntheticMic(engine(info)), "silent");
-  const offers = await noSecondProvider(page);
-  await endLandsFirst(page);
-  await startThreadCall(page);
-  await expect(voiceBar(page).getByText("Connecting…")).toBeVisible();
-  await expect(voiceBar(page)).toHaveCount(0, { timeout: 60_000 });
-  expect(live.urls.length).toBeGreaterThanOrEqual(1);
-  expect(offers.length).toBeGreaterThanOrEqual(1);
-  await expect(composer(page)).toBeEditable();
-  await composer(page).fill("100 litres of lactose-free milk for Thursday");
-  await composer(page).press("Enter");
-  await expect(card(page, "understood")).toContainText(/How much\s*100\sL/, { timeout: 20_000 });
-  expect(errors.filter((e) => !/503|Service Unavailable/.test(e))).toEqual([]);
+  const live = await fakeLive(page);
+  await ownKitchen(page, micFor(engine(info)));
+  await mic(page).click();
+  await expect(bar(page)).toBeVisible({ timeout: 20_000 });
+  // Connected: the agent greets; then it listens, with the live level and mute and end on the bar.
+  await expect.poll(() => statusOf(page), { timeout: 20_000 }).toBe("listening");
+  await expect(bar(page).locator("[data-voice-level]")).toBeVisible();
+  await expect(bar(page).getByRole("button", { name: "Mute" })).toBeVisible();
+  await expect(bar(page).getByRole("button", { name: "End" })).toBeVisible();
+  // The buyer speaks: heard live on the bar, then a spoken turn in the thread, an acknowledgement at once, then the
+  // engine's reply said in full (the same reply the thread shows).
+  live.buyer("A hundred litres of lactose-free milk for Wednesday.");
+  await expect(threadLog(page).getByText("A hundred litres of lactose-free milk for Wednesday.")).toBeVisible({ timeout: 20_000 });
+  await expect(threadLog(page).locator("[data-spoken]").first()).toBeVisible();
+  await expect.poll(() => live.relayed.length, { timeout: 20_000 }).toBeGreaterThan(0);
+  await expect.poll(() => live.told.length + live.relayed.filter((r) => /option|order|euro|litre/i.test(String(r.say))).length, { timeout: 40_000 }).toBeGreaterThan(0);
+  const spoken = [...live.relayed.map((r) => String(r.say)), ...live.told].join(" ");
+  expect(spoken).not.toMatch(/\*\*|\{\{|https?:\/\/|\b(req|ord|trn)_\w{4,}/);
+  // Mute: the microphone stops sending; unmute.
+  await bar(page).getByRole("button", { name: "Mute" }).click();
+  await expect.poll(() => statusOf(page)).toMatch(/muted|speaking|working/);
+  await bar(page).getByRole("button", { name: "Unmute" }).click();
+  // The field stays: typing during the call works, and the reply to typed words is said too.
+  await expect(composer(page)).toBeEnabled();
+  // End: the bar goes; the buyer is in the same composer, the conversation as it was.
+  await bar(page).getByRole("button", { name: "End" }).click();
+  await expect(bar(page)).toHaveCount(0);
+  await expect(threadLog(page).getByText("A hundred litres of lactose-free milk for Wednesday.")).toBeVisible();
+  await expect(mic(page)).toHaveAttribute("data-mic", "idle");
+  expect(errors).toEqual([]);
 });
 
-/**
- * Was a DEFECT, fixed on claude/voice-3 (one 12 s budget across the provider switch). When the voice service accepts the socket and never answers (a venue network that
- * lets the WebSocket through and nothing back), the buyer should hear "The voice connection did not open (the network
- * may block it). Type instead." within about 12 s. Instead the call goes back and forth between the two providers
- * for about 23 s and ends on a stale notice, "The first voice service refused the call (its limit). Trying the other
- * one…", which is not what happened and promises a retry that never comes. Cause: src/app/_channels/use-call.ts:438-446
- * (the 6 s switch replaces the socket, so the 12 s "did not open" timer at :447-453 never fires for it), :425-431 (a
- * lost second provider reconnects to the first), and the ended call's toast reads `view.notice` before `endReason`
- * (src/app/k/[kitchen]/thread.tsx:559).
- */
-test("in the thread, a voice service that never answers is named as such", async ({ page }, info) => {
-  test.setTimeout(120_000);
-  await threadWithVoice(page, realOrSyntheticMic(engine(info)), "silent");
-  await noSecondProvider(page);
-  await endLandsFirst(page);
-  await startThreadCall(page);
-  await expect(voiceBar(page)).toHaveCount(0, { timeout: 60_000 });
-  expect(await told(page)).toMatch(/did not open/);
-  expect(await told(page)).not.toMatch(/Trying the other one/);
+test("barge-in: the buyer talks over the agent and it stops at once", async ({ page }, info) => {
+  const live = await fakeLive(page);
+  await ownKitchen(page, micFor(engine(info)));
+  await mic(page).click();
+  await expect.poll(() => statusOf(page), { timeout: 20_000 }).toBe("listening");
+  live.longNext(25); // ten seconds of the agent talking
+  live.buyer("what can I try?");
+  await expect.poll(() => statusOf(page), { timeout: 30_000 }).toBe("speaking");
+  live.interrupt();
+  await expect.poll(() => statusOf(page), { timeout: 5_000 }).not.toBe("speaking");
+  await bar(page).getByRole("button", { name: "End" }).click();
 });
 
-/**
- * Was a DEFECT, fixed on claude/voice-3 (a reconnect that does not start ends "lost"). Same cause as above: when a dropped call cannot reconnect (two tries), the call ends
- * and the buyer's last word is the stale notice "Connection lost. Reconnecting with your request as it was…", not
- * "The connection to the voice service was lost." (use-call.ts:435 sets endReason but keeps the notice; the toast at
- * src/app/k/[kitchen]/thread.tsx:559 prefers the notice).
- */
-test("in the thread, a call that cannot reconnect ends saying it was lost, not 'Reconnecting'", async ({ page }, info) => {
-  test.setTimeout(90_000);
-  const { live } = await threadWithVoice(page, realOrSyntheticMic(engine(info)), "answer");
-  await startThreadCall(page);
-  await connected(page);
-  live.set("down");
-  await live.socket()!.close({ code: 1011, reason: "internal error" });
-  await expect(voiceBar(page)).toHaveCount(0, { timeout: 30_000 });
-  await page.waitForTimeout(500);
-  expect((await told(page)).split(" | ").at(-1)).toBe("The connection to the voice service was lost.");
-});
-
-/**
- * Was a DEFECT, fixed on claude/voice-3 (the server ends the call a new one carries on from). Moving a call to the second provider ends the first provider's call and asks for
- * the new one at the same moment (src/app/_channels/use-call.ts:442-444 and :419-421: `void post(end)` then dial,
- * not awaited), and the server counts the call being replaced as busy (src/server/channels/voice/calls.ts:105: the
- * line check does not exempt `carryFrom`). Whenever the new request arrives before the end, it is refused "This
- * kitchen's agent is already on a call", and the switch the fallback exists for never happens. Here the end is held
- * back 1 s to make that ordering certain.
- */
-test("in the thread, switching to the second provider is not refused as a second call", async ({ page }, info) => {
-  test.setTimeout(90_000);
-  await threadWithVoice(page, realOrSyntheticMic(engine(info)), "silent");
-  const offers = await noSecondProvider(page);
-  await page.route(/\/ui-api\/voice\/[^/]+\/call\/[^/]+$/, async (route) => {
-    if (JSON.parse(route.request().postData() || "{}").op === "end") await new Promise((r) => setTimeout(r, 1000));
-    await route.fallback();
+test("the line drops mid-call: 'Reconnecting', then back, and where things stand is said", async ({ page }, info) => {
+  const live = await fakeLive(page, { dropAfterConnect: true });
+  await ownKitchen(page, micFor(engine(info)));
+  await mic(page).click();
+  // Every status the bar shows, recorded as it changes (a reconnect can take well under a second).
+  await page.evaluate(() => {
+    const w = window as unknown as { __statuses: string[] };
+    w.__statuses = [];
+    new MutationObserver(() => {
+      const s = document.querySelector("[data-voice-status]")?.getAttribute("data-voice-status");
+      if (s && w.__statuses.at(-1) !== s) w.__statuses.push(s);
+    }).observe(document.body, { subtree: true, attributes: true, childList: true, attributeFilter: ["data-voice-status"] });
   });
-  await startThreadCall(page);
-  await expect.poll(() => offers.length, { timeout: 20_000 }).toBeGreaterThan(0);
+  await expect.poll(() => statusOf(page), { timeout: 20_000 }).toBe("listening");
+  await expect.poll(() => live.sockets, { timeout: 15_000 }).toBe(2);
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __statuses: string[] }).__statuses), { timeout: 10_000 }).toContain("reconnecting");
+  await expect.poll(() => statusOf(page), { timeout: 20_000 }).toBe("listening");
+  await expect.poll(() => live.told.join(" "), { timeout: 15_000 }).toMatch(/I'm back/);
+  await bar(page).getByRole("button", { name: "End" }).click();
 });
 
-for (const [why, code, reason, words] of [
-  ["the connection drops and the service stays down", 1011, "internal error", "The connection to the voice service was lost."],
-  ["the voice service ends it at the time limit", 1008, "deadline expired", "The call reached its time limit."],
-] as const) {
-  test(`in the thread, connected, then ${why}: the buyer is told why and types on in the same composer`, async ({ page }, info) => {
-    test.setTimeout(90_000);
-    const errors = watchErrors(page);
-    const { live } = await threadWithVoice(page, realOrSyntheticMic(engine(info)), "answer");
-    await startThreadCall(page);
-    await connected(page);
-    await expect(voiceBar(page).getByRole("button", { name: "End call" })).toBeVisible();
-    // Lost mid-call: the call reconnects with the request kept ("Reconnecting…"); with the service down, two tries
-    // fail and it gives up. The time limit is not reconnected.
-    if (code === 1011) live.set("down");
-    await live.socket()!.close({ code, reason });
-    if (code === 1011) await expect(voiceStatus(page)).toHaveAttribute("data-status", "recovering", { timeout: 10_000 });
-    await expect(voiceBar(page)).toHaveCount(0, { timeout: 30_000 });
-    // The time limit says so. A drop that stays down says it was lost, or (the defect below) only "Reconnecting…".
-    await expect.poll(() => told(page)).toMatch(code === 1011 ? /was lost|Reconnecting/ : new RegExp(words.replace(/\./g, "\\.")));
-    if (code === 1011) expect(live.urls.length).toBe(3);
-    // The same composer takes the request, typed, and the thread carries on.
-    await composer(page).fill("100 litres of lactose-free milk for Thursday");
-    await composer(page).press("Enter");
-    await expect(card(page, "understood")).toContainText(/How much\s*100\sL/, { timeout: 20_000 });
-    expect(errors).toEqual([]);
-  });
-}
-
-test("in the thread, connected, then the phone goes offline: the call ends, typing says it was not sent, and works once back online", async ({ page, context }, info) => {
-  test.setTimeout(90_000);
+test("microphone refused: a plain sentence, once, and the typed conversation carries on", async ({ page }) => {
   const errors = watchErrors(page);
-  const { live } = await threadWithVoice(page, realOrSyntheticMic(engine(info)), "answer");
-  await startThreadCall(page);
-  await connected(page);
+  const callPosts: string[] = [];
+  page.on("request", (r) => {
+    if (/\/ui-api\/voice\/[^/]+\/call$/.test(new URL(r.url()).pathname) && r.method() === "POST") callPosts.push(r.url());
+  });
+  await ownKitchen(page, "NotAllowedError");
+  await mic(page).click();
+  await expect(page.getByText(/The microphone is blocked for this page\. Allow it in the browser's site settings/).first()).toBeVisible({ timeout: 15_000 });
+  await expect(bar(page)).toHaveCount(0);
+  expect(callPosts, "no voice session is asked for without a microphone").toEqual([]);
+  await expect(composer(page)).toBeEnabled();
+  expect(errors).toEqual([]);
+});
 
-  await context.setOffline(true);
-  // The stubbed socket lives inside Playwright, not on the network, so going offline does not close it by itself;
-  // a real Gemini socket dies with the network. Close it the way the network would (abnormal close).
-  await live.socket()!.close({ code: 1011, reason: "network" });
-  // Reconnecting needs AimoPilot, which cannot be reached: the call ends and the composer is back.
-  await expect(voiceBar(page)).toHaveCount(0, { timeout: 30_000 });
-  await expect(composer(page)).toBeEditable();
-
-  // Still offline: a typed request is not sent, and the page says so instead of pretending.
-  const words = "100 litres of lactose-free milk for Thursday";
-  await composer(page).fill(words);
-  await composer(page).press("Enter");
-  // The thread's own words for it are now "No connection. Your words are kept below: send them again ...".
-  await expect(threadLog(page).getByRole("alert")).toContainText(/Not sent|No connection/, { timeout: 15_000 });
-
-  await context.setOffline(false);
-  await expect(composer(page)).toHaveValue(words);
-  await composer(page).press("Enter");
-  await expect(card(page, "understood")).toContainText(/How much\s*100\sL/, { timeout: 30_000 });
-  expect(errors.filter((e) => !/Failed to fetch|NetworkError|Load failed|network connection was lost|ERR_INTERNET_DISCONNECTED/i.test(e))).toEqual([]);
+test("the old call page leads to the same conversation's microphone", async ({ page }) => {
+  await addPasskey(page);
+  const slug = await visitorKitchen(page);
+  await page.goto("/call");
+  await page.waitForURL(`**/k/${slug}?talk=1`, { timeout: 20_000 });
+  await expect(mic(page)).toBeVisible();
 });

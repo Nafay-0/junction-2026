@@ -1,5 +1,5 @@
 import { DockError } from "@/core/errors";
-import { VOICE_TOOLS } from "../prompts";
+import { LIVE_TOOLS } from "../../thread/voice-brief";
 import type { CallMode } from "./live";
 
 /**
@@ -14,7 +14,7 @@ import type { CallMode } from "./live";
  * The browser opens a WebSocket with a short-lived client secret this server mints with the session's
  * instructions, tools and audio settings. Unlike Gemini's locked token, an OpenAI client could send its own
  * session.update; that changes nothing that matters, because every decision is made by this server's tools
- * (tools.ts) from the caller's transcribed words, and the server refuses tool calls after the call's time limit.
+ * (thread/voice-bridge.ts) from the caller's transcribed words, and the server refuses tool calls after the call's time limit.
  * Audio is 24 kHz 16-bit PCM both ways.
  */
 
@@ -32,7 +32,7 @@ export const REALTIME_PRICE: Record<string, { audioIn: number; audioCached: numb
 export function realtimeTools() {
   const lower = (s: unknown): unknown =>
     Array.isArray(s) ? s.map(lower) : s && typeof s === "object" ? Object.fromEntries(Object.entries(s).map(([k, v]) => [k, k === "type" && typeof v === "string" ? v.toLowerCase() : lower(v)])) : s;
-  return VOICE_TOOLS.map((t) => ({ type: "function", name: t.name, description: t.description, parameters: lower(t.parameters) }));
+  return LIVE_TOOLS.map((t) => ({ type: "function", name: t.name, description: t.description, parameters: lower(t.parameters) }));
 }
 
 export function realtimeSession(opts: { model: string; system: string; mode: CallMode; vocabulary?: string[] }) {
@@ -49,8 +49,8 @@ export function realtimeSession(opts: { model: string; system: string; mode: Cal
         noise_reduction: { type: "near_field" },
         // The transcript is what AimoPilot acts on, so it gets the kitchen's words and the three languages.
         transcription: transcriptionFor(opts.mode, keywords),
-        // Push-to-talk: the browser commits each turn. Hands-free: semantic turn detection, slow to jump in.
-        turn_detection: opts.mode === "push_to_talk" ? null : { type: "semantic_vad", eagerness: "low", create_response: true, interrupt_response: true },
+        // Hands-free: semantic turn detection, slow to jump in; speech over the agent interrupts it.
+        turn_detection: { type: "semantic_vad", eagerness: "low", create_response: true, interrupt_response: true },
       },
       output: { format: { type: "audio/pcm", rate: 24000 }, voice: "marin" },
     },
@@ -62,18 +62,9 @@ export function realtimeSession(opts: { model: string; system: string; mode: Cal
 
 const SETTING = "A kitchen worker on a phone ordering food supplies from a wholesaler, in English, Finnish or Swedish, in a loud room. Amounts in litres, kilos, pieces or cases.";
 
-/**
- * Which transcriber: gpt-live-transcribe (streams as the caller speaks, takes keywords; needs turns committed by
- * the browser, so push-to-talk only) or gpt-transcribe (reads the whole turn). DOCK_VOICE_OPENAI_TRANSCRIBE
- * overrides it for push-to-talk; DOCK_VOICE_OPENAI_DELAY sets gpt-live-transcribe's delay (minimal..xhigh).
- */
-function transcriptionFor(mode: CallMode, keywords: string[]) {
-  const want = process.env.DOCK_VOICE_OPENAI_TRANSCRIBE?.trim() || "gpt-live-transcribe";
-  if (mode === "push_to_talk" && want === "gpt-live-transcribe") {
-    const delay = process.env.DOCK_VOICE_OPENAI_DELAY?.trim();
-    return { model: want, languages: ["en", "fi", "sv"], prompt: SETTING, ...(keywords.length ? { keywords } : {}), ...(delay ? { delay } : {}) };
-  }
-  return { model: "gpt-transcribe", prompt: `${SETTING} Words they use: ${keywords.slice(0, 60).join(", ")}.` };
+/** The transcriber: gpt-transcribe reads each whole turn that the turn detection ends (hands-free). */
+function transcriptionFor(_mode: CallMode, keywords: string[]) {
+  return { model: process.env.DOCK_VOICE_OPENAI_TRANSCRIBE?.trim() || "gpt-transcribe", prompt: `${SETTING} Words they use: ${keywords.slice(0, 60).join(", ")}.` };
 }
 
 export type RealtimeSecret = { token: string; expiresAt: string; startBy: string };

@@ -762,13 +762,15 @@ function Answered({ children }: { children: ReactNode }) {
 
 // ---------- the composer ----------
 
-export type MicState = "idle" | "listening" | "processing" | "off";
+export type MicState = "idle" | "starting" | "live" | "off";
 
 /**
- * The one place the buyer speaks to the agent: a field, a microphone (hold to talk), a photo, send.
- *   idle        the field, with the tools on its right
- *   listening   the field gives way to what is being heard and a moving level; release sends
- *   processing  the words are being read; the field is back, disabled
+ * The one place the buyer speaks to the agent: a field, a microphone, a photo, send. The microphone is one tap:
+ * it starts a hands-free conversation in place (talk, the agent talks back, talk over it to interrupt), and a
+ * second tap ends it. The field stays: the buyer can type during the call and after it.
+ *   idle      the field, with the tools on its right
+ *   starting  the microphone is opening and the voice line connecting
+ *   live      the conversation is on: the microphone is lit; a tap ends it
  * `tools` replaces the built-in microphone and photo buttons when a page brings its own.
  */
 export function Composer({
@@ -794,7 +796,7 @@ export function Composer({
   label: string;
   busy?: boolean;
   disabled?: boolean;
-  mic?: { state: MicState; onDown: () => void; onUp: () => void; heard?: ReactNode };
+  mic?: { state: MicState; onTap: () => void };
   onPhoto?: () => void;
   tools?: ReactNode;
   size?: "md" | "lg";
@@ -803,7 +805,7 @@ export function Composer({
   hint?: ReactNode;
 }) {
   const tx = useText(THREAD_TEXT);
-  const listening = mic?.state === "listening";
+  const listening = mic?.state === "live";
   const tall = size === "lg";
   const tool = "flex shrink-0 items-center justify-center rounded-full text-ink-soft transition-colors duration-150 hover:bg-surface hover:text-ink disabled:opacity-40 " + (tall ? "size-12" : "size-11");
   return (
@@ -817,55 +819,42 @@ export function Composer({
         {label}
       </label>
       <div className={`flex items-center gap-0.5 rounded-[1.75rem] bg-paper p-1 shadow-sm ring-1 transition-shadow duration-150 ${listening ? "ring-2 ring-lavender-deep" : "ring-line-strong focus-within:ring-2 focus-within:ring-lavender-deep"}`}>
-        {listening ? (
-          <p className={`flex min-w-0 flex-1 items-center gap-3 px-3 ${tall ? "min-h-13" : "min-h-11"}`} role="status">
-            <VoiceBars />
-            <span className="min-w-0 truncate text-[1rem] text-ink">{mic?.heard || <span className="text-ink-soft">{tx.release}</span>}</span>
-          </p>
-        ) : (
-          <input
-            id={id}
-            ref={inputRef}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder={placeholder}
-            autoComplete="off"
-            enterKeyHint="send"
-            disabled={disabled || mic?.state === "processing"}
-            className={`min-w-0 flex-1 rounded-full bg-transparent pl-4 pr-1 placeholder:text-ink-soft focus:outline-none focus-visible:outline-none disabled:text-ink-soft ${tall ? "min-h-12 text-[0.95rem] sm:min-h-13 sm:text-[1.08rem]" : "min-h-11 text-[1rem]"}`}
-          />
-        )}
+        <input
+          id={id}
+          ref={inputRef}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          autoComplete="off"
+          enterKeyHint="send"
+          disabled={disabled}
+          className={`min-w-0 flex-1 rounded-full bg-transparent pl-4 pr-1 placeholder:text-ink-soft focus:outline-none focus-visible:outline-none disabled:text-ink-soft ${tall ? "min-h-12 text-[0.95rem] sm:min-h-13 sm:text-[1.08rem]" : "min-h-11 text-[1rem]"}`}
+        />
         {tools ?? (
           <>
             {mic && mic.state !== "off" && (
               <button
                 type="button"
-                aria-label={tx.talk}
-                title={tx.talk}
+                aria-label={listening ? tx.endTalk : tx.talk}
+                title={listening ? tx.endTalk : tx.talk}
                 aria-pressed={listening}
-                disabled={disabled}
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  mic.onDown();
-                }}
-                onPointerUp={mic.onUp}
-                onPointerLeave={() => listening && mic.onUp()}
-                onKeyDown={(e) => (e.key === " " || e.key === "Enter") && !e.repeat && mic.onDown()}
-                onKeyUp={(e) => (e.key === " " || e.key === "Enter") && mic.onUp()}
-                className={listening ? `${tool} relative !bg-lavender-deep !text-paper` : tool}
+                disabled={disabled || mic.state === "starting"}
+                data-mic={mic.state}
+                onClick={mic.onTap}
+                className={listening || mic.state === "starting" ? `${tool} relative !bg-lavender-deep !text-paper` : tool}
               >
                 {listening && <span aria-hidden className="voice-ring absolute inset-0 rounded-full bg-lavender-deep" />}
-                {mic.state === "processing" ? <Spinner size={18} /> : <Mic aria-hidden size={tall ? 22 : 20} className="relative" />}
+                {mic.state === "starting" ? <Spinner size={18} /> : <Mic aria-hidden size={tall ? 22 : 20} className="relative" />}
               </button>
             )}
-            {onPhoto && !listening && (
+            {onPhoto && (
               <button type="button" aria-label={tx.photo} title={tx.photo} disabled={disabled} onClick={onPhoto} className={tool}>
                 <Camera aria-hidden size={tall ? 22 : 20} />
               </button>
             )}
           </>
         )}
-        {!listening && (
+        {(
           <button type="submit" disabled={disabled || busy} aria-busy={busy || undefined} aria-label={tx.send} title={tx.send} className={`flex shrink-0 items-center justify-center rounded-full bg-lime text-ink transition-[background-color,transform] duration-150 hover:bg-lime-hover active:scale-95 disabled:opacity-60 motion-reduce:active:scale-100 ${tall ? "size-12 sm:size-13" : "size-11"}`}>
             {busy ? <Spinner size={18} /> : <ArrowUp aria-hidden size={tall ? 24 : 21} strokeWidth={2.4} />}
           </button>

@@ -1,65 +1,48 @@
 "use client";
 
-import { Phone } from "lucide-react";
+import { Smartphone } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../../_client/api";
 import { useText } from "../../_i18n/provider";
-import { CALL_AGENT_TEXT } from "./call-agent.text";
+import { VOICE_MODE_TEXT } from "../../_channels/voice-mode.text";
 import { usePortal } from "./portal";
 
 /**
- * "Call your agent": a voice call with the kitchen's purchasing agent, started from a QR code. The call screen
- * and the helper that returns a kitchen's call URL and QR code are built under web/src/app/_channels/ with routes
- * under /ui-api/voice. Expected: GET /ui-api/voice/{kitchen}/call -> { url, qrSvg }. On a phone the control opens
- * the call; on a laptop it shows the code to scan. Until that route answers, the control says so and does nothing.
+ * "Talk on your phone": on a laptop, a code the phone scans to open this same conversation (signed in once, by a
+ * one-time link), where its microphone starts the same hands-free mode (GET /ui-api/voice/{kitchen}/call -> { url,
+ * qrSvg }). On a phone it is not shown: the composer's own microphone is the way to talk.
  */
-type Call = { url: string; qrSvg?: string };
+type Link = { url: string; qrSvg?: string };
 
 export function CallAgent({ compact = false }: { compact?: boolean }) {
   const { kitchen } = usePortal();
-  const tx = useText(CALL_AGENT_TEXT);
-  const [call, setCall] = useState<Call | null>();
+  const tx = useText(VOICE_MODE_TEXT);
+  const [link, setLink] = useState<Link | null>();
   const [show, setShow] = useState(false);
+  const [phone, setPhone] = useState(true);
   useEffect(() => {
+    queueMicrotask(() => setPhone(window.matchMedia("(pointer: coarse)").matches));
+  }, []);
+  useEffect(() => {
+    if (!show || link !== undefined) return;
     let alive = true;
-    void api<Call>("GET", `/ui-api/voice/${encodeURIComponent(kitchen.slug)}/call`).then((r) => alive && setCall(r.ok && typeof r.data.url === "string" ? r.data : null));
+    void api<Link>("GET", `/ui-api/voice/${encodeURIComponent(kitchen.slug)}/call`).then((r) => alive && setLink(r.ok && typeof r.data.url === "string" ? r.data : null));
     return () => {
       alive = false;
     };
-  }, [kitchen.slug]);
-
-  if (!call) {
-    return (
-      <div className={`flex items-center gap-2 ${compact ? "text-[0.88rem]" : ""}`}>
-        <button type="button" disabled aria-disabled className="inline-flex min-h-10 items-center gap-2 rounded-full border border-line bg-paper px-4 text-[0.92rem] font-semibold text-ink-soft">
-          <PhoneIcon /> {tx.call}
-        </button>
-        <span className="text-[0.85rem] text-ink-soft">{call === undefined ? tx.checking : tx.connecting}</span>
-      </div>
-    );
-  }
-  const phone = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+  }, [kitchen.slug, show, link]);
+  if (phone) return null;
   return (
-    <div>
-      {phone ? (
-        <a href={call.url} className="inline-flex min-h-11 items-center gap-2 rounded-full bg-petrol px-5 text-[0.95rem] font-semibold text-paper">
-          <PhoneIcon /> {tx.call}
-        </a>
-      ) : (
-        <button type="button" aria-expanded={show} onClick={() => setShow((x) => !x)} className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line-strong bg-paper px-4 text-[0.95rem] font-semibold text-ink transition-colors hover:border-ink-soft hover:bg-mist">
-          <PhoneIcon /> {tx.call}
-        </button>
-      )}
-      {show && !phone && (
+    <div className={compact ? "text-[0.88rem]" : ""}>
+      <button type="button" aria-expanded={show} onClick={() => setShow((x) => !x)} className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line-strong bg-paper px-4 text-[0.95rem] font-semibold text-ink transition-colors hover:border-ink-soft hover:bg-mist">
+        <Smartphone aria-hidden size={17} /> {tx.phone}
+      </button>
+      {show && link?.qrSvg && (
         <figure className="mt-2 w-48">
-          {call.qrSvg ? <div className="aspect-square rounded-lg border border-line bg-paper p-3 shadow-sm [&>svg]:size-full" dangerouslySetInnerHTML={{ __html: call.qrSvg }} /> : null}
-          <figcaption className="mt-1 text-[0.85rem] leading-snug">{tx.scan(kitchen.agentName)}</figcaption>
+          <div className="aspect-square rounded-lg border border-line bg-paper p-3 shadow-sm [&>svg]:size-full" dangerouslySetInnerHTML={{ __html: link.qrSvg }} />
+          <figcaption className="mt-1 text-[0.85rem] leading-snug">{tx.phoneScan(kitchen.agentName)}</figcaption>
         </figure>
       )}
     </div>
   );
-}
-
-function PhoneIcon() {
-  return <Phone aria-hidden size={17} />;
 }

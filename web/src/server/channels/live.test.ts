@@ -9,7 +9,7 @@ const live = process.env.DOCK_LIVE === "1";
 
 describe.skipIf(!live || !process.env.GEMINI_API_KEY)("live: Gemini Live token", () => {
   it("mints a one-use token with the setup locked inside", async () => {
-    const t = await mintLiveToken(liveSetup({ model: voiceModel(), system: "Test.", mode: "push_to_talk" }), { seconds: 60 });
+    const t = await mintLiveToken(liveSetup({ model: voiceModel(), system: "Test.", mode: "hands_free" }), { seconds: 60 });
     expect(t.token).toMatch(/^auth_tokens\//);
   });
 });
