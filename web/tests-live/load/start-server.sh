@@ -27,8 +27,14 @@ PG=(DOCK_STORE=memory DATABASE_URL="$B")
 if [ "$STORE" = "postgres" ]; then
   SCHEMA="${PG_SCHEMA:-dock_perf}"
   case "$SCHEMA" in dock|dock_prod) echo "refusing schema $SCHEMA: use a schema of your own" >&2; exit 1 ;; esac
-  # DATABASE_URL is left unset here, so Next reads it from .env.local.
-  PG=(DOCK_STORE=postgres DOCK_PG_SCHEMA="$SCHEMA" DOCK_PG_POOL_MAX="${PG_POOL_MAX:-2}")
+  # Load never touches the shared Aiven PostgreSQL (a soak there starved the live site): a local database only,
+  # e.g. docker run -d -e POSTGRES_PASSWORD=localtest -e POSTGRES_DB=dock -p 127.0.0.1:55432:5432 postgres:16-alpine
+  # LOAD_DATABASE_URL=postgres://postgres:localtest@127.0.0.1:55432/dock
+  case "${LOAD_DATABASE_URL:-}" in
+    postgres://*@127.0.0.1:*|postgres://*@localhost:*|postgresql://*@127.0.0.1:*|postgresql://*@localhost:*) ;;
+    *) echo "STORE=postgres needs LOAD_DATABASE_URL pointing at a local database (127.0.0.1 or localhost)" >&2; exit 1 ;;
+  esac
+  PG=(DOCK_STORE=postgres DOCK_PG_SCHEMA="$SCHEMA" DOCK_PG_POOL_MAX="${PG_POOL_MAX:-2}" DATABASE_URL="$LOAD_DATABASE_URL")
 fi
 NODE_FLAGS=()
 [ -n "${NODE_EXTRA:-}" ] && NODE_FLAGS=(NODE_OPTIONS="${NODE_OPTIONS:-} --diagnostic-dir=$LOG_DIR $NODE_EXTRA")

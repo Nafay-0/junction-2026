@@ -24,12 +24,12 @@ tests-live/load/start-server.sh 4650            # limits off
 tests-live/load/start-server.sh 4651 limits     # public limits on
 pnpm exec tsx tests-live/load/load.ts --url http://localhost:4650 --pid <pid>
 
-# The PostgreSQL store (DATABASE_URL from .env.local) on a schema of your own, 2 connections, no other Aiven adapter
+# The PostgreSQL store on a LOCAL database only (Docker; never the shared Aiven service), 2 connections, no other adapter
 # (STORE=postgres also works with --fresh-port; dock and dock_prod are refused). Drop the schema afterwards.
-STORE=postgres PG_SCHEMA=dock_perf PG_POOL_MAX=2 tests-live/load/start-server.sh 4655
+LOAD_DATABASE_URL=postgres://postgres:localtest@127.0.0.1:55432/dock STORE=postgres PG_SCHEMA=dock_perf PG_POOL_MAX=2 tests-live/load/start-server.sh 4655
 # From a laptop every query is a ~40 ms round trip to Aiven, so 5,000 orders take hours to place; fill the store
 # by copying its own committed orders in SQL (recent, same organisations), then measure a window on top:
-pnpm exec tsx --env-file=.env.local tests-live/load/pg-fill.ts --schema dock_perf --to 4750
+LOAD_DATABASE_URL=postgres://postgres:localtest@127.0.0.1:55432/dock pnpm exec tsx tests-live/load/pg-fill.ts --schema dock_perf --to 4750
 pnpm exec tsx tests-live/load/load.ts --url http://localhost:4655 --pid <pid> --growth 250 --window 250
 
 # Heap snapshots of the server (kill -USR2 <pid> writes one to $LOG_DIR):

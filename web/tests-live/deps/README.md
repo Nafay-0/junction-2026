@@ -1,5 +1,10 @@
 # Dependency failures (`tests-live/deps`)
 
+> **Stop (Sat 14 Nov):** do not run the PostgreSQL, Valkey, Kafka or OpenSearch scenarios against the shared Aiven
+> services any more, even on a schema of your own: load on the free-tier PostgreSQL starved the live site's start.
+> Point them at local containers (Docker) instead; the model and partner scenarios need no service at all.
+
+
 Makes one dependency fail at a time against local Dock production servers that the runner starts itself from the
 existing `.next` build, and records for each failure mode:
 

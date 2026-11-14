@@ -20,7 +20,7 @@ token locally, and the browser's Gemini Live socket is answered by the test (`pa
 | `pnpm e2e:room` | room conditions and the crowd behind one address | 5 min |
 | `pnpm e2e:a11y` / `pnpm e2e:visual` / `pnpm e2e:visual:update` | accessibility audit; screenshot comparison; rewrite baselines | 2 min each |
 | `pnpm test:deps` | model and partner failures (no secrets, no network) | 10 min |
-| `pnpm test:deps:aiven` | PostgreSQL, Valkey, Kafka, OpenSearch outages on schema `dock_testinfra` (needs `.env.local`; see `tests-live/deps/README.md`) | 15 min |
+| `pnpm test:deps:aiven` | PostgreSQL, Valkey, Kafka, OpenSearch outages. **Not against the shared Aiven services** (it starved the live site): local containers only, see `tests-live/deps/README.md` | 15 min |
 | `pnpm test:load` / `pnpm test:soak` | throughput steps; 10-minute soak with memory and ledger check (`tests-live/load/README.md`) | 6 / 11 min |
 | `pnpm e2e:summary` | a few lines from the last run's `test-results/results.json` | - |
 

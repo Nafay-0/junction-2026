@@ -4,7 +4,7 @@
  * ~40 ms round trip to Aiven, and placing 5,000 orders takes hours there).
  *
  *   cd web
- *   pnpm exec tsx --env-file=.env.local tests-live/load/pg-fill.ts --schema dock_perf --to 5000
+ *   pnpm exec tsx tests-live/load/pg-fill.ts --schema dock_perf --to 5000
  *
  * Each copy is a committed order of the same organisation with a new order id and request id, created at a random
  * moment in the last 12 hours: inside the weekly budget's and the splitting check's windows, so the gate's sums
@@ -14,13 +14,15 @@
  */
 import pg from "pg";
 import { arg } from "./lib";
-import { pgConnectionString } from "@/server/aiven/env";
 
 async function main() {
   const schema = arg("schema", "dock_perf")!;
   const to = Number(arg("to", "5000"));
   if (!/^dock_perf[a-z0-9_]*$/.test(schema)) throw new Error(`refusing schema ${schema}: only dock_perf* schemas are load-test stores`);
-  const client = new pg.Client({ connectionString: pgConnectionString() });
+  // Only a local database (see start-server.sh): a fill on the shared Aiven PostgreSQL starved the live site.
+  const url = process.env.LOAD_DATABASE_URL ?? "";
+  if (!/^postgres(ql)?:\/\/[^@]+@(127\.0\.0\.1|localhost):/.test(url)) throw new Error("pg-fill needs LOAD_DATABASE_URL pointing at a local database (127.0.0.1 or localhost)");
+  const client = new pg.Client({ connectionString: url });
   await client.connect();
   try {
     const t = `${schema}.docs`;
