@@ -184,9 +184,8 @@ small set of original images was made with OpenAI's image model (`gpt-image-2.6-
 2026; 95 generations, $3.98 in all, logged in `scripts/art/spend.json`):
 
 - `hero` (the kitchen picker) and `home` (the Home hero): 1536 x 864.
-- One header per catalogue department, `dept-<id>` (17; Household 30 and 32 share one): 1536 x 864. Shown in its own
-  cell beside the department's name and figures (a band above them on phones), never behind text: words always have
-  a solid ground.
+- One header per catalogue department, `dept-<id>` (17; Household 30 and 32 share one): 1536 x 864, subject weighted
+  right so the department's name sits on the quiet left.
 - 71 tiles by kind and variant of product, `tile-<kind>` (see "Variety" below): 1024 x 1024.
 
 **One art direction for all of them** (`scripts/art/prompts.json`, the shared `style` and `negative` clauses):
