@@ -185,14 +185,14 @@ async function Door({ lang, searchParams }: { lang: Lang; searchParams: PageProp
           </section>
         </div>
         {!me && (
-          <details className="rounded-xl border border-line bg-paper/70 p-5 sm:p-6" {...(prefill ? { open: true } : {})}>
-            <summary className="flex min-h-11 cursor-pointer items-center font-semibold text-petrol">
-              {tx.signInQuiet} {tx.signInButton}
-            </summary>
+          <section aria-labelledby="signin" className="rounded-xl border border-line bg-paper/70 p-5 sm:p-6">
+            <h3 id="signin" className="text-[1.05rem] font-semibold">
+              {tx.signInQuiet} {tx.signInTitle}
+            </h3>
             <div className="mt-4 max-w-[34rem]">
               <SignInForm prefill={prefill} />
             </div>
-          </details>
+          </section>
         )}
       </section>
 
