@@ -37,6 +37,9 @@ jobs:
           cache: pnpm
           cache-dependency-path: exa/web/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
+      # Next writes the types of the routes (LayoutProps and the like) when the app is run or built.
+      # A fresh checkout has neither happened, so they are generated here before the type check.
+      - run: pnpm exec next typegen
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test:guard

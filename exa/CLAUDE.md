@@ -14,8 +14,8 @@ These apply on top of the root `CLAUDE.md`. Its agent model policy and team work
 
 ## The app (`exa/web`)
 
-- Read `README.md` (one level up) for what is built and the code map, and `web/AGENTS.md`: this is Next.js 16 and AI SDK 7, and both differ from older versions. Their docs ship in `node_modules/next/dist/docs/` and `node_modules/ai/docs/`. Check names there, not from memory.
-- Exa's API changed a lot in 2026. Before changing an Exa call, read `reports/Exa Internet Butler playbook.md`. Call Exa through `web/src/lib/exa/client.ts` so cost tracking and caching keep working.
+- Read `DEVELOPMENT.md` (one level up) for what is built and the code map, and `web/AGENTS.md`: this is Next.js 16 and AI SDK 7, and both differ from older versions. Their docs ship in `node_modules/next/dist/docs/` and `node_modules/ai/docs/`. Check names there, not from memory.
+- Exa's API changed a lot in 2026. Before changing an Exa call, read `reports/Exa Internet Butler playbook.md` if it is on this machine (it is kept locally and is not in the repository), and Exa's current docs either way. Call Exa through `web/src/lib/exa/client.ts` so cost tracking and caching keep working.
 - A tool returns the payload its widget renders; the shapes live in `web/src/lib/widgets/types.ts`. Every payload carries `sources`, and every widget shows them.
 - Tools that stream progress are async generators. The last value they `yield` is the result; a generator's `return` value is ignored by the AI SDK.
 - Reasoning is never replayed across turns (see the comment in `web/src/app/api/chat/route.ts`). Keep it that way: it is what makes model switching and context trimming safe.

@@ -10,3 +10,8 @@ skills-lock.json
 # A local copy of the demo film for the landing page (BERYL_DEMO_VIDEO=/landing/demo.mp4). The live
 # site plays it from the downloads bucket; its poster, demo-poster.jpg, is in the repo.
 web/public/landing/demo.mp4
+
+# Research done before the build (the Exa playbook and the notes behind it): kept on the
+# authors' machines, not in the repository.
+reports/
+research_notes/

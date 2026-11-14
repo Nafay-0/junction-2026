@@ -51,7 +51,7 @@ From GitHub, once these files are on `main` (they are in `.github/workflows/`, w
 - `beryl-deploy.yml`: builds and deploys the server when `main` changes under `exa/web`, or when started by hand.
 - `beryl-desktop.yml`: builds the three installers and uploads them, for a tag like `beryl-v0.2.0` or by hand.
 
-None of the three has run yet: they start working after the first push.
+They have been running since `exa/` reached `main` on 15 November. The checks failed on their first run (a fresh checkout has no generated route types) and were fixed by running `next typegen` first.
 
 **A deploy restarts the server, and a task running at that moment is lost.** During the judging, do not push to `main` under `exa/web` unless you mean to redeploy.
 
@@ -68,6 +68,7 @@ The address is baked into the app. The installers in the bucket open `https://be
 
 - Deployed on 14 Nov at 20:10 (revision `beryl-00003-fg6`, image `web:live-1114-2005`, commit `565fc23`): jobs, notifications, chat addresses, the new landing page. The service now has the secret `RESEND_API_KEY` and `BERYL_SITE_URL=https://beryl.zeroanomaly.tech`; migration 0002 was applied on start.
 - Deployed on 14 Nov at 22:32 (revision `beryl-00004-zqb`, image `web:live-1114-2230`, commit `dcf8180e`): the demo film on the landing page, first under the hero, and stock prices on a closed market. The film is `gs://beryl-exa-downloads/beryl-demo.mp4` (draft 3 of the video, 16.8 MB) and the service has `BERYL_DEMO_VIDEO` set to its public address. Checked signed out: health, the page's order, the film playing, the poster, the guards, one instance, no errors in the log.
+- Deployed on 15 Nov at about 00:28 by `beryl-deploy.yml`, its first run (revision `beryl-00005-9p5`, image `web:4166065e…`, commit `4166065e`): `exa/` had just been merged into `main` and pushed. The code is the same as the revision before; the settings, the film's address among them, were kept. Checked signed out afterwards: health, the landing page and its film, no errors in the log.
 - Emails (notifications, job results) go out through Resend from `notifications@beryl.zeroanomaly.tech`; the domain is verified there. The server needs `RESEND_API_KEY` as a secret, and `BERYL_SITE_URL=https://beryl.zeroanomaly.tech` so links in emails point at the site. `/api/health` says `"email": true` when the key is there.
 - Jobs are started by a clock inside the server, so they run only while the one instance is up. That is already how the service is set (always on, exactly one instance). A job that came due during a deploy runs once the new revision is up; a run that was in progress when the server stopped is marked failed.
 - Migration `0002_jobs_and_notifications` adds the tables. It is applied by the server when it starts, like the others.
