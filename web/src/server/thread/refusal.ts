@@ -29,7 +29,7 @@ export type Refusal =
   | { code: "recall"; what: string }
   | { code: "no_such_kind"; what: string }
   | { code: "claim_missing"; what: string; claims: string[]; products?: string[] }
-  | { code: "nothing_fits"; what: string; detail?: string; noOffer?: boolean };
+  | { code: "nothing_fits"; what: string; detail?: string; noOffer?: boolean; /** The reason is about the day asked (stock, a cut-off, too late): another day may have it. */ day?: boolean };
 
 const DATA = generated as { departments: Record<string, string>; categories: Record<string, { label: string }> };
 
@@ -158,6 +158,13 @@ export function sayRefusal(r: Refusal, lang: Lang): string {
         if (sv) return `Grossisten erbjuder inte ${r.what} just nu. Ska jag leta efter en annan produkt?`;
         return `The wholesaler isn't offering ${r.what} right now. Shall I look for another product?`;
       }
+      // "Another day" only when the reason is the day: an offer the agent makes is one a yes carries out (engine.ts
+      // anotherDay); a reason of another kind ends on a question the buyer answers in their own words.
+      if (!r.day) {
+        if (fi) return `En löytänyt tuotetta ${r.what}, jonka voisin tilata${r.detail ? `: ${r.detail.replace(/\.$/, "")}` : ""}. Kelpaako jokin muu tuote?`;
+        if (sv) return `Jag hittade inget ${r.what} som jag kan beställa${r.detail ? `: ${r.detail.replace(/\.$/, "")}` : ""}. Duger en annan produkt?`;
+        return `I couldn't find ${r.what} that I can order${r.detail ? `: ${r.detail.replace(/\.$/, "").replace(/^./, (c) => c.toLowerCase())}` : ""}. Would another product do?`;
+      }
       if (fi) return `En löytänyt tuotetta ${r.what}, jonka voisin tilata sille päivälle${r.detail ? `: ${r.detail.replace(/\.$/, "")}` : ""}. Katsonko toisen päivän?`;
       if (sv) return `Jag hittade inget ${r.what} som kan beställas för den dagen${r.detail ? `: ${r.detail.replace(/\.$/, "")}` : ""}. Ska jag titta på en annan dag?`;
       return `I couldn't find ${r.what} that can be ordered for that day${r.detail ? `: ${r.detail.replace(/\.$/, "").replace(/^./, (c) => c.toLowerCase())}` : ""}. Shall I look at another day?`;
@@ -190,6 +197,9 @@ export function refusalOfStep(run: TurnRun, step: IntakeView, lang: Lang): Refus
   for (const e of step.excluded) if (e.code && e.code !== "compromise") codes.set(e.code, (codes.get(e.code) ?? 0) + 1);
   const top = [...codes.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
   const day = step.need?.deliverBy;
+  // Another day was already looked at (the buyer's yes to that offer): never offered a second time.
+  if (run.anotherDayFor && (top === "cutoff_passed" || top === "too_late" || top === "out_of_stock" || top === "no_substitute"))
+    return { code: "nothing_fits", what, detail: { en: `nothing can come in the week after the day you asked for either${day ? `, up to ${dayWords(day, lang)}` : ""}`, fi: `mikään ei ehdi myöskään pyytämääsi päivää seuraavalla viikolla${day ? ` (${dayWords(day, lang)} mennessä)` : ""}`, sv: `inget kan komma veckan efter den dag du bad om heller${day ? ` (senast ${dayWords(day, lang)})` : ""}` }[lang] };
   if (top === "cutoff_passed" || top === "too_late") return { code: "cutoff_passed", what, ...(day ? { day } : {}) };
   if (top === "out_of_stock") return { code: "out_of_stock", what, ...(day ? { day } : {}) };
   if (top === "over_budget") return { code: "over_budget", ...(signerOf(run) ? { signer: signerOf(run) } : {}) };
@@ -204,8 +214,9 @@ export function refusalOfStep(run: TurnRun, step: IntakeView, lang: Lang): Refus
   if (allergens.length) return { code: "forbidden_allergen", what, allergens: [...new Set(allergens.map((a) => a.trim()))].slice(0, 3) };
   if (top === "no_offer") return { code: "nothing_fits", what, noOffer: true };
   const first = step.excluded.find((e) => e.code && e.code !== "compromise") ?? step.excluded[0];
+  const byDay = !!first?.code && ["cutoff_passed", "too_late", "out_of_stock", "no_substitute"].includes(first.code);
   // The reason is the store's own English words: said in English only (Finnish and Swedish keep the plain sentence).
-  return { code: "nothing_fits", what, ...(first && lang === "en" ? { detail: plainDetail(first.reason) } : {}) };
+  return { code: "nothing_fits", what, ...(byDay ? { day: true } : {}), ...(first && lang === "en" ? { detail: plainDetail(first.reason) } : {}) };
 }
 
 /** A gate rule that refused or stopped an order, as a refusal. */

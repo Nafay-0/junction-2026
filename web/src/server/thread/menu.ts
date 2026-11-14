@@ -753,7 +753,10 @@ export async function planDifferences(run: TurnRun, planId: string, lang: "en" |
   }
   // Packs are bought whole for a dish: rounding up to a pack is how a recipe is bought, not a difference to say.
   const diffs = differencesOf(wanted, got, { roundingCounts: false });
-  return { diffs, toBuy: wanted.length, buyable, totalCents: view.totals.totalCents, buyableCents, deliverBy, allowed: svc.kitchen.mandate.allowedCategories };
+  // The earliest day every line that cannot make the day asked can come: the latest of their own earliest days.
+  const lateLines = view.totals.day.lines.filter((x) => !x.ok);
+  const later = lateLines.length && lateLines.every((x) => !!x.arrives) ? lateLines.map((x) => x.arrives!).sort().at(-1) : undefined;
+  return { diffs, toBuy: wanted.length, buyable, totalCents: view.totals.totalCents, buyableCents, deliverBy, allowed: svc.kitchen.mandate.allowedCategories, ...(later && (!deliverBy || later > deliverBy) ? { later } : {}) };
 }
 
 /**

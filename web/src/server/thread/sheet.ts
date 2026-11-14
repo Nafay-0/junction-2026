@@ -1,3 +1,4 @@
+import { onStep } from "@/core/quote";
 import { DockError } from "@/core/errors";
 import { addDaysIso, isoWeekday, localNow } from "@/core/kitchen";
 import type { LiveOffer, Product } from "@/core/catalog";
@@ -274,7 +275,10 @@ export async function editSheet(run: TurnRun, sheetId: string, version: number |
   s.removed = undefined;
   switch (edit.kind) {
     case "packs": {
-      if (!Number.isInteger(edit.packs) || edit.packs < 1 || edit.packs > 9999) throw new DockError(400, "sheet_packs", "Whole packs, at least one.");
+      // A product sold in a real fractional lot (0,7 kg of a churned butter) is edited in its own steps; else whole packs.
+      const [product] = await run.rt.catalog.searchProducts({ ids: [line(s, edit.lineId).productId], limit: 1 }).catch(() => []);
+      const lot = product?.lotSize && product.lotSize > 0.01 ? product.lotSize : 1;
+      if (!onStep(edit.packs, lot) || edit.packs > 9999) throw new DockError(400, "sheet_packs", lot === 1 ? "Whole packs, at least one." : `In steps of ${lot}.`);
       line(s, edit.lineId).packs = edit.packs;
       changed.push("amount");
       break;

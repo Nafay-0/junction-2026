@@ -1,7 +1,7 @@
 import { familyL } from "@/app/k/[kitchen]/family.text";
 import { answerWatchMoment, markWatchSaid, watchAnswerOf, watchMomentForThread, type WatchMoment } from "@/server/watch/thread";
 import { cardId } from "./cards";
-import { readable } from "./refusal";
+import { codeLeaks, readable } from "./refusal";
 import { byLine, record, step, type TurnRun } from "./pipeline";
 import type { WatchCard } from "./types";
 
@@ -22,6 +22,8 @@ export function shortName(name: string): string {
   const out: string[] = [];
   for (const w of words) {
     if (/\d/.test(w) || /^(x|l|kg|g|ml|dl|cl)$/i.test(w) || out.length >= 4) break;
+    // Marketing words a chef does not say ("Peltolan hand made churned butter" is the Peltolan churned butter).
+    if (/^(hand|made|handmade|käsintehty|gourmet)$/i.test(w) && out.length) continue;
     out.push(w);
   }
   return out.join(" ") || name;
@@ -31,6 +33,8 @@ export function shortName(name: string): string {
 function kitchenName(product: { name: string; family: string }, lang: Lang): string {
   const lf = /lactose[ -]free|laktoositon|laktosfri/i.test(product.name);
   const fam = familyL(product.family, lang).toLowerCase();
+  // A family with no word of its own (a partner category, "cat 17403"): the product's short name, as people write it.
+  if (!fam || /^cat[ _]?\d/.test(fam) || codeLeaks(fam).length) return readable(shortName(product.name), lang);
   return lf ? `${lang === "fi" ? "laktoositon" : lang === "sv" ? "laktosfri" : "lactose-free"} ${fam}` : fam;
 }
 

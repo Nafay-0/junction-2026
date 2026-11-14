@@ -9,6 +9,8 @@ import type { Card, GatePreview } from "./types";
  */
 
 const eur = (cents: number) => (cents / 100).toFixed(2);
+/** A count as people write it: "1 000", never "1000" (the model copies what it is given). */
+const thousands = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 
 /** A catalogue name as people say it: the brand and the line, no marks, no pack size. */
 const short = (name: string) => {
@@ -81,7 +83,8 @@ function cardFacts(c: Card, run?: TurnRun): Record<string, unknown> | undefined 
         ...(cannot.length ? { cannotOrder: cannot.map((o) => ({ title: o.title, because: o.gate?.reasons?.[0] ?? o.gate?.rule ?? "the kitchen's rules" })) } : {}),
         ...(c.insteadOf ? { askedKindNotOffered: c.insteadOf } : {}),
         ...(c.askedDay ? { askedDay: c.askedDay } : {}),
-        ...(c.notes.length ? { notes: c.notes.slice(0, 2) } : {}),
+        // A cut-off that has passed is said as passed: its old date is not a fact the reply can be checked against.
+        ...(c.notes.length ? { notes: [...new Set(c.notes.map((n) => n.replace(/order cut-off [A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2}(?: \d{1,2}[:.]\d{2})? has passed/g, "its order cut-off has passed").replace(/^Same as last time \(([^)]*)\) is not possible/, "Your usual ($1) cannot do it")))].slice(0, 2) } : {}),
         ask: can.length > 1 ? `which one: ${can.length} can be ordered (one product per option, each with its own price)` : can.length === 1 ? "only one can be ordered: ask 'Shall I order it?', never 'which one'" : "none can be ordered: say why, and what would make it possible",
       };
     }
@@ -90,10 +93,10 @@ function cardFacts(c: Card, run?: TurnRun): Record<string, unknown> | undefined 
     case "gate":
       return { decided: { outcome: c.outcome, ...(c.approver ? { who: c.approver.name } : {}), ...(c.said ? { sayThis: c.said.en } : c.reasons.length ? { because: c.reasons[0] } : {}) } };
     case "order":
-      return { order: { status: c.status, totalEur: eur(c.totalCents), delivery: c.deliveryDate, lines: c.lines.slice(0, 4).map((l) => `${l.quantity} × ${l.name}`), ...(c.authorised.by !== "agent" ? { who: c.authorised.name } : {}), ...(c.takeBackUntil ? { canTakeBackUntil: c.takeBackUntil } : {}) } };
+      return { order: { status: c.status, totalEur: eur(c.totalCents), delivery: c.deliveryDate, lines: c.lines.slice(0, 4).map((l) => `${thousands(l.quantity)} × ${l.name}`), ...(c.authorised.by !== "agent" ? { who: c.authorised.name } : {}), ...(c.takeBackUntil ? { canTakeBackUntil: c.takeBackUntil } : {}) } };
     case "sheet":
       return {
-        orderToConfirm: c.state === "placed" ? undefined : { lines: c.lines.map((l) => `${l.packs} × ${l.name}`), totalEur: eur(c.totalCents), delivery: c.deliveryDate, gate: gateWords(c.gate, c.totalCents), ...(c.check?.length ? { noticed: c.check } : {}), ask: "shall I order it?" },
+        orderToConfirm: c.state === "placed" ? undefined : { lines: c.lines.map((l) => `${thousands(l.packs)} × ${l.name}`), totalEur: eur(c.totalCents), delivery: c.deliveryDate, gate: gateWords(c.gate, c.totalCents), ...(c.check?.length ? { noticed: c.check } : {}), ask: "shall I order it?" },
       };
     case "menu": {
       // The day asked for cannot be had: the first thing said, with the earliest day that can.
@@ -158,6 +161,32 @@ export function speakFacts(run: TurnRun): Record<string, unknown>[] {
     }
   }
   return out;
+}
+
+/**
+ * A planned dish or menu, ingredient by ingredient, as the playbook asks it said (instructions.ts P7.4): each one
+ * ordered (product, packs, price), on hand (and on what basis) or not covered (and why), the count covered of all,
+ * and whether it is complete. From the planner's own coverage (dishGroups), never the model's reading of the card.
+ */
+export async function dishFacts(run: TurnRun, planId: string): Promise<Record<string, unknown> | undefined> {
+  const { dishGroups } = await import("@/server/agent/menu/thread");
+  const g = await dishGroups(run.k.info.slug, planId, run.lang ?? "en");
+  if (!g.of) return undefined;
+  return plainFacts({
+    dish: g.dishes.join(", "),
+    ...(g.covers ? { portions: g.covers } : {}),
+    ...(g.day ? { day: g.day } : {}),
+    covered: `${g.covered} of ${g.of} ingredients`,
+    complete: g.complete,
+    ingredients: [
+      ...g.toOrder.map((i) => ({ ingredient: i.ingredient, ...(i.need ? { need: i.need } : {}), how: "I'll order it", ...(i.product ? { product: short(i.product) } : {}), ...(i.packs ? { packs: i.packs } : {}), ...(i.totalCents ? { totalEur: eur(i.totalCents) } : {}), ...(i.standIn ? { standIn: short(i.standIn) } : {}) })),
+      ...g.onHand.map((i) => ({ ingredient: i.ingredient, ...(i.need ? { need: i.need } : {}), how: "on hand", basis: i.basis ?? i.words })),
+      ...g.cannotGet.map((i) => ({ ingredient: i.ingredient, ...(i.need ? { need: i.need } : {}), how: "not covered", why: i.words })),
+    ].slice(0, 24),
+    toOrderTotalEur: eur(g.totalToOrderCents),
+    ...(g.perCoverCents ? { perPortionEur: eur(g.perCoverCents) } : {}),
+    ...(g.complete ? {} : { sayFirst: `only ${g.covered} of ${g.of} ingredients are covered: name what is not covered and why, and end on the ways forward, never "Shall I order it?"` }),
+  }) as Record<string, unknown>;
 }
 
 /** Facts the reply is written from carry no codes: category codes, product ids and snake_case words come out as words. */
