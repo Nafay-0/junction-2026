@@ -682,6 +682,8 @@ export type RulesCard = CardBase & {
   current: RulesSnapshot;
   /** Rules the kitchen's people stated (memory), applied on every order. */
   stated: { id: string; text: string }[];
+  /** This week's spend against the weekly budget (committed and held by orders waiting for an OK), in cents. */
+  week?: { spentCents: number; heldCents: number; leftCents: number };
   /** What this browser may sign here; `why` is a code the widget words (not_signed_in, not_this_account, demo_terms_fixed, visitor_terms_fixed). */
   editable: { narrow: boolean; terms: boolean; why?: string; /** The signed-in person who would sign. */ as?: string };
   /** The values the widget may offer (the mandate's vocabulary). */

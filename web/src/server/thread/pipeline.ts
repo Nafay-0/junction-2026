@@ -127,11 +127,13 @@ export function read(run: TurnRun, words: string, earlier: EarlierRequest[]): Pr
 
 // ---------- several items in one message ----------
 
-const DAY_PHRASE = /\b(for|by|on|until|before|till|to|ennen|mennessä|torstaiksi|maanantaiksi|på|senast|innan)\b[^,;\n]*$/i;
+const DAY_PHRASE = /\b(for|by|on|until|before|till|to|ennen|mennessä|maanantaiksi|tiistaiksi|keskiviikoksi|torstaiksi|perjantaiksi|lauantaiksi|sunnuntaiksi|huomiseksi|ylihuomiseksi|på|senast|innan|tomorrow)\b[^,;\n]*$/i;
 
 /** Item parts of a message, split where a new amount starts after "and", a comma or a new line; the day said at the end goes to each. */
 export function splitItems(text: string): string[] {
-  const raw = text.split(/\s*(?:,|;|\n|\band\b|\bja\b|\bsekä\b|\boch\b|\bsamt\b|\bplus\b)\s*(?=\d)/i).map((x) => x.trim()).filter(Boolean);
+  let raw = text.split(/\s*(?:,|;|\n|\band\b|\bja\b|\bsekä\b|\boch\b|\bsamt\b|\bplus\b)\s*(?=\d)/i).map((x) => x.trim()).filter(Boolean);
+  // "maitoa 30 l ja kermaa 5 l torstaiksi": the amount after the item; split at "and" when every part has its own amount.
+  if (raw.length < 2 || raw.some((x) => !/\d/.test(x))) raw = text.split(/\s*(?:;|\n|\band\b|\bja\b|\bsekä\b|\boch\b|\bsamt\b|\bplus\b)\s*/i).map((x) => x.trim()).filter(Boolean);
   if (raw.length < 2 || raw.some((x) => !/\d/.test(x))) return [];
   const day = DAY_PHRASE.exec(raw.at(-1)!)?.[0];
   return raw.map((x) => (day && !DAY_PHRASE.test(x) ? `${x} ${day}` : x)).slice(0, 5);
@@ -294,7 +296,34 @@ async function usualSheet(run: TurnRun, words: string): Promise<{ requestId: str
  * question, options), then, for a routine request, the order placed alone. Several items in one message each come
  * through here, in parallel.
  */
+/**
+ * Typing slips a chef makes that two readers would read differently ("laktose free", "tomorow", "wednsday"): set
+ * right by plain code before the words are read, so a slip is never a question back. Only unambiguous misspellings.
+ */
+const TYPOS: [RegExp, string][] = [
+  [/\blaktose\b/gi, "lactose"],
+  [/\blactos\b/gi, "lactose"],
+  [/\blactoce\b/gi, "lactose"],
+  [/\b(tomorow|tommorow|tommorrow|tomorrrow|tmrw)\b/gi, "tomorrow"],
+  [/\b(wednsday|wensday|wedensday|wendsday)\b/gi, "Wednesday"],
+  [/\b(thursady|thrusday|thursdy|thurday)\b/gi, "Thursday"],
+  [/\b(tuseday|tuesay|teusday)\b/gi, "Tuesday"],
+  [/\b(firday|fridy|friady)\b/gi, "Friday"],
+  [/\b(saturady|satruday)\b/gi, "Saturday"],
+  [/\b(mondy|monady)\b/gi, "Monday"],
+  [/\bskimed\b/gi, "skimmed"],
+  [/\b(yogurt|yougurt|yoghurth)\b/gi, "yoghurt"],
+  [/\b(whiping|wipping)\b/gi, "whipping"],
+  [/\b(liters?|litters?|ltrs?)\b/gi, "litres"],
+];
+export function fixTypos(words: string): string {
+  let w = words;
+  for (const [re, to] of TYPOS) w = w.replace(re, to);
+  return w;
+}
+
 export async function orderFromWords(run: TurnRun, words: string, earlier: EarlierRequest[], opts: { deliverBy?: string; item?: number; quietIfNotPurchase?: boolean } = {}): Promise<ItemOutcome[]> {
+  words = fixTypos(words);
   const ref = `${run.turnId}:${opts.item ?? 0}`;
   const reading = !opts.item && run.opening ? run.opening : step(run, "read", opts.item ? `Reading "${words.slice(0, 40)}"` : "Reading your request");
   if (!opts.item) run.opening = undefined;
@@ -407,8 +436,8 @@ export async function openNeed(run: TurnRun, need: NeedInput, words: string, opt
   // "For coffee" is a use, not a claim any product carries: it becomes the barista kind in the words searched for.
   const nn = need as { requiredClaims?: string[]; item: { text: string; attributes?: string[] } };
   const COFFEE = /coffee|barista|foam|kahvi|kaffe/i;
-  if (nn.requiredClaims?.some((c) => COFFEE.test(c)) || nn.item.attributes?.some((c) => COFFEE.test(c)) || /\b(for|to|in)\s+(the\s+)?coffee\b|kahviin|till kaffe/i.test(nn.item.text)) {
-    const text = /barista/i.test(nn.item.text) ? nn.item.text : `${nn.item.text.replace(/\s+(for|to|in)\s+(the\s+)?coffee|\s+kahviin|\s+till kaffe/i, "")} barista`;
+  if (nn.requiredClaims?.some((c) => COFFEE.test(c)) || nn.item.attributes?.some((c) => COFFEE.test(c)) || /\b(for|to|in)\s+(the\s+)?coffee\b|kahviin|kahvikoneeseen|till kaffe/i.test(nn.item.text)) {
+    const text = /barista/i.test(nn.item.text) ? nn.item.text : `${nn.item.text.replace(/\s+(for|to|in)\s+(the\s+)?coffee(\s+(machine|maker|bar|machines))?|\s+(kahviin|kahvikoneeseen)|\s+till kaffe(maskinen)?/i, "")} barista`;
     need = { ...need, ...(nn.requiredClaims ? { requiredClaims: nn.requiredClaims.filter((c) => !COFFEE.test(c)) } : {}), item: { ...need.item, text, ...(nn.item.attributes ? { attributes: nn.item.attributes.filter((c) => !COFFEE.test(c)) } : {}) } } as NeedInput;
   }
   const n = need as { deliverBy?: string; deliverOn?: string };
@@ -442,6 +471,13 @@ export async function openNeed(run: TurnRun, need: NeedInput, words: string, opt
         step0 = await run.rt.dock.intake.respondToConcerns(run.session, step0.requestId, { by: byLine(run), responses: step0.concerns.map((c) => ({ key: c.key, choice: "confirm" })) }, humanVia(run, words));
         record(run, "replaces_repeat", `The repeat check on ${res.step.requestId} is the order it replaces: answered by the buyer's change "${words.slice(0, 80)}".`, {}, res.step.requestId);
       }
+    }
+    // "Maitoa niinkuin yleensä": the buyer's own words say "as usual", so two readers differing on whether that means
+    // the usual amount or one pack is settled by the words (recorded as theirs); never a question back.
+    const asUsual = /\b(as usual|the usual|usual amount|same as (last|before|always)|like last time|niin ?kuin (yleensä|aina|viimeksi|tavallisesti)|kuten (yleensä|aina|viimeksi|tavallisesti)|tavalliseen tapaan|tavallinen määrä|som vanligt|samma som (förra|sist))(?![\p{L}])/iu;
+    if (step0.state === "needs_confirmation" && step0.concerns.length > 0 && asUsual.test(words) && step0.concerns.every((c) => c.code === "readings_differ" && /same as last|usual/i.test(String((c as { evidence?: { first?: unknown } }).evidence?.first ?? "")) && c.corrections.some((x) => x.id === "keep_first"))) {
+      step0 = await run.rt.dock.intake.respondToConcerns(run.session, step0.requestId, { by: byLine(run), responses: step0.concerns.map((c) => ({ key: c.key, choice: "keep_first" })) }, humanVia(run, words));
+      record(run, "as_usual", `The readers differed on the amount; the buyer's words "${words.slice(0, 80)}" say as usual: the usual amount.`, {}, res.step.requestId);
     }
     run.store.card(run.thread, run.turnId, { ...understood, requestId: res.step.requestId, memoryUsed: [...(opts.memoryLine ? [opts.memoryLine] : []), ...res.step.memoryUsed.map((m) => m.text)], memory: res.step.memoryUsed, ...(res.step.noticed?.length ? { notes: res.step.noticed.map((n) => ({ code: n.code, params: n.params })) } : {}) });
     if (res.step.memoryUsed.length) record(run, "memory_read", `Memory answered for this request: ${res.step.memoryUsed.map((m) => m.text).join("; ")}`, { lines: res.step.memoryUsed }, res.step.requestId);

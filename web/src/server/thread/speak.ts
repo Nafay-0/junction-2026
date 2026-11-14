@@ -94,7 +94,7 @@ function cardFacts(c: Card): Record<string, unknown> | undefined {
     case "records":
       return { records: c.rows.slice(0, 5).map((r) => ({ what: r.label, ...(r.date ? { date: r.date } : {}), ...(r.totalCents !== undefined ? { totalEur: eur(r.totalCents) } : {}) })) };
     case "rules":
-      return c.proposal ? { rulesChange: { changes: c.diff.map((d) => `${d.field}: ${d.before || "none"} → ${d.after || "none"}`), state: c.proposal.state, canConfirmHere: c.proposal.canSign, ...(c.proposal.why ? { whyNot: c.proposal.why } : {}) }, ask: c.proposal.state === "open" && c.proposal.canSign ? "shall I change it?" : undefined } : { rules: { perOrderLimitEur: eur(c.current.perOrderLimitCents), weeklyBudgetEur: eur(c.current.weeklyBudgetCents) } };
+      return c.proposal ? { rulesChange: { changes: c.diff.map((d) => `${d.field}: ${d.before || "none"} → ${d.after || "none"}`), state: c.proposal.state, canConfirmHere: c.proposal.canSign, ...(c.proposal.why ? { whyNot: c.proposal.why } : {}) }, ask: c.proposal.state === "open" && c.proposal.canSign ? "shall I change it?" : undefined } : { rules: { perOrderLimitEur: eur(c.current.perOrderLimitCents), weeklyBudgetEur: eur(c.current.weeklyBudgetCents), ...(c.week ? { thisWeek: { spentEur: eur(c.week.spentCents), ...(c.week.heldCents ? { heldWaitingForOkEur: eur(c.week.heldCents) } : {}), leftEur: eur(c.week.leftCents) } } : {}), whoGivesTheOk: c.current.approvers.map((a) => `${a.name} (${a.role.replaceAll("_", " ")}), up to ${eur(a.maxApprovalCents)}`), groups: (c.current.groups ?? []).map((g) => g.name).slice(0, 6) } };
     case "watch":
       return c.state === "open" ? { watchSaid: c.text.en.say, ask: c.text.en.ask } : { watch: c.kind, ...(c.reply ? { reply: c.reply } : {}) };
     case "offer":

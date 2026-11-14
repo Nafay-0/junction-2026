@@ -20,6 +20,7 @@ import { ThreadStore, type StoredThread } from "./store";
 import { runWidget } from "./widgets";
 import { speakFacts } from "./speak";
 import { codeLeaks } from "./refusal";
+import { fixTypos } from "./pipeline";
 import { hasToday, helsinkiToday, postToday, todayCardId } from "./home";
 import { ensureTelemetry } from "./telemetry";
 import type { AgentTurn, BuyerTurn, MemoryCard, RecordsCard, SubmitTurn, SubmitTurnReply, ThreadAction, ThreadDoor } from "./types";
@@ -232,7 +233,8 @@ export async function submitTurn(kitchen: Kitchen | string, input: unknown): Pro
 
   // A speculative reading of new words, in parallel with the agent's first step (agent.ts asks for the same reading).
   if (body.text && !body.action && worthReading(body.text) && llmRoom()) {
-    void withTurn(turnCtx(), () => earlierFor(run, body.text!).then((earlier) => read(run, body.text!, earlier))).catch(() => undefined);
+    const fixed = fixTypos(body.text);
+    void withTurn(turnCtx(), () => earlierFor(run, fixed).then((earlier) => read(run, fixed, earlier))).catch(() => undefined);
   }
 
   // One agent turn at a time per thread: a turn sent while one works is answered next.
@@ -531,7 +533,8 @@ export function settled(messages: ModelMessage[]): ModelMessage[] {
  */
 async function showLine(run: TurnRun, text: string): Promise<void> {
   // Two to four sentences, with the agent's two marks (**figure**, {{day}}) kept for display and stripped for the check.
-  const one = plainLine(run, text.replace(/[ \t]+/g, " ").replace(/\n{2,}/g, "\n").trim().slice(0, 600));
+  // Checked as the model wrote it (its dates as "16.11."); worded for the buyer after (plainLine: English days, no codes).
+  const one = text.replace(/[ \t]+/g, " ").replace(/\n{2,}/g, "\n").trim().slice(0, 600).replace(/(\d{1,2}\.\d{1,2}\.)(\}\}|\*\*)?\./g, "$1$2");
   if (!one) return;
   const plain = one.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\{\{([^}]+)\}\}/g, "$1");
   // Under 60 words: whole sentences from the start while they fit, and a closing question kept (it is what is open).
@@ -546,19 +549,37 @@ async function showLine(run: TurnRun, text: string): Promise<void> {
   }
   const onScreen = [...new Set(run.store.cards(run.thread).flatMap((x) => ("requestId" in x.card && x.card.requestId ? [x.card.requestId] : [])))].slice(-3);
   const steps = await Promise.all(onScreen.map((id) => run.rt.dock.intake.get(run.session, id).catch(() => undefined)));
-  const facts = addWords(factsFrom(...run.facts, ...steps.filter(Boolean), run.store.cards(run.thread).slice(-12).map((x) => x.card)), run.buyer.text ?? "");
+  const facts = addWords(factsFrom(...run.facts, ...steps.filter(Boolean), run.store.cards(run.thread).slice(-12).map((x) => x.card)), `${run.buyer.text ?? ""} ${freeOf(run.buyer.text ?? "")}`);
   const g = groundForDisplay("thread", plain, facts, { where: `thread ${run.thread.threadId}`, replacement: "" });
   if (g.violations.length) {
     record(run, "grounding_refusal", `A sentence of the agent's reply was not shown: it said ${g.violations.map((v) => `"${v.said}" (${v.kind})`).join(", ")}, which the data does not back.`, { said: one, violations: g.violations });
     // Only the sentences the data backs are shown (without marks); none at all when none is backed.
-    const kept = g.text.replace(/\s+/g, " ").trim();
+    const kept = plainLine(run, g.text.replace(/\s+/g, " ").trim());
     if (!kept || g.replaced >= g.sentences) return;
     run.store.line(run.thread, run.turnId, kept);
     run.store.mark(run.thread, run.turnId, "line", Date.now() - run.t0);
     return;
   }
-  run.store.line(run.thread, run.turnId, one);
+  const shown = plainLine(run, one);
+  if (!shown) return;
+  run.store.line(run.thread, run.turnId, shown);
   run.store.mark(run.thread, run.turnId, "line", Date.now() - run.t0);
+}
+
+/** "No nuts", "ilman gluteenia": the buyer's own words, said as the claim they make ("nut-free"), for the check. */
+function freeOf(words: string): string {
+  const out: string[] = [];
+  const pairs: [RegExp, string][] = [
+    [/\b(no|without|ei|ilman)\s+(nuts?|pähkinö\w*|pähkinä\w*)/i, "nut-free nut free"],
+    [/\b(no|without|ei|ilman)\s+(peanuts?|maapähkin\w*)/i, "peanut-free"],
+    [/\b(no|without|ei|ilman)\s+(gluten\w*|gluteeni\w*)/i, "gluten-free"],
+    [/\b(no|without|ei|ilman)\s+(milk|dairy|maito\w*)/i, "milk-free dairy-free"],
+    [/\b(no|without|ei|ilman)\s+(eggs?|kanamuna\w*|muna\w*)/i, "egg-free"],
+    [/\b(no|without|ei|ilman)\s+(fish|kala\w*)/i, "fish-free"],
+    [/\b(no|without|ei|ilman)\s+(lactose|laktoosi\w*)/i, "lactose-free"],
+  ];
+  for (const [re, w] of pairs) if (re.test(words)) out.push(w);
+  return out.join(" ");
 }
 
 /** How long the turn shows the memory step as working before it lets the writer finish out of sight. */
