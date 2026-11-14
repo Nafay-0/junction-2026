@@ -28,6 +28,15 @@ export type ToolContext = {
   today: string;
   /** Where the request comes from: the desktop app (which has a live browser) or the web. */
   client: ClientKind;
+  /**
+   * The account the request is for, and what a job made in it should carry along: the user's
+   * time zone, their approximate place and the chat it was made in. Set by the chat; without an
+   * account the tools that manage jobs are left out (a live call, a run of a job).
+   */
+  userId?: string;
+  timeZone?: string;
+  place?: string;
+  conversationId?: string;
 };
 
 /** Turn a thrown value into a short message a widget can show. */

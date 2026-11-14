@@ -15,6 +15,8 @@ import { capFor, capRefusal, spentBy } from "@/lib/db/cap";
 import { conversationOrigin, saveConversation, validConversationId } from "@/lib/db/conversations";
 import { readOnlyReason } from "@/lib/db/origin";
 import { recordUsage } from "@/lib/db/usage";
+import { jobSpendingNow } from "@/lib/jobs/run";
+import { chatEnded } from "@/lib/notifications/chat";
 import { RUN_ACTIVE_CODE, RUN_ACTIVE_SENTENCE } from "@/lib/run-state";
 import { MAX_RUNS_PER_ACCOUNT, activeRun, follow, noteProgress, runsOf, spendingNow, startRun, type Run } from "@/lib/runs";
 
@@ -112,10 +114,10 @@ export async function POST(req: Request) {
   }
   // Several tasks side by side are fine; an unbounded number is somebody's mistake.
   if (runsOf(user.id).length >= MAX_RUNS_PER_ACCOUNT) {
-    return Response.json({ error: `You already have ${MAX_RUNS_PER_ACCOUNT} tasks running. Wait for one to finish, or stop one.` }, { status: 429 });
+    return Response.json({ error: `You already have ${MAX_RUNS_PER_ACCOUNT} chats working. Wait for one to finish, or stop one.` }, { status: 429 });
   }
 
-  const ctx: ToolContext = { meter, mode, effort, depth, model: info, worker, country, today, coords: coords ? { lat: coords.lat, lng: coords.lng, label: coords.label } : undefined, client };
+  const ctx: ToolContext = { meter, mode, effort, depth, model: info, worker, country, today, coords: coords ? { lat: coords.lat, lng: coords.lng, label: coords.label } : undefined, client, userId: user.id, timeZone, place: body.place?.slice(0, 80), conversationId };
   const tools = createTools(ctx, model);
 
   // Reasoning from earlier turns is never replayed. Claude's thinking blocks are bound to the exact
@@ -156,7 +158,7 @@ export async function POST(req: Request) {
     finishedUsage = done.reduce((sum, step) => addUsage(sum, toTokenUsage(step.usage)), { ...EMPTY_USAGE });
     if (cap.capUsd === null) return false;
     const onRecord = await spentBy(user.id).catch(() => cap.spentUsd);
-    capHit = onRecord + spendingNow(user.id) >= cap.capUsd;
+    capHit = onRecord + spendingNow(user.id) + jobSpendingNow(user.id) >= cap.capUsd;
     return capHit;
   };
 
@@ -223,6 +225,8 @@ export async function POST(req: Request) {
           record({ mode, effort, startedAt: meter.startedAt, durationMs: Date.now() - meter.startedAt, steps, usage: finishedUsage, llmCostUsd: round(costOf(info.id, finishedUsage)), finishReason: isAborted ? "stopped" : "error", ...meter.snapshot() });
         }
         await save(final);
+        // Someone who asked to be told when this chat is done is told now, if it is.
+        if (conversationId) void chatEnded({ userId: user.id, conversationId, messages: final, aborted: isAborted });
       },
       messageMetadata: ({ part }): RunStats | undefined => {
         // What the interface is told names the mode, never the model behind it.
@@ -271,7 +275,7 @@ function titleOf(messages: ButlerMessage[]): string {
   const first = messages.find((m) => m.role === "user");
   const text = first?.parts.find((p) => p.type === "text");
   const clean = (text && text.type === "text" ? text.text : "").replace(/\s+/g, " ").trim();
-  if (!clean) return first?.parts.some((p) => p.type === "file") ? "Image search" : "New task";
+  if (!clean) return first?.parts.some((p) => p.type === "file") ? "Image search" : "New chat";
   return clean.length > 72 ? `${clean.slice(0, 70).trimEnd()}…` : clean;
 }
 
@@ -368,7 +372,7 @@ function friendlyError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   if (/rate limit|429/i.test(message)) return "Busy right now. Try again in a few seconds.";
   if (/credit|402|billing/i.test(message)) return "The account behind this demo has run out of credit.";
-  if (/context|too long|maximum/i.test(message)) return "This conversation got too long. Start a new task to continue.";
+  if (/context|too long|maximum/i.test(message)) return "This chat got too long. Start a new chat to continue.";
   if (/abort/i.test(message)) return "Stopped.";
   return "Something went wrong while answering. Try again, or switch mode.";
 }

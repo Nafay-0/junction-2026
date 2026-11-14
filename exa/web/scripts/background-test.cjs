@@ -47,7 +47,7 @@ const ok = (label, pass, note = "") => { if (!pass) failures += 1; console.log(`
   const type = (text) => inHost(`(() => { ${V} const el = vis('textarea[aria-label="Message"]')[0]; Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(el, ${JSON.stringify(text)}); el.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
   const send = () => inHost(`(() => { ${V} vis('button[aria-label="Send"]')[0].click(); return true; })()`);
   const ask = async (text) => { await type(text); await wait(250); await send(); };
-  const runningDots = () => inHost("document.querySelectorAll('[aria-label=\"A task is running in this conversation\"]').length");
+  const runningDots = () => inHost("document.querySelectorAll('[aria-label=\"This chat is still working\"]').length");
   const active = () => inHost("localStorage.getItem('hovi.active')");
   const saved = (id) => inHost(`fetch('/api/conversations/${id}', { headers: { 'x-beryl-client': 'desktop' } }).then((r) => r.ok ? r.json() : null)`);
   const serverRuns = () => inHost("fetch('/api/chat/runs').then((r) => r.json()).then((j) => j.running.map((x) => x.id))");
@@ -55,7 +55,7 @@ const ok = (label, pass, note = "") => { if (!pass) failures += 1; console.log(`
   const signIn = async () => {
     await until(() => inHost("(() => { const el = document.querySelector('input[type=email]'); return Boolean(el && Object.keys(el).some((k) => k.startsWith('__reactProps'))); })()"));
     const fill = (sel, value) => inHost(`(() => { const el = document.querySelector(${JSON.stringify(sel)}); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, ${JSON.stringify(value)}); el.dispatchEvent(new Event('input', { bubbles: true })); })()`);
-    await fill("input[type=email]", process.env.ADMIN_EMAIL); await fill("input[type=password]", process.env.ADMIN_PASSWORD);
+    await fill("input[type=email]", (process.env.BERYL_TEST_EMAIL || process.env.ADMIN_EMAIL)); await fill("input[type=password]", (process.env.BERYL_TEST_PASSWORD || process.env.ADMIN_PASSWORD));
     await inHost("document.querySelector('form').requestSubmit(); 1");
   };
   const ready = () => until(() => inHost(`(() => { ${V} return vis('textarea[aria-label="Message"]').length > 0; })()`));
@@ -90,7 +90,7 @@ const ok = (label, pass, note = "") => { if (!pass) failures += 1; console.log(`
   ok("nothing says it was stopped", !/Stopped before this finished/.test(during));
 
   // ── Leave it running and start another beside it ──
-  await inHost(`(() => { ${V} vis('button[aria-label="New task"]')[0].click(); return true; })()`);
+  await inHost(`(() => { ${V} vis('button[aria-label="New chat"]')[0].click(); return true; })()`);
   await wait(800); await ready();
   ok("a new task opens with an empty message box", (await box()) === "" && !(await busy()));
   ok("the list marks the task left running", (await until(async () => (await runningDots()) >= 1, 8000)) === true, await runningDots());
@@ -127,7 +127,7 @@ const ok = (label, pass, note = "") => { if (!pass) failures += 1; console.log(`
   await shot("5-first-finished");
 
   // ── Stop really stops ──
-  await inHost(`(() => { ${V} vis('button[aria-label="New task"]')[0].click(); return true; })()`);
+  await inHost(`(() => { ${V} vis('button[aria-label="New chat"]')[0].click(); return true; })()`);
   await wait(800); await ready();
   await ask("Search the web one at a time, never in parallel, for the population of each of these and then list them: Helsinki, Espoo, Tampere, Vantaa, Oulu, Turku, Jyväskylä, Kuopio.");
   await until(busy, 10000);
@@ -138,13 +138,13 @@ const ok = (label, pass, note = "") => { if (!pass) failures += 1; console.log(`
   ok("Stop ends the task on the server too", !(await serverRuns()).includes(third) && !(await busy()));
 
   // ── A task in the live browser carries on while another conversation is on screen ──
-  await inHost(`(() => { ${V} vis('button[aria-label="New task"]')[0].click(); return true; })()`);
+  await inHost(`(() => { ${V} vis('button[aria-label="New chat"]')[0].click(); return true; })()`);
   await wait(800); await ready();
   await ask(`In the live browser, open http://localhost:${port}/dev/sandbox.html, read the page, and tell me in one sentence what the page is for. Then close the browser.`);
   ok("a task in the live browser starts", Boolean(await until(busy, 15000)));
   const fourth = await active(); made.push(fourth);
   await until(() => inHost("Boolean(document.querySelector('webview'))"), 30000);
-  await inHost(`(() => { ${V} vis('button[aria-label="New task"]')[0].click(); return true; })()`);
+  await inHost(`(() => { ${V} vis('button[aria-label="New chat"]')[0].click(); return true; })()`);
   await wait(800); await ready();
   ok("another conversation is on screen", (await active()) !== fourth && !(await busy()));
   const browsed = await until(async () => {

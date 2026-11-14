@@ -69,7 +69,9 @@ export function OverviewScreen({ data }: { data: Overview }) {
               <SpendSplit spend={data.period} />
               <p className="border-t border-border pt-3 text-[0.78rem] leading-snug text-muted-foreground">
                 {count(data.period.exaCalls)} Exa calls{data.period.decisionCalls > 0 ? `, ${count(data.period.decisionCalls)} requests to the decision model` : ""}.{" "}
-                {data.period.activeAccounts === 1 ? "One account" : `${count(data.period.activeAccounts)} accounts`} asked for something. {SPEND_MEANING}
+                {data.period.activeAccounts === 1 ? "One account" : `${count(data.period.activeAccounts)} accounts`} asked for something.{" "}
+                {data.period.jobRuns > 0 ? `Scheduled jobs ran ${count(data.period.jobRuns)} ${data.period.jobRuns === 1 ? "time" : "times"} and cost ${usd(data.period.jobsUsd)} of this. ` : ""}
+                {SPEND_MEANING}
               </p>
             </div>
           )}
@@ -187,7 +189,7 @@ function Daily({ data, quiet }: { data: Overview; quiet: boolean }) {
     >
       {quiet ? (
         <Empty icon={<ChartNoAxesColumn />} title={`Nothing has been asked in the last ${data.days} days`}>
-          Each day gets a bar here as soon as someone hands over a task.
+          Each day gets a bar here as soon as someone starts a chat.
         </Empty>
       ) : (
         <div role="figure" aria-label={`${MEASURES.find((m) => m.id === measure)?.label} per day`} className="select-none [&_.recharts-surface]:outline-none [&_.recharts-wrapper]:outline-none">

@@ -64,8 +64,8 @@ const note = (name) => path.join(profile, name);
       busy: vis('button[aria-label="Stop"]').length > 0,
       approve: buttons.includes('Approve'),
       done: buttons.filter((b) => b.includes('I have signed in') || b.includes('Done, continue')).length,
-      waitingMark: document.querySelectorAll('[aria-label="This task is waiting for you"]').length,
-      runningMark: document.querySelectorAll('[aria-label="A task is running in this conversation"]').length,
+      waitingMark: document.querySelectorAll('[aria-label="This chat is waiting for you"]').length,
+      runningMark: document.querySelectorAll('[aria-label="This chat is still working"]').length,
       webview: Boolean(document.querySelector('webview')),
       signedIn: vis('textarea[aria-label="Message"]').length > 0,
       active: localStorage.getItem('hovi.active') }; })()`);
@@ -77,12 +77,12 @@ const note = (name) => path.join(profile, name);
   const text = async (id) => ((await saved(id))?.messages?.at(-1)?.parts ?? []).filter((p) => p.type === "text").map((p) => p.text).join(" ").replace(/\s+/g, " ");
   const remove = (id) => inHost(`fetch('/api/conversations/${id}', { method: 'DELETE', headers: { 'x-beryl-client': 'desktop' } }).then(() => 1)`);
   const click = (label) => inHost(`(() => { ${V} const b = vis('button').find((x) => x.innerText.trim().includes(${JSON.stringify(label)})); if (b) b.click(); return Boolean(b); })()`);
-  const newTask = () => inHost(`(() => { ${V} vis('button[aria-label="New task"]')[0].click(); return true; })()`);
+  const newTask = () => inHost(`(() => { ${V} vis('button[aria-label="New chat"]')[0].click(); return true; })()`);
   const signIn = async () => {
     await until(() => inHost("(() => { const el = document.querySelector('input[type=email]'); return Boolean(el && Object.keys(el).some((k) => k.startsWith('__reactProps'))); })()"));
     const fill = (sel, value) => inHost(`(() => { const el = document.querySelector(${JSON.stringify(sel)}); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, ${JSON.stringify(value)}); el.dispatchEvent(new Event('input', { bubbles: true })); })()`);
-    await fill("input[type=email]", process.env.ADMIN_EMAIL);
-    await fill("input[type=password]", process.env.ADMIN_PASSWORD);
+    await fill("input[type=email]", (process.env.BERYL_TEST_EMAIL || process.env.ADMIN_EMAIL));
+    await fill("input[type=password]", (process.env.BERYL_TEST_PASSWORD || process.env.ADMIN_PASSWORD));
     await inHost("document.querySelector('form').requestSubmit(); 1");
     await until(async () => (await state()).signedIn);
     // The quickest mode keeps the test short; a fresh conversation keeps it apart from earlier ones.
@@ -204,7 +204,7 @@ const note = (name) => path.join(profile, name);
     ok("the list marks the task that was left waiting", opened.waitingMark > 0, `${opened.waitingMark} marked`);
     ok("it did not start by itself out of sight", !(await parts(first)).some((x) => x.includes("(interrupted)")));
     await shot("marked");
-    await inHost(`(() => { const mark = document.querySelector('[aria-label="This task is waiting for you"]'); mark?.closest('li')?.querySelector('button')?.click(); return true; })()`);
+    await inHost(`(() => { const mark = document.querySelector('[aria-label="This chat is waiting for you"]'); mark?.closest('li')?.querySelector('button')?.click(); return true; })()`);
     ok("opened from the list, it picks up", Boolean(await until(async () => (await parts(first)).some((x) => x.includes("(interrupted)")), 60000)));
     ok("and gets back to the user's turn", Boolean(await until(async () => (await state()).done > 0 && (await parts(first)).at(-1)?.startsWith("requestUserAction:input-available"), 150000)));
     await remove(first);

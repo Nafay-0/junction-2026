@@ -254,7 +254,7 @@ export function Composer({
             void addFiles(files);
           }
         }}
-        placeholder={inCall ? "Type to say it in the call" : listening === "off" ? "Ask anything, or hand me a task" : "Listening. Speak in any language"}
+        placeholder={inCall ? "Type to say it in the call" : listening === "off" ? "Ask anything, or hand something over" : "Listening. Speak in any language"}
         aria-label="Message"
         className="block max-h-[200px] w-full resize-none bg-transparent px-4 pt-3.5 pb-1 text-base leading-relaxed outline-none placeholder:text-subtle sm:text-[0.95rem]"
       />

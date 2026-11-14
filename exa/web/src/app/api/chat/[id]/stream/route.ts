@@ -23,7 +23,7 @@ export async function POST(_req: Request, { params }: Context) {
   if (user instanceof Response) return user;
   const { id } = await params;
   const run = validConversationId(id) ? activeRun(user.id, id) : undefined;
-  if (!run) return Response.json({ error: "That task has finished.", code: RUN_GONE_CODE }, { status: 409 });
+  if (!run) return Response.json({ error: "That answer has finished.", code: RUN_GONE_CODE }, { status: 409 });
   return createUIMessageStreamResponse({ stream: follow(run) });
 }
 

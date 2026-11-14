@@ -2,12 +2,13 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ChevronsUpDown, LayoutDashboard, LogOut, MessagesSquare, Trash2 } from "lucide-react";
+import { Bell, CalendarClock, ChevronsUpDown, LayoutDashboard, LogOut, MessagesSquare, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { initialsOf, signOut, useUser } from "@/lib/auth/client";
 import type { SessionUser } from "@/lib/auth/types";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { NotificationSettings } from "@/components/notifications/settings";
 
 /** The account's initials in a small round badge. */
 export function AccountBadge({ user, className }: { user: Pick<SessionUser, "name" | "email">; className?: string }) {
@@ -19,8 +20,8 @@ export function AccountBadge({ user, className }: { user: Pick<SessionUser, "nam
 }
 
 /**
- * Who is signed in, and what they can do about it: go to the admin area (the admin only), clear
- * their conversations, sign out. In the conversation list it is a full row at the bottom; in the
+ * Who is signed in, and what they can do about it: see their jobs, choose which emails they get,
+ * go to the admin area (the admin only), clear their conversations, sign out. In the conversation list it is a full row at the bottom; in the
  * admin area's header it is just the badge.
  */
 export function AccountMenu({
@@ -39,6 +40,7 @@ export function AccountMenu({
   const user = useUser();
   const [confirming, setConfirming] = React.useState(false);
   const [leaving, setLeaving] = React.useState(false);
+  const [notifications, setNotifications] = React.useState(false);
 
   return (
     <>
@@ -84,13 +86,23 @@ export function AccountMenu({
               </Link>
             </DropdownMenuItem>
           ) : null}
+          <DropdownMenuItem asChild>
+            <Link href="/jobs">
+              <CalendarClock className="size-4" />
+              Jobs
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setNotifications(true)}>
+            <Bell className="size-4" />
+            Notifications
+          </DropdownMenuItem>
           {onDeleteAll && conversationCount > 0 ? (
             <DropdownMenuItem onSelect={() => setConfirming(true)}>
               <Trash2 className="size-4" />
               Delete all conversations
             </DropdownMenuItem>
           ) : null}
-          {toChat || user.role === "admin" || (onDeleteAll && conversationCount > 0) ? <DropdownMenuSeparator /> : null}
+          <DropdownMenuSeparator />
           <DropdownMenuItem
             disabled={leaving}
             onSelect={() => {
@@ -103,6 +115,8 @@ export function AccountMenu({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <NotificationSettings open={notifications} onOpenChange={setNotifications} />
 
       <Dialog open={confirming} onOpenChange={setConfirming}>
         <DialogContent>

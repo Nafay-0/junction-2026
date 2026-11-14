@@ -45,16 +45,20 @@ const TOKENS = sql`(e.input_tokens + e.output_tokens + e.worker_input_tokens + e
 /** Everything a row cost. */
 const COST = sql`(e.llm_cost_usd + e.worker_cost_usd + e.exa_cost_usd + e.decision_cost_usd)`;
 /**
- * The cost of a set of rows, by kind. The model's own cost is "LLMs" for a typed request and
- * "Voice" for a call; sub-agents and helpers are LLMs whoever asked for them.
+ * The cost of a set of rows, by kind. The model's own cost is "LLMs" for a typed request and for
+ * a run of a job, and "Voice" for a call; sub-agents and helpers are LLMs whoever asked for them.
  */
 const SPEND = sql`
-  coalesce(sum(case when e.kind = 'chat' then e.llm_cost_usd else 0 end + e.worker_cost_usd), 0) as llm_usd,
+  coalesce(sum(case when e.kind in ('chat', 'job') then e.llm_cost_usd else 0 end + e.worker_cost_usd), 0) as llm_usd,
   coalesce(sum(e.exa_cost_usd), 0) as exa_usd,
-  coalesce(sum(case when e.kind = 'chat' then 0 else e.llm_cost_usd end), 0) as voice_usd,
+  coalesce(sum(case when e.kind in ('chat', 'job') then 0 else e.llm_cost_usd end), 0) as voice_usd,
   coalesce(sum(e.decision_cost_usd), 0) as decisions_usd`;
 /** The mode of a row, or what stands in for one: "voice" for a call and its tools, "before" for a typed request from before modes. */
-const MODE_KEY = sql`coalesce(e.mode, case when e.kind = 'chat' then 'before' else 'voice' end)`;
+const MODE_KEY = sql`coalesce(e.mode, case when e.kind in ('chat', 'job') then 'before' else 'voice' end)`;
+/** How many of the rows are runs of scheduled jobs, and what those cost: a share of the figures above, not on top of them. */
+const JOBS = sql`
+  count(*) filter (where e.kind = 'job') as job_runs,
+  coalesce(sum(e.llm_cost_usd + e.worker_cost_usd + e.exa_cost_usd + e.decision_cost_usd) filter (where e.kind = 'job'), 0) as job_usd`;
 
 type Row = Record<string, unknown>;
 const spendOf = (r: Row | undefined): Spend => ({ llm: num(r?.llm_usd), exa: num(r?.exa_usd), voice: num(r?.voice_usd), decisions: num(r?.decisions_usd) });
@@ -211,7 +215,8 @@ export type Overview = {
   accounts: { total: number; blocked: number; active7d: number };
   conversations: { total: number; web: number; desktop: number };
   /** Within the chosen period. */
-  period: Spend & { requests: number; tokens: number; exaCalls: number; decisionCalls: number; activeAccounts: number };
+  /** `jobRuns` and `jobsUsd` are the runs of scheduled jobs among the requests, and their share of the cost. */
+  period: Spend & { requests: number; tokens: number; exaCalls: number; decisionCalls: number; jobRuns: number; jobsUsd: number; activeAccounts: number };
   allTime: Spend & { requests: number };
   /** One entry per day of the period, oldest first, days without use included. Days are UTC. */
   daily: Array<Spend & { day: string; requests: number; tokens: number }>;
@@ -231,7 +236,7 @@ export async function overview(days: number): Promise<Overview> {
     db.execute(sql`select count(*) as total, count(*) filter (where status = 'blocked') as blocked, count(*) filter (where last_seen_at > now() - interval '7 days') as active from users`),
     db.execute(sql`select count(*) as total, count(*) filter (where origin = 'desktop') as desktop from conversations`),
     db.execute(sql`
-      select count(*) as requests, coalesce(sum(${TOKENS}), 0) as tokens, ${SPEND},
+      select count(*) as requests, coalesce(sum(${TOKENS}), 0) as tokens, ${SPEND}, ${JOBS},
         coalesce(sum(e.exa_search_calls + e.exa_contents_calls + e.exa_agent_calls + e.exa_answer_calls), 0) as exa_calls,
         coalesce(sum(e.decision_calls), 0) as decision_calls,
         count(distinct e.user_id) as accounts
@@ -281,6 +286,8 @@ export async function overview(days: number): Promise<Overview> {
       tokens: num(periodRows[0]?.tokens),
       exaCalls: num(periodRows[0]?.exa_calls),
       decisionCalls: num(periodRows[0]?.decision_calls),
+      jobRuns: num(periodRows[0]?.job_runs),
+      jobsUsd: num(periodRows[0]?.job_usd),
       activeAccounts: num(periodRows[0]?.accounts),
       ...spendOf(periodRows[0]),
     },
@@ -299,7 +306,7 @@ export type AccountUsage = {
   days: number;
   account: { id: string; name: string; email: string; role: "user" | "admin" };
   /** Within the chosen period. */
-  period: Spend & { requests: number; tokens: number; exaCalls: number; decisionCalls: number };
+  period: Spend & { requests: number; tokens: number; exaCalls: number; decisionCalls: number; jobRuns: number; jobsUsd: number };
   /** Since the account was made: the total is what its limit is compared with. */
   allTime: Spend & { requests: number };
   usageCapUsd: number | null;
@@ -317,7 +324,7 @@ export async function accountUsage(id: string, days: number): Promise<AccountUsa
 
   const [periodRows, allTimeRows, modeRowsRaw, modelRowsRaw] = await Promise.all([
     db.execute(sql`
-      select count(*) as requests, coalesce(sum(${TOKENS}), 0) as tokens, ${SPEND},
+      select count(*) as requests, coalesce(sum(${TOKENS}), 0) as tokens, ${SPEND}, ${JOBS},
         coalesce(sum(e.exa_search_calls + e.exa_contents_calls + e.exa_agent_calls + e.exa_answer_calls), 0) as exa_calls,
         coalesce(sum(e.decision_calls), 0) as decision_calls
       from usage_events e where e.user_id = ${id} and e.created_at >= ${since}`),
@@ -338,6 +345,8 @@ export async function accountUsage(id: string, days: number): Promise<AccountUsa
       tokens: num(periodRows[0]?.tokens),
       exaCalls: num(periodRows[0]?.exa_calls),
       decisionCalls: num(periodRows[0]?.decision_calls),
+      jobRuns: num(periodRows[0]?.job_runs),
+      jobsUsd: num(periodRows[0]?.job_usd),
       ...spendOf(periodRows[0]),
     },
     allTime: { requests: num(allTimeRows[0]?.requests), ...spendOf(allTimeRows[0]) },

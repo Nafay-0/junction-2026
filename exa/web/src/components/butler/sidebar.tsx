@@ -111,7 +111,7 @@ export function Sidebar({
               className="flex h-9 flex-1 items-center gap-2 rounded-xl border border-sidebar-border bg-card px-3 text-[0.85rem] font-medium shadow-card transition-colors hover:border-ring/50"
             >
               <Plus className="size-4 text-brand" />
-              New task
+              New chat
             </button>
             <button
               type="button"
@@ -127,7 +127,7 @@ export function Sidebar({
             {conversations.length === 0 ? (
               <div className="flex flex-col items-center gap-2 px-4 pt-16 text-center">
                 <MessageSquareDashed className="size-6 text-subtle" />
-                <p className="text-[0.85rem] font-medium">No saved tasks yet</p>
+                <p className="text-[0.85rem] font-medium">No chats yet</p>
                 <p className="text-[0.78rem] leading-snug text-muted-foreground">Everything you ask is saved to your account, so you can come back to it on any device.</p>
               </div>
             ) : (
@@ -237,7 +237,7 @@ function Row({
       {waiting ? (
         <Tooltip>
           <TooltipTrigger asChild>
-            <span tabIndex={0} role="img" aria-label="This task is waiting for you" className="flex size-6 shrink-0 items-center justify-center outline-none">
+            <span tabIndex={0} role="img" aria-label="This chat is waiting for you" className="flex size-6 shrink-0 items-center justify-center outline-none">
               <span className="size-2 rounded-full bg-brass ring-2 ring-brass/25" />
             </span>
           </TooltipTrigger>
@@ -246,7 +246,7 @@ function Row({
       ) : running ? (
         <Tooltip>
           <TooltipTrigger asChild>
-            <span tabIndex={0} role="img" aria-label="A task is running in this conversation" className="flex size-6 shrink-0 items-center justify-center outline-none">
+            <span tabIndex={0} role="img" aria-label="This chat is still working" className="flex size-6 shrink-0 items-center justify-center outline-none">
               <span className="size-2 animate-pulse-dot rounded-full bg-brand" />
             </span>
           </TooltipTrigger>

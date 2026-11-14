@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { APP_NAME } from "@/lib/brand";
 import { AccountMenu } from "@/components/account/account-menu";
 import { ThemeToggle } from "@/components/account/theme-toggle";
+import { NotificationBell } from "@/components/notifications/bell";
 import { Logo } from "@/components/brand/logo";
 
 const TABS = [
@@ -63,6 +64,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               <ArrowLeft className="size-4" />
               Back to the chat
             </Link>
+            {/* Notices reach every page, and a window open here counts as "the user is here". */}
+            <NotificationBell />
             <ThemeToggle />
             <AccountMenu variant="badge" toChat />
           </div>

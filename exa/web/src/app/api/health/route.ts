@@ -24,6 +24,8 @@ export async function GET() {
     models: has("ANTHROPIC_AWS_API_KEY") && has("ANTHROPIC_AWS_WORKSPACE_ID") && has("AWS_REGION") && has("GOOGLE_API_KEY"),
     voice: has("GOOGLE_API_KEY"),
     admin: has("ADMIN_EMAIL") && has("ADMIN_PASSWORD"),
+    // Whether the server can send email (notifications, job results).
+    email: has("RESEND_API_KEY"),
     upSeconds: Math.round((Date.now() - started) / 1000),
     // How many searches and page reads the server has sent since it started: a number that stops
     // moving when nothing is working, which is how a stopped task is seen to have stopped.

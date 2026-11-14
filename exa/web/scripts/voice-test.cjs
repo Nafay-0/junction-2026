@@ -137,9 +137,10 @@ async function main() {
 async function signIn(inHost) {
   const needsSignIn = await until(() => inHost("location.pathname.startsWith('/login') ? 'yes' : document.querySelector('textarea[aria-label=\"Message\"]') ? 'no' : ''"), 30000);
   if (needsSignIn !== "yes") return;
-  const email = process.env.ADMIN_EMAIL;
-  const password = process.env.ADMIN_PASSWORD;
-  if (!email || !password) throw new Error("ADMIN_EMAIL and ADMIN_PASSWORD are needed in exa/.env.local to sign in.");
+  // The admin from exa/.env.local, or another account named by BERYL_TEST_EMAIL and BERYL_TEST_PASSWORD.
+  const email = process.env.BERYL_TEST_EMAIL || process.env.ADMIN_EMAIL;
+  const password = process.env.BERYL_TEST_PASSWORD || process.env.ADMIN_PASSWORD;
+  if (!email || !password) throw new Error("ADMIN_EMAIL and ADMIN_PASSWORD are needed in exa/.env.local to sign in (or BERYL_TEST_EMAIL and BERYL_TEST_PASSWORD for another account).");
   const fill = (selector, value) =>
     inHost(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(el, ${JSON.stringify(value)}); el.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
   await until(() => inHost("(() => { const el = document.querySelector('input[type=email]'); return Boolean(el && document.querySelector('input[type=password]') && Object.keys(el).some((k) => k.startsWith('__reactProps'))); })()"));

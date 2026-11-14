@@ -6,7 +6,7 @@
 /** A request for a conversation that already has a task running is refused with this code. */
 export const RUN_ACTIVE_CODE = "run_active";
 
-export const RUN_ACTIVE_SENTENCE = "A task is still running in this conversation. Wait for it to finish, or stop it first.";
+export const RUN_ACTIVE_SENTENCE = "This chat is still working. Wait for it to finish, or stop it first.";
 
 /** Asked to join a task that has just ended: load the saved conversation instead. */
 export const RUN_GONE_CODE = "run_gone";

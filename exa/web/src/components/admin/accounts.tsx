@@ -489,7 +489,7 @@ function AddDialog({ open, onClose, onDone }: { open: boolean; onClose: () => vo
       <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="font-display text-[1.3rem] leading-tight">{made ? "Account added" : "Add an account"}</DialogTitle>
-          <DialogDescription>{made ? "They can sign in on the web and in the desktop app." : "An ordinary account: it can chat and hand over tasks, and sees only its own conversations."}</DialogDescription>
+          <DialogDescription>{made ? "They can sign in on the web and in the desktop app." : "An ordinary account: it can chat and set up jobs, and sees only its own conversations."}</DialogDescription>
         </DialogHeader>
         {made ? (
           <HandOver email={made.email} password={made.password} onClose={close} />

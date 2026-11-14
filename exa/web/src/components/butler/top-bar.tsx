@@ -13,6 +13,7 @@ import { NO_USAGE, addSummaries, exaCallCount, hasFigures, summarise, totalSpend
 import { useUser } from "@/lib/auth/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { NotificationBell } from "@/components/notifications/bell";
 import { UsageBreakdown, fmtUsd } from "./usage";
 
 /** What every finished answer in the conversation used, added up. Null when there are no figures to show. */
@@ -31,16 +32,19 @@ export function sumUsage(all: Array<RunStats | undefined>): UsageSummary | null 
  * nothing overlaps. The name takes whatever room is left and is cut with an ellipsis. As the
  * column narrows, things step out in this order: the Exa count, the token count, the "New task"
  * label, the product's name beside the logo (the conversation's name matters more). The logo, the
- * cost, the theme switch and the list button always stay.
+ * cost, the bell, the theme switch and the list button always stay.
  */
 export function TopBar({
   usage,
   title,
   onNewChat,
+  onOpenChat,
   showNew,
   sidebarOpen,
   onToggleSidebar,
 }: {
+  /** Open another chat: what a notification about one does. */
+  onOpenChat: (conversationId: string) => void;
   /** What the conversation has used so far, or null when there is nothing to show. */
   usage: UsageSummary | null;
   /** The open conversation's name, once it has one. */
@@ -86,20 +90,21 @@ export function TopBar({
       <div className="flex shrink-0 items-center gap-1">
         {usage && showUsage ? <UsageMeter usage={usage} /> : null}
         <BrowserButton />
+        <NotificationBell onOpenChat={onOpenChat} />
         {showNew ? (
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 type="button"
                 onClick={onNewChat}
-                aria-label="New task"
+                aria-label="New chat"
                 className="flex h-9 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[0.8rem] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <Plus className="size-4" />
-                <span className="hidden @min-[560px]/chat:inline">New task</span>
+                <span className="hidden @min-[560px]/chat:inline">New chat</span>
               </button>
             </TooltipTrigger>
-            <TooltipContent>Start a new task</TooltipContent>
+            <TooltipContent>Start a new chat</TooltipContent>
           </Tooltip>
         ) : null}
         <ThemeToggle />

@@ -16,6 +16,7 @@ import type {
   FlightsData,
   HotelsData,
   ImagesData,
+  JobCardData,
   KeyFactsData,
   PlacesData,
   PredictionMarketData,
@@ -33,6 +34,7 @@ import { KeyFacts } from "@/components/widgets/facts";
 import { Flights } from "@/components/widgets/flights";
 import { Hotels } from "@/components/widgets/hotels";
 import { Images } from "@/components/widgets/images";
+import { JobCard } from "@/components/widgets/job-card";
 import { LocationRequest } from "@/components/widgets/location-request";
 import { PredictionMarket } from "@/components/widgets/market";
 import { PlacesMap } from "@/components/widgets/places-map";
@@ -203,6 +205,24 @@ function renderWidget(part: ToolPart, handlers: WidgetHandlers): React.ReactNode
         "Searching the web",
       );
       return <Sift data={data} loading={loading} />;
+    }
+    case "tool-createJob":
+    case "tool-updateJob": {
+      const making = part.type === "tool-createJob";
+      const { data, loading } = resolve<JobCardData>(
+        part,
+        (i) => ({ kind: "job", action: making ? "created" : "updated", draft: { title: str(i.title, making ? "A new job" : "Your job"), scheduleText: str(i.scheduleText) }, sources: [] }),
+        making ? "Setting up the job" : "Changing the job",
+      );
+      return <JobCard data={data} loading={loading} />;
+    }
+    case "tool-listJobs": {
+      const { data, loading } = resolve<JobCardData>(part, () => ({ kind: "job", action: "list", jobs: [], sources: [] }), "Looking at your jobs");
+      return <JobCard data={data} loading={loading} />;
+    }
+    case "tool-deleteJob": {
+      const { data, loading } = resolve<JobCardData>(part, () => ({ kind: "job", action: "refused", draft: { title: "Your job" }, sources: [] }), "Deleting the job");
+      return <JobCard data={data} loading={loading} />;
     }
     case "tool-getStocks": {
       const { data, loading } = resolve<StocksData>(part, () => ({ kind: "stocks", quotes: [], sources: [] }), "Fetching live prices");

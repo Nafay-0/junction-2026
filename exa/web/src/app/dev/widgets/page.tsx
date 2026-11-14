@@ -19,6 +19,7 @@ import { Plan } from "@/components/widgets/plan";
 import { Products } from "@/components/widgets/products";
 import { Research } from "@/components/widgets/research";
 import { Sift } from "@/components/widgets/sift";
+import { JobCard } from "@/components/widgets/job-card";
 import { Stocks } from "@/components/widgets/stocks";
 import { Weather } from "@/components/widgets/weather";
 import { actionsFixture, actionsLoadingFixture } from "@/lib/widgets/fixtures/actions";
@@ -29,6 +30,7 @@ import { factsFixture, factsLoadingFixture } from "@/lib/widgets/fixtures/facts"
 import { flightsFixture, flightsLoadingFixture } from "@/lib/widgets/fixtures/flights";
 import { hotelsFixture, hotelsLoadingFixture } from "@/lib/widgets/fixtures/hotels";
 import { imagesFixture, imagesLoadingFixture } from "@/lib/widgets/fixtures/images";
+import { jobCreatedFixture, jobDeletedFixture, jobListFixture, jobLoadingFixture, jobRefusedFixture } from "@/lib/widgets/fixtures/job";
 import { marketFixture, marketLoadingFixture } from "@/lib/widgets/fixtures/market";
 import { placesFixture, placesLoadingFixture } from "@/lib/widgets/fixtures/places-map";
 import { planFixture } from "@/lib/widgets/fixtures/plan";
@@ -73,6 +75,10 @@ export default function WidgetGallery() {
     ["hotels", <Hotels key="hotels" data={loading ? hotelsLoadingFixture : hotelsFixture} loading={loading} />],
     ["products", <Products key="products" data={loading ? productsLoadingFixture : productsFixture} loading={loading} />],
     ["stocks", <Stocks key="stocks" data={loading ? stocksLoadingFixture : stocksFixture} loading={loading} />],
+    ["job", <JobCard key="job" data={loading ? jobLoadingFixture : jobCreatedFixture} loading={loading} />],
+    ["job-list", <JobCard key="job-list" data={jobListFixture} />],
+    ["job-deleted", <JobCard key="job-deleted" data={jobDeletedFixture} />],
+    ["job-refused", <JobCard key="job-refused" data={jobRefusedFixture} />],
     ["market", <PredictionMarket key="market" data={loading ? marketLoadingFixture : marketFixture} loading={loading} />],
     ["images", <Images key="images" data={loading ? imagesLoadingFixture : imagesFixture} loading={loading} />],
     ["research", <Research key="research" data={loading ? researchLoadingFixture : researchFixture} loading={loading} />],

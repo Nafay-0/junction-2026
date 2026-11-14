@@ -563,6 +563,23 @@ export type LocationAnswer =
 /* ───────────────────────── Helpers ───────────────────────── */
 
 /** Props every widget component takes. */
+/**
+ * A scheduled job, as the chat shows it after the agent made, changed, listed or deleted one.
+ * The job itself is described in lib/jobs/types.ts.
+ */
+export type JobCardData = WidgetBase & {
+  kind: "job";
+  /** "refused": nothing was done, and `error` says why. */
+  action: "created" | "updated" | "deleted" | "list" | "refused";
+  job?: import("@/lib/jobs/types").JobItem;
+  /** For "list": every job the account has. */
+  jobs?: Array<import("@/lib/jobs/types").JobItem>;
+  /** The next few runs (ms since 1970), so the user sees what the schedule really means. */
+  nextRuns?: number[];
+  /** While the job is being set up: what the agent is making. */
+  draft?: { title?: string; scheduleText?: string };
+};
+
 export type WidgetProps<T> = {
   data: T;
   /** True while the tool is still running; `data` may be partial. */

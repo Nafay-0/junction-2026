@@ -32,6 +32,9 @@ importers:
       cn:
         specifier: ^0.5.2
         version: 0.5.2
+      croner:
+        specifier: ^11.0.0
+        version: 11.0.0
       drizzle-orm:
         specifier: ^0.45.4
         version: 0.45.4(postgres@4.1.1)
@@ -44,6 +47,9 @@ importers:
       maplibre-gl:
         specifier: ^6.18.0
         version: 6.18.0
+      marked:
+        specifier: ^18.2.0
+        version: 18.2.0
       motion:
         specifier: ^14.13.0
         version: 14.13.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -2643,6 +2649,10 @@ packages:
 
   convert-source-map@2.0.0:
     resolution: {integrity: sha512-Kvp459HrV2FEJ1CAsi1Ku+MY3kasH19TFykTz2xWmMeq6bk2NU3XXvfJ+Q61m0xktWwt+1HSYf3JZsTms3aRJg==}
+
+  croner@11.0.0:
+    resolution: {integrity: sha512-T17ADjdttrVToyzLpLq9Xb9xzcMwpQ/M3Qs9szhh0MVNTbv6NWQ9OFYa2qlzPYXFMn+uoDlnW1IpIv6cAvFtyA==}
+    engines: {node: '>=18.0'}
 
   cross-fetch@4.1.0:
     resolution: {integrity: sha512-uKm5PU+MHTootlWEY+mZ4vvXoCn4fLQxT9dSc1sXVMSFkINTJVN8cAQROpwcKm8bJ/c7rgZVIBWzH5T78sNZZw==}
@@ -7569,6 +7579,8 @@ snapshots:
       semver: 7.8.6
 
   convert-source-map@2.0.0: {}
+
+  croner@11.0.0: {}
 
   cross-fetch@4.1.0:
     dependencies:

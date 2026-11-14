@@ -5,7 +5,7 @@ import type { ClientKind } from "@/lib/client-kind";
 import { database } from "./client";
 import { usageEvents } from "./schema";
 
-export type UsageKind = "chat" | "voice" | "tool";
+export type UsageKind = "chat" | "voice" | "tool" | "job";
 
 const whole = (n: number | undefined) => (typeof n === "number" && Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0);
 const money = (n: number | undefined) => (typeof n === "number" && Number.isFinite(n) ? Math.max(0, n) : 0);
@@ -21,7 +21,7 @@ export async function recordUsage(input: {
   client: ClientKind;
   /** The model that did the work. The figures themselves name a mode, never a model. */
   model: { id: string; label: string };
-  /** "chat": a typed request. "voice": a live call or voice input. "tool": a tool run on behalf of a live call. */
+  /** "chat": a typed request. "voice": a live call or voice input. "tool": a tool run on behalf of a live call. "job": one run of a scheduled job. */
   kind: UsageKind;
   stats: RunStats;
 }): Promise<void> {

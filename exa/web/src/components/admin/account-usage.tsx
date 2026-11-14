@@ -100,7 +100,7 @@ export function UsageDialog({ account, onClose }: { account: Account | null; onC
               </Empty>
             ) : (
               <>
-                <Section title="Where the money went" note={`${count(data.period.exaCalls)} Exa calls${data.period.decisionCalls > 0 ? `, ${count(data.period.decisionCalls)} requests to the decision model` : ""}.`}>
+                <Section title="Where the money went" note={`${count(data.period.exaCalls)} Exa calls${data.period.decisionCalls > 0 ? `, ${count(data.period.decisionCalls)} requests to the decision model` : ""}.${data.period.jobRuns > 0 ? ` Scheduled jobs ran ${count(data.period.jobRuns)} ${data.period.jobRuns === 1 ? "time" : "times"} and cost ${usd(data.period.jobsUsd)} of this.` : ""}`}>
                   <SpendSplit spend={data.period} />
                 </Section>
                 <Section title="By mode" note="What the account picked.">

@@ -259,7 +259,7 @@ export function titleFrom(messages: ButlerMessage[]): string {
   const first = messages.find((m) => m.role === "user");
   const text = first?.parts.find((p) => p.type === "text");
   const title = titleOf(text && text.type === "text" ? text.text : "");
-  if (!title) return first?.parts.some((p) => p.type === "file") ? "Image search" : "New task";
+  if (!title) return first?.parts.some((p) => p.type === "file") ? "Image search" : "New chat";
   return title;
 }
 

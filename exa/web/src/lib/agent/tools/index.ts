@@ -5,6 +5,7 @@ import type { RunStats } from "../stats";
 import { browserActTool, browserCloseTool, browserLookTool, browserOpenTool, browserReadTool, requestUserActionTool } from "./browser";
 import { askUserTool, requestLocationTool, showActionsTool, showComparisonTool, showKeyFactsTool, showWidgetTool, updatePlanTool } from "./compose";
 import type { ToolContext } from "./context";
+import { createJobTool, deleteJobTool, listJobsTool, updateJobTool } from "./jobs";
 import { getPredictionMarketTool, getStocksTool } from "./markets";
 import { findPlacesTool, getWeatherTool } from "./places";
 import { deepResearchTool } from "./research";
@@ -23,14 +24,18 @@ import { searchFlightsTool, searchHotelsTool } from "./travel";
  */
 export function createTools(ctx: ToolContext, mainModel: LanguageModel) {
   const all = allTools(ctx, mainModel);
-  if (ctx.client === "desktop") return all;
-  const reading: Partial<typeof all> = { ...all };
-  for (const name of DESKTOP_ONLY) delete reading[name];
-  return reading as typeof all;
+  const given: Partial<typeof all> = { ...all };
+  if (ctx.client !== "desktop") for (const name of DESKTOP_ONLY) delete given[name];
+  // Jobs belong to an account: where the request names none, the agent cannot manage them.
+  if (!ctx.userId) for (const name of JOB_TOOLS) delete given[name];
+  return given as typeof all;
 }
 
 /** The tools that act in the live browser. Only the desktop app has one. */
 export const DESKTOP_ONLY = ["browserOpen", "browserAct", "browserRead", "browserLook", "browserClose", "requestUserAction"] as const;
+
+/** The tools that make and manage the user's scheduled jobs. */
+export const JOB_TOOLS = ["createJob", "listJobs", "updateJob", "deleteJob"] as const;
 
 function allTools(ctx: ToolContext, mainModel: LanguageModel) {
   return {
@@ -59,6 +64,10 @@ function allTools(ctx: ToolContext, mainModel: LanguageModel) {
     browserLook: browserLookTool(),
     browserClose: browserCloseTool(),
     requestUserAction: requestUserActionTool(),
+    createJob: createJobTool(ctx),
+    listJobs: listJobsTool(ctx),
+    updateJob: updateJobTool(ctx),
+    deleteJob: deleteJobTool(ctx),
   };
 }
 

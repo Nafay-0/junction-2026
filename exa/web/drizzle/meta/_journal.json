@@ -15,6 +15,13 @@
       "when": 1794656296866,
       "tag": "0001_modes_usage_kinds_and_caps",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794671670269,
+      "tag": "0002_jobs_and_notifications",
+      "breakpoints": true
     }
   ]
 }

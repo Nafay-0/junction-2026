@@ -25,6 +25,7 @@ import {
   useConversations,
 } from "@/lib/conversations";
 import { describe, locate, useExactLocation, type LocateResult } from "@/lib/location";
+import { markNotificationsRead, onNewNotification, reportNeedsYou, type NeedsYou } from "@/lib/notifications/client";
 import { useClientValue, useMediaQuery, useStored } from "@/lib/use-client";
 import { USAGE_CAP_SENTENCE } from "@/lib/usage-cap";
 import { isCapRefusal, markCapReached, refreshCap, useCap } from "@/lib/usage-cap-client";
@@ -33,6 +34,8 @@ import { fetchRunState, refreshRunning, stopRunOnServer, useRunning } from "@/li
 import type { ClarifyAnswer, ExactLocation, LocationAnswer } from "@/lib/widgets/types";
 import { liveCall, useCall } from "@/lib/voice/use-call";
 import { BrowserWorkspace, useBrowserLayout } from "@/components/browser/workspace";
+import { useOpenNotification } from "@/components/notifications/bell";
+import { SlowNote } from "@/components/notifications/slow-note";
 import { CallBar, CallView } from "@/components/voice/call-view";
 import { CapDialog, CapNote } from "./cap";
 import { Composer, type ComposerHandle } from "./composer";
@@ -153,6 +156,16 @@ function waitsFor(messages: ButlerMessage[], type?: string, toolCallId?: string)
   return last.parts.some((p) => "toolCallId" in p && "state" in p && p.state === "input-available" && (type === undefined || p.type === type) && (toolCallId === undefined || p.toolCallId === toolCallId));
 }
 
+/** The step in the last answer that is still waiting: of the given kind, and with the given id when one is named. */
+function waitingPart(messages: ButlerMessage[], type: string, toolCallId?: string): { toolCallId: string; input?: unknown } | undefined {
+  const last = messages.at(-1);
+  if (last?.role !== "assistant") return undefined;
+  for (const p of last.parts) {
+    if (p.type === type && "toolCallId" in p && "state" in p && p.state === "input-available" && (toolCallId === undefined || p.toolCallId === toolCallId)) return { toolCallId: p.toolCallId, input: p.input };
+  }
+  return undefined;
+}
+
 /** A picture the agent took of a page is for the answer being written. It is not kept in the saved conversation. */
 function withoutPictures(messages: ButlerMessage[]): ButlerMessage[] {
   const has = (p: ButlerMessage["parts"][number]) => p.type === "tool-browserLook" && p.state === "output-available" && Boolean(p.output?.picture);
@@ -178,7 +191,7 @@ const BROWSER_BUSY = {
   title: "",
   ok: false,
   problem:
-    "The live browser is being used by another of the user's tasks right now, and there is only one. This step was not taken. Tell the user in one sentence that this task needs the browser the other task is using, and that they can ask again when it has finished or stop it. Do not retry.",
+    "The live browser is being used by another of the user's chats right now, and there is only one. This step was not taken. Tell the user in one sentence that this chat needs the browser the other chat is using, and that they can ask again when it has finished or stop it. Do not retry.",
   page: "",
   sources: [] as [],
 };
@@ -396,6 +409,16 @@ export function Butler() {
     } catch {
       /* ignore */
     }
+    // An address that names a chat (/?chat=<id>, which is what an email links to) opens that one.
+    // The address is then tidied, so a reload goes by what is open and not by what the link said.
+    const linked = new URLSearchParams(window.location.search).get("chat");
+    if (linked !== null) {
+      if (/^[A-Za-z0-9_-]{6,80}$/.test(linked)) {
+        lastId = linked;
+        remember(linked);
+      }
+      window.history.replaceState(null, "", window.location.pathname + window.location.hash);
+    }
     void (lastId ? openConversation(lastId) : Promise.resolve(null)).then((found) => {
       if (cancelled) return;
       setActive(found ?? { id: newConversationId(), messages: [] });
@@ -468,6 +491,37 @@ export function Butler() {
     [leave],
   );
 
+  /* A notification that arrives while the page is open is announced once. One about the chat the
+     user is looking at needs no announcing: it is marked read. When the window is not the one in
+     use, the system is asked to show it too (the desktop app may; a website only where the user
+     has allowed it), since nobody is looking at a toast in a window behind another. */
+  const openNotice = useOpenNotification(open);
+  React.useEffect(
+    () =>
+      onNewNotification((item) => {
+        const inFront = document.visibilityState === "visible" && document.hasFocus();
+        if (inFront && item.conversationId && item.conversationId === activeId.current) {
+          void markNotificationsRead([item.id]);
+          return;
+        }
+        const opens = Boolean(item.conversationId || item.jobId);
+        toast(item.title, { description: item.body || undefined, duration: 12_000, action: opens ? { label: "Open", onClick: () => openNotice(item) } : undefined });
+        if (inFront) return;
+        try {
+          if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+          const shown = new Notification(item.title, { body: item.body || undefined, tag: item.id });
+          shown.onclick = () => {
+            window.focus();
+            if (opens) openNotice(item);
+            shown.close();
+          };
+        } catch {
+          /* the system would not show it: the bell and the email still do their part */
+        }
+      }),
+    [openNotice],
+  );
+
   // A task was left waiting when the app was last closed: say so once, with a way to open it.
   // The list may be closed or out of view, and the mark there is easy to miss.
   const toldLeft = React.useRef(false);
@@ -477,7 +531,7 @@ export function Butler() {
     if (found.length === 0) return;
     toldLeft.current = true;
     const first = found[0];
-    toast(found.length > 1 ? `${found.length} tasks are waiting for you` : "A task is waiting for you", {
+    toast(found.length > 1 ? `${found.length} chats are waiting for you` : "A chat is waiting for you", {
       description: found.length > 1 ? "Open one from the list to carry on." : conversations.find((c) => c.id === first)?.title,
       duration: 20_000,
       action: { label: "Open", onClick: () => open(first) },
@@ -547,6 +601,7 @@ export function Butler() {
                   registerHandover={registerHandover}
                   onWorking={onWorking}
                   onNeedsUser={onNeedsUser}
+                  onOpenChat={open}
                   startedIn={meta?.origin}
                   title={meta?.title}
                 />
@@ -570,6 +625,7 @@ function ChatView({
   registerHandover,
   onWorking,
   onNeedsUser,
+  onOpenChat,
   hidden,
   rejoin,
   startedIn,
@@ -583,6 +639,8 @@ function ChatView({
   onWorking: (id: string, working: boolean) => void;
   /** Tell the shell whether this conversation is waiting for the user in the live browser. */
   onNeedsUser: (id: string, waiting: boolean) => void;
+  /** Open another chat: what a notification about one does. */
+  onOpenChat: (id: string) => void;
   /** Where the browser pane finds this conversation's way of answering a hand-over. */
   registerHandover: (id: string, handler: ((answer: HandoverAnswer, toolCallId?: string) => void) | null) => void;
   /** The conversation's name, once it has been saved under one. */
@@ -737,6 +795,30 @@ function ChatView({
     onNeedsUser(conversationId, theirTurn || theirYes);
   }, [onNeedsUser, conversationId, theirTurn, theirYes]);
   React.useEffect(() => () => onNeedsUser(conversationId, false), [onNeedsUser, conversationId]);
+  /* The server is told too, so it can reach a user who is not at the screen: the notice shows in
+     the app at once, and an email follows if a minute later it is still waiting and they are
+     away. When they have dealt with it the server is told that as well, and no email goes out.
+     The step that is waiting names the report, so each one is told once. */
+  const handover = theirTurn ? waitingPart(messages, "tool-requestUserAction") : undefined;
+  const handoverInput = (handover?.input ?? {}) as { kind?: NeedsYou["what"]; reason?: string };
+  const needsId = theirYes ? approvalId : handover?.toolCallId;
+  const needsWhat: NonNullable<NeedsYou["what"]> = theirYes ? "approval" : (handoverInput.kind ?? "other");
+  const needsText = theirYes ? undefined : handoverInput.reason;
+  React.useEffect(() => {
+    if (!needsId) return;
+    let told = false;
+    // A moment later, so a view that is put straight back (development does that) tells it once.
+    const timer = setTimeout(() => {
+      told = true;
+      const approval = browserState().approval;
+      const text = needsWhat === "approval" ? (approval?.toolCallId === needsId ? approval.summary : undefined) : needsText;
+      reportNeedsYou({ conversationId, toolCallId: needsId, what: needsWhat, text });
+    }, 400);
+    return () => {
+      clearTimeout(timer);
+      if (told) reportNeedsYou({ conversationId, toolCallId: needsId, resolved: true });
+    };
+  }, [needsId, needsWhat, needsText, conversationId]);
 
   /* A task that is already running on the server (the page was reloaded or closed, or the task
      was started from another window): the conversation was opened as that task found it, and
@@ -1096,7 +1178,7 @@ function ChatView({
   return (
     <>
       {hidden ? null : <LayoutBridge target={openBrowser} onBeside={onBrowserBeside} onGone={onBrowserGone} />}
-      <TopBar usage={usage} title={empty ? undefined : title} onNewChat={onNewTask} showNew={!empty} sidebarOpen={sidebarOpen} onToggleSidebar={onToggleSidebar} />
+      <TopBar usage={usage} title={empty ? undefined : title} onNewChat={onNewTask} onOpenChat={onOpenChat} showNew={!empty} sidebarOpen={sidebarOpen} onToggleSidebar={onToggleSidebar} />
       <CapDialog open={capOpen && !hidden} onOpenChange={setCapOpen} />
 
       {calling ? (
@@ -1185,6 +1267,8 @@ function ChatView({
         <div className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-t from-background to-transparent" />
         <div className="safe-bottom mx-auto w-full max-w-[760px] px-3 sm:px-4">
           {calling ? <CallBar call={call} onShowCall={() => setCallView("live")} /> : null}
+          {/* Working for a while in one go, and not waiting on the user: offer to tell them when it is done. */}
+          {working && !theirYes && !hidden && !readOnly && !capped && !calling ? <SlowNote conversationId={conversationId} /> : null}
           {readOnly ? (
             <ReadOnlyNote startedIn={startedIn ?? "web"} onNewTask={onNewTask} />
           ) : capped ? (
@@ -1253,7 +1337,7 @@ function ReadOnlyNote({ startedIn, onNewTask }: { startedIn: ClientKind; onNewTa
         className="flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-primary px-4 text-[0.85rem] font-medium text-primary-foreground transition-[transform,opacity] hover:opacity-90 active:scale-[0.98]"
       >
         <Plus className="size-4" />
-        New task
+        New chat
       </button>
     </div>
   );

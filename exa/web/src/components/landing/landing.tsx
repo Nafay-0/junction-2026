@@ -1,4 +1,4 @@
-import { AudioLines, Check, Globe, KeyRound, LayoutGrid, Layers, ListFilter, Monitor, MousePointerClick, Play, ShieldCheck, Smartphone, Telescope, Users, WalletCards } from "lucide-react";
+import { AudioLines, Bell, CalendarClock, Check, Globe, KeyRound, Layers, LayoutGrid, ListFilter, Mail, Monitor, MousePointerClick, Play, ShieldCheck, Smartphone, Telescope, Users, WalletCards } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { APP_NAME, APP_TAGLINE } from "@/lib/brand";
 import { Logo } from "@/components/brand/logo";
@@ -144,10 +144,38 @@ export function Landing({ signedIn = false, demoVideo = "" }: { signedIn?: boole
                   ))}
                 </ul>
               </Card>
+              <Card className="lg:col-span-3" icon={<CalendarClock />} title="Works on a schedule" text={`Ask once and ${APP_NAME} does it on time, every time, and emails you the result. Pause, change or try a job whenever you like.`}>
+                <ul className="space-y-1.5">
+                  {[
+                    ["Morning AI news", "Weekdays at 08:00"],
+                    ["RTX 5090 price watch", "Every 6 hours"],
+                    ["Flights to Lisbon under 150 €", "Fridays at 17:00"],
+                  ].map(([name, schedule]) => (
+                    <li key={name} className="flex h-10 items-center gap-2.5 rounded-xl bg-surface px-3 text-[0.84rem] hairline">
+                      <span className="min-w-0 flex-1 truncate">{name}</span>
+                      <span className="shrink-0 text-[0.78rem] text-muted-foreground">{schedule}</span>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+              <Card className="lg:col-span-3" icon={<Bell />} title="Tells you when it matters" text="A long chat is done, a job has run, or the browser needs your OK. You see it in the app, and get an email only when you&apos;re away.">
+                <ul className="space-y-1.5">
+                  {[
+                    [<Check key="i" />, "Done: lease or buy an electric car"],
+                    [<Mail key="i" />, "Morning AI news is in your inbox"],
+                    [<Bell key="i" />, "Waiting for your approval: reserve a table"],
+                  ].map(([icon, line]) => (
+                    <li key={String(line)} className="flex h-10 items-center gap-2.5 rounded-xl bg-surface px-3 text-[0.84rem] hairline">
+                      <span className="flex size-5 shrink-0 items-center justify-center text-brand [&_svg]:size-4">{icon}</span>
+                      <span className="min-w-0 flex-1 truncate">{line}</span>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
               <Card className="lg:col-span-2" icon={<ModeIcon mode="smart" />} title="Pick your pace" text="Four modes, from Ultra fast to Expert, and a dial for how hard it should think.">
                 <ModesDemo />
               </Card>
-              <Card className="lg:col-span-2" icon={<Layers />} title="Keeps working without you" text="Close the tab or start something else. Your task keeps running, and you can have several going at once.">
+              <Card className="lg:col-span-2" icon={<Layers />} title="Keeps working without you" text="Close the tab or start something else. Your chat keeps working, and you can have several going at once.">
                 <ul className="space-y-1.5">
                   {[
                     ["Lease or buy an electric car", true],
@@ -188,7 +216,7 @@ export function Landing({ signedIn = false, demoVideo = "" }: { signedIn?: boole
         {/* ───────── Demo ───────── */}
         <section id="demo" className="scroll-mt-16 border-t border-border/60 bg-surface/50">
           <div className="mx-auto w-full max-w-[960px] px-5 py-16 sm:px-8 sm:py-24">
-            <SectionTitle title="Watch it work" lead="A two-minute tour, from a question to a finished task." />
+            <SectionTitle title="Watch it work" lead="A two-minute tour, from a question to the finished result." />
             <Reveal className="mt-10 sm:mt-12">
               <DemoVideo src={demoVideo} />
             </Reveal>

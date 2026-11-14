@@ -62,7 +62,7 @@ const mine = (userId: string, id: string) => and(eq(conversations.userId, userId
 
 const cleanTitle = (title: string) => {
   const t = title.replace(/\s+/g, " ").trim();
-  return (t.length > 200 ? `${t.slice(0, 199)}…` : t) || "New task";
+  return (t.length > 200 ? `${t.slice(0, 199)}…` : t) || "New chat";
 };
 
 /**

@@ -23,7 +23,7 @@ export type ModeInfo = {
 export const MODES: ModeInfo[] = [
   { id: "ultrafast", label: "Ultra fast", blurb: "Quick answers for everyday things.", rank: 0 },
   { id: "fast", label: "Fast", blurb: "Fast, with a bit more care.", rank: 1 },
-  { id: "smart", label: "Smart", blurb: "Thinks it through. Best for most tasks.", rank: 2 },
+  { id: "smart", label: "Smart", blurb: "Thinks it through. Best for most things.", rank: 2 },
   { id: "expert", label: "Expert", blurb: "For the hard questions. Takes longer.", rank: 3 },
 ];
 

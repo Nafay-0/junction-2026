@@ -64,6 +64,12 @@ gcloud storage cp desktop/release/downloads/* gs://beryl-exa-downloads/ --cache-
 
 The address is baked into the app. The installers in the bucket open `https://beryl.zeroanomaly.tech` (built and uploaded 14 Nov, 17:07). The upload does not restart the server. The app's browser engine is inside the installer, so a change under `web/src/lib/browser/` or `web/desktop/` reaches people only through a new installer; the interface comes from the server and is new with every deploy.
 
+## Email and scheduled jobs
+
+- Emails (notifications, job results) go out through Resend from `notifications@beryl.zeroanomaly.tech`; the domain is verified there. The server needs `RESEND_API_KEY` as a secret, and `BERYL_SITE_URL=https://beryl.zeroanomaly.tech` so links in emails point at the site. `/api/health` says `"email": true` when the key is there.
+- Jobs are started by a clock inside the server, so they run only while the one instance is up. That is already how the service is set (always on, exactly one instance). A job that came due during a deploy runs once the new revision is up; a run that was in progress when the server stopped is marked failed.
+- Migration `0002_jobs_and_notifications` adds the tables. It is applied by the server when it starts, like the others.
+
 ## Changing a setting
 
 - A key: `printf %s "<value>" | gcloud secrets versions add <NAME> --project beryl-exa --data-file=-`, then `gcloud run services update beryl --project beryl-exa --region europe-north1 --update-secrets <NAME>=<NAME>:latest`.
