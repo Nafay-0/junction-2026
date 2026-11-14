@@ -45,14 +45,14 @@ const ATTEMPTS = [
 ];
 
 const useT = () => {
-  const P = c("order", 8);
+  const P = c("order", -2);
   return {
     dock: c("never", 6),
     ring: [c("Twenty", -4), c("code", 8)] as const,
-    checks: [c("check"), c("order", 8)] as const,
+    checks: [c("check", -4), c("order", -4)] as const,
     pass: P,
-    block: P + 24,
-    hits: ATTEMPTS.map((a) => c(a.word, 6)),
+    block: P + 18,
+    hits: ATTEMPTS.map((a) => c(a.word, 12)),
     tally: c("All stopped"),
     chain: c("tamper-evident"),
   };
@@ -110,8 +110,8 @@ export const Gate = () => {
   const dock = interpolate(frame, [0, T.dock], [0, 1], { ...clamp, easing: EASE });
   const lit = interpolate(frame, T.ring, [0, 20], { ...clamp, easing: EASE_IO });
   const checks = interpolate(frame, T.checks, [0, 4], clamp);
-  const pass = interpolate(frame, [T.pass, T.pass + 26], [0, 1], { ...clamp, easing: EASE_IO });
-  const fold = interpolate(frame, [T.block - 6, T.block + 18], [0, 1], { ...clamp, easing: EASE_IO });
+  const pass = interpolate(frame, [T.pass, T.pass + 22], [0, 1], { ...clamp, easing: EASE_IO });
+  const fold = interpolate(frame, [T.block - 4, T.block + 14], [0, 1], { ...clamp, easing: EASE_IO });
   const glow = interpolate(frame, [T.checks[1] - 4, T.checks[1] + 4, T.pass + 30], [0, 1, 0], clamp);
   const knock = T.hits.reduce((s, h) => s + interpolate(frame, [h - 1, h + 1, h + 22], [0, 1, 0], clamp), 0);
   const barrier = T.hits.reduce((s, h) => s + interpolate(frame, [h - 2, h + 4, h + 26, h + 38], [0, 1, 1, 0], { ...clamp, easing: EASE_IO }), 0);
@@ -169,9 +169,9 @@ export const Gate = () => {
 
       {/* the order: beneath the gate in depth, so it goes through it */}
       {fold < 1 || end > 0 ? (
-        <div style={{ position: "absolute", left: card.x, top: card.y, width: card.w, height: card.h, boxSizing: "border-box", borderRadius: 26 - 8 * fold, background: `rgb(255 255 255 / ${1 - 0.93 * fold})`, border: fold > 0 ? `2.5px solid rgb(192 224 33 / ${fold})` : undefined, boxShadow: fold < 1 ? SHADOW.xl : `0 0 ${40 * live(2)}px -8px rgb(192 224 33 / 0.8)`, overflow: "hidden", opacity: end }}>
-          <Order k={Math.min(1, fold * 2)} />
-          <BlockFace b={CHAIN[2]} k={Math.max(0, fold * 2 - 1)} live={live(2)} />
+        <div style={{ position: "absolute", left: card.x, top: card.y, width: card.w, height: card.h, boxSizing: "border-box", borderRadius: 26 - 8 * fold, background: `rgb(255 255 255 / ${1 - 0.93 * interpolate(fold, [0.55, 0.95], [0, 1], clamp)})`, border: fold > 0.4 ? `2.5px solid rgb(192 224 33 / ${interpolate(fold, [0.4, 0.8], [0, 1], clamp)})` : undefined, boxShadow: fold < 1 ? SHADOW.xl : `0 0 ${40 * live(2)}px -8px rgb(192 224 33 / 0.8)`, overflow: "hidden", opacity: end }}>
+          <Order k={interpolate(fold, [0.05, 0.4], [0, 1], clamp)} />
+          <BlockFace b={CHAIN[2]} k={interpolate(fold, [0.6, 1], [0, 1], clamp)} live={live(2)} />
         </div>
       ) : null}
 

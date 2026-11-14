@@ -200,7 +200,7 @@ export const Agents = () => {
             const pts = [[x0, a.y], [left ? x0 + 150 : x0 - 150, a.y], [left ? x1 - 150 : x1 + 150, y1], [x1, y1]];
             return (
               <g key={a.name}>
-                <path d={`M ${pts[0]} C ${pts[1]}, ${pts[2]}, ${pts[3]}`} fill="none" stroke="rgb(192 224 33 / 0.4)" strokeWidth={2.5} strokeDasharray="6 10" opacity={prog(frame, T.ghosts + 10 + k * 4, 16)} />
+                <path d={`M ${pts[0]} C ${pts[1]}, ${pts[2]}, ${pts[3]}`} fill="none" stroke="rgb(192 224 33 / 0.4)" strokeWidth={2.5} strokeDasharray="6 10" strokeDashoffset={-frame * 0.8} opacity={prog(frame, T.ghosts + 10 + k * 4, 16)} />
                 <Wire pts={pts} at={a.at - 4} dur={14} every={54} offset={k * 9} rest={0.6} />
                 {frame >= T.meet + 2 && <Wire pts={pts} at={T.meet + 2} dur={14} rest={0} width={5} />}
               </g>
@@ -214,8 +214,11 @@ export const Agents = () => {
         {SIX.map((a, i) => {
           const lit = prog(frame, a.at - 6, 12);
           const glow = i === 0 ? Math.max(lit, 0.6 + 0.4 * toBuyer) * lit : lit * (1 - 0.35 * toBuyer);
-          const g = prog(frame, T.ghosts + i * 4, 16);
-          return <AgentNode key={a.name} name={a.name} sub={a.sub} lit={glow} ghost={g} style={{ position: "absolute", left: a.x, top: a.y - NODE_H / 2, scale: String(0.96 + 0.04 * lit) }} />;
+          // The six places open out of the gate as the narrator says "six agents", and wait for their agents.
+          const g = interpolate(frame, [T.ghosts + i * 4, T.ghosts + i * 4 + 22], [0, 1], { ...clamp, easing: EASE });
+          const ox = (RING_GATE.x - (a.x + AGENT_W / 2)) * (1 - g);
+          const oy = (RING_GATE.y - a.y) * (1 - g);
+          return <AgentNode key={a.name} name={a.name} sub={a.sub} lit={glow} ghost={g} style={{ position: "absolute", left: a.x, top: a.y - NODE_H / 2, translate: `${ox.toFixed(2)}px ${oy.toFixed(2)}px`, scale: String((0.5 + 0.5 * g) * (0.96 + 0.04 * lit)) }} />;
         })}
         <div style={{ position: "absolute", left: gx, top: gy }}>
           <TheGate w={RING_GATE.w} lit={20} checks={4} flash={Math.min(1, pulses)} glow={Math.min(1, pulses * 0.6 + meet * 0.25)} />

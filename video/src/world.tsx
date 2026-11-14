@@ -201,7 +201,7 @@ export const TheGate = ({ w = GATE_W, lit = 0, checks = 0, fail = -1, barrier = 
             );
           })}
         </div>
-        <div style={{ position: "absolute", left: -64, right: -64, top: 640 - 260 * (1 - barrier), height: 44, borderRadius: 12, background: `repeating-linear-gradient(135deg, ${C.safety} 0 26px, ${C.slab} 26px 52px)`, opacity: Math.min(1, barrier * 1.6), boxShadow: "0 16px 30px -10px rgb(0 0 0 / 0.6)" }} />
+        <div style={{ position: "absolute", left: -64, right: -64, top: 640 - 46 * (1 - barrier), height: 44, borderRadius: 12, background: `repeating-linear-gradient(135deg, ${C.safety} 0 26px, ${C.slab} 26px 52px)`, opacity: Math.min(1, barrier * 2), boxShadow: "0 16px 30px -10px rgb(0 0 0 / 0.6)" }} />
       </div>
     </div>
   );
