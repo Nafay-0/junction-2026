@@ -24,6 +24,16 @@
  *   vecjudge50  semantic recall only, 50 candidates, judged
  *   opus50      judge50's 50 candidates re-ranked by Claude Opus 5.5 (reference, not for shipping)
  *
+ * Common-practice baselines, on OpenSearch (--baselines; OPENSEARCH_URL or --baselines-url; --baselines-index, default
+ * dock-recall: the index pnpm search:publish:opensearch creates). The buyer's words as typed, no reading of them:
+ *   bm25              a plain multi_match (best_fields, OR) with OpenSearch's default BM25 (k1 1.2, b 0.75) over
+ *                     names.fi (finnish analyzer), names.sv (swedish), names.en (english) and brand (lowercase, ascii
+ *                     folding); no synonyms, no filters, no rules, no judge
+ *   knn               k-NN alone: the query embedding against the same 768-d product vectors (Lucene HNSW, cosine)
+ *   hybrid_rrf        bm25 and knn, 100 each, fused by reciprocal rank (k = 60, equal weights): no rules, no judge
+ *   bm25_rules, hybrid_rrf_rules   the same lists with our hard rules applied in code afterwards (claims and
+ *                     allergens read from the words, recall.ts hardFilter): what the rules add without a judge
+ *
  * Timing: every embedding and judge answer is cached on disk (.data/search-eval/) with the time it took when it was
  * fetched; a cached answer replays that measured time, so a re-run reports the same latency without paying again.
  * Prints ids and figures only. Partner text never leaves .data/.
@@ -216,6 +226,47 @@ async function main() {
     judge100: (c) => run(c, "judge100", { recallSize: 100 }),
     judge200: (c) => run(c, "judge200", { recallSize: 200 }),
   };
+  if (flag("baselines")) {
+    const { Client } = await import("@opensearch-project/opensearch");
+    const url = arg("baselines-url") ?? process.env.OPENSEARCH_URL?.trim();
+    if (!url) throw new Error("--baselines needs OPENSEARCH_URL or --baselines-url (a local Docker OpenSearch with pnpm search:publish:opensearch)");
+    const os = new Client({ node: url, requestTimeout: 10_000, maxRetries: 0 });
+    const ix = arg("baselines-index") ?? "dock-recall";
+    const ids = (body: unknown) => ((body as { hits?: { hits?: { _id: string }[] } }).hits?.hits ?? []).map((h) => h._id);
+    const bm25 = async (text: string) => ids((await os.search({ index: ix, body: { size: 100, _source: false, query: { multi_match: { query: text, fields: ["names.fi", "names.sv", "names.en", "brand"] } } } })).body);
+    const knn = async (vector: number[]) => ids((await os.search({ index: ix, body: { size: 100, _source: false, query: { knn: { vec: { vector, k: 100 } } } } })).body);
+    const rrf = (lists: string[][]) => {
+      const score = new Map<string, number>();
+      for (const l of lists) l.forEach((id, rank) => score.set(id, (score.get(id) ?? 0) + 1 / (60 + rank + 1)));
+      return [...score.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([id]) => id);
+    };
+    const rules = (text: string, list: string[]) => {
+      const f = index.hardFilter(index.understand(text));
+      return list.filter((id) => f(byId.get(id)!));
+    };
+    const baseline = (name: string, make: (c: SearchCase) => Promise<{ list: string[]; embedMs: number; embedTokens: number }>, withRules = false) => async (c: SearchCase): Promise<Row> => {
+      const t0 = performance.now();
+      const got = await make(c);
+      const list = withRules ? rules(c.text, got.list) : got.list;
+      const ms = performance.now() - t0 + got.embedMs;
+      return { case: c, config: name, top: list.slice(0, 24), labels: [], candidates: list, ms: Math.round(ms), costUsd: (got.embedTokens * EMBED_USD_PER_M) / 1e6, path: "baseline", notSoldSaid: list.length === 0 };
+    };
+    const lexOnly = async (c: SearchCase) => ({ list: await bm25(c.text), embedMs: 0, embedTokens: 0 });
+    const vecOnly = async (c: SearchCase) => {
+      const e = await embed(c.text);
+      return { list: await knn(e.vector), embedMs: e.ms, embedTokens: e.tokens };
+    };
+    const both = async (c: SearchCase) => {
+      const e = await embed(c.text);
+      const [a, b] = await Promise.all([bm25(c.text), knn(e.vector)]);
+      return { list: rrf([a, b]), embedMs: e.ms, embedTokens: e.tokens };
+    };
+    CONFIGS.bm25 = baseline("bm25", lexOnly);
+    CONFIGS.knn = baseline("knn", vecOnly);
+    CONFIGS.hybrid_rrf = baseline("hybrid_rrf", both);
+    CONFIGS.bm25_rules = baseline("bm25_rules", lexOnly, true);
+    CONFIGS.hybrid_rrf_rules = baseline("hybrid_rrf_rules", both, true);
+  }
   if (flag("ablation")) {
     for (const s of ["lexical", "typo", "words", "kinds", "vectors"] as const) {
       const size = Number(arg("recall") ?? 50);
