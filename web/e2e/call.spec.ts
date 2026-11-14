@@ -202,11 +202,17 @@ test.describe("with a microphone", () => {
       offers.push(body);
       await route.fulfill({ status: 503, json: { error: { code: "voice_unavailable", message: "test: no voice session" } } });
     });
-    await startCall(page);
+    await signIn(page);
+    await page.goto(`/call?k=${tester.username}`);
+    await page.getByRole("button", { name: "Call", exact: true }).click();
     await expect.poll(() => offers.length, { timeout: 20_000 }).toBeGreaterThan(0);
     expect(gemini.sockets).toBe(1);
     expect(starts.some((s) => s.avoid === "gemini")).toBe(true);
     expect(String(offers[0].sdp)).toMatch(/^v=0/);
+    // The second provider did not start either: no going back and forth, the same call continues by typing.
+    await expect(page.getByLabel("What the kitchen needs")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/did not open/).first()).toBeVisible();
+    expect(gemini.sockets).toBe(1);
   });
 
   test("in the thread: the microphone starts the call, the read-back lands in the thread, hanging up leaves the words to send", async ({ page }) => {

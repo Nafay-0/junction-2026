@@ -419,6 +419,18 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
         // one does not start either, say the voice connection did not open and carry on by typing. Never back and forth.
         if (!ready) {
           void post(`${base}/call/${start.callId}`, { op: "end", reason: `refused ${code}` });
+          // A reconnect that does not start: try again (twice in all), then the call was lost, and says so.
+          if (why.reconnect) {
+            if (reconnects.current < 2) {
+              reconnects.current += 1;
+              cleanup(true);
+              window.setTimeout(() => void dialRef.current(mode, start.callId, a, { reconnect: true }), 800 * reconnects.current);
+              return;
+            }
+            cleanup();
+            set({ phase: "lost", talking: false, latched: false, agentSpeaking: false, thinking: false, notice: undefined, endReason: say().lost });
+            return;
+          }
           if (!why.avoid) {
             cleanup(true);
             set({ notice: say().switching });
@@ -446,7 +458,7 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
       // A provider that accepts the socket but does not start the session in 6 s (seen on Gemini's free tier under
       // load): try the other provider once. If nothing connects in 12 s (blocked WebSocket, captive portal), type.
       window.setTimeout(() => {
-        if (sock.current === s && !s.ready && !why.avoid) {
+        if (sock.current === s && !s.ready && !why.avoid && !why.reconnect) {
           cleanup(true);
           void post(`${base}/call/${start.callId}`, { op: "end", reason: "slow start" });
           set({ notice: say().switching });
@@ -456,9 +468,13 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
       window.setTimeout(() => {
         if (sock.current === s && !s.ready) {
           cleanup();
-          set({ notice: undefined });
           void post(`${base}/call/${start.callId}`, { op: "end", reason: "connect timeout" });
-          void startTyped(undefined, say().noVoice, start.callId);
+          // A call that had been connected and could not come back was lost; one that never started did not open.
+          if (why.reconnect) set({ phase: "lost", talking: false, latched: false, agentSpeaking: false, thinking: false, notice: undefined, endReason: say().lost });
+          else {
+            set({ notice: undefined });
+            void startTyped(undefined, say().noVoice, start.callId);
+          }
         }
       }, Math.max(0, deadline - Date.now()));
     },
