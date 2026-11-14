@@ -189,7 +189,8 @@ export function claimNegatedInWords(text: string, tag: string): boolean {
  */
 export function dayFitsWords(text: string, day: string, today?: string): boolean {
   const named = weekdayNamed(text);
-  if (named) return weekdayOf(day) === named;
+  // A named weekday is within the coming two weeks (the interpreter's calendar), never a year ahead.
+  if (named) return weekdayOf(day) === named && (!today || (day > today && day <= addDays(today, 14)));
   const t = fold(text);
   if (today && !/\d{1,2}\s*[./]\s*\d{1,2}|\d{1,2}(st|nd|rd|th|:e)\b/.test(t)) {
     // "day after tomorrow" also contains "tomorrow": the first pattern that matches wins.
@@ -203,6 +204,13 @@ const addDays = (d: string, n: number) => {
   t.setUTCDate(t.getUTCDate() + n);
   return t.toISOString().slice(0, 10);
 };
+
+/** A day as the buyer reads it: "Mon 16.11.2026". */
+const DAY_NAMES = ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+function dayWords(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return `${DAY_NAMES[weekdayOf(iso)]} ${d}.${m}.${y}`;
+}
 
 const weekdayOf = (iso: string) => new Date(`${iso}T12:00:00Z`).getUTCDay() || 7;
 
@@ -449,16 +457,16 @@ function compareDate(a: Reading, b: Reading, text: string, today: string | undef
       minor.push("the second reading has no delivery day");
       return undefined;
     }
-    return { field: "date", first: da, second: NOT_STATED, why: "only the first reading has a delivery day", patch: { deliverBy: null } };
+    return { field: "date", first: dayWords(da), second: NOT_STATED, why: "only the first reading has a delivery day", patch: { deliverBy: null } };
   }
   if (!da && db) {
     if (!rules.askWhenOnlySecondHasDate) {
       minor.push(`only the second reading has a delivery day (${db})`);
       return undefined;
     }
-    return { field: "date", first: NOT_STATED, second: db, why: "only the second reading has a delivery day", patch: { deliverBy: db } };
+    return { field: "date", first: NOT_STATED, second: dayWords(db), why: "only the second reading has a delivery day", patch: { deliverBy: db } };
   }
-  return { field: "date", first: da!, second: db!, why: "two different delivery days", patch: { deliverBy: db! } };
+  return { field: "date", first: dayWords(da!), second: dayWords(db!), why: "two different delivery days", patch: { deliverBy: db! } };
 }
 
 /**

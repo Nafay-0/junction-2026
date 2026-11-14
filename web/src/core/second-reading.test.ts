@@ -123,7 +123,7 @@ describe("compareReadings: material differences", () => {
   });
 
   it("the delivery day: two different days, and a day only the second reading has", () => {
-    expect(compareReadings(base, r({ deliverBy: "2026-11-23" })).differences).toMatchObject([{ field: "date", first: "2026-11-16", second: "2026-11-23", patch: { deliverBy: "2026-11-23" } }]);
+    expect(compareReadings(base, r({ deliverBy: "2026-11-23" })).differences).toMatchObject([{ field: "date", first: "Mon 16.11.2026", second: "Mon 23.11.2026", patch: { deliverBy: "2026-11-23" } }]);
     expect(fields(r({ deliverBy: undefined }), base)).toEqual(["date"]);
   });
 
@@ -164,6 +164,8 @@ describe("only what the words say", () => {
     expect(fields(r({ deliverBy: "2026-11-16" }), r({ deliverBy: "2026-11-20" }), text)).toEqual(["date"]);
     // "next Tuesday": both readings are Tuesdays, a week apart, and that is asked.
     expect(fields(r({ deliverBy: "2026-11-17" }), r({ deliverBy: "2026-11-24" }), "50 litres of milk for next Tuesday")).toEqual(["date"]);
+    // A Monday a year ahead (a written "1.11." read from nowhere) does not fit "for Monday" either.
+    expect(compareReadings(r({ deliverBy: "2026-11-16" }), r({ deliverBy: "2027-11-01" }), { text: "100 kg yoghurt for Monday", today: "2026-11-14" }).agreed).toBe(true);
   });
 });
 
