@@ -54,6 +54,16 @@ async function once(n: number) {
   const marks: Record<string, number> = {};
   let taps = 0;
   const lead = log.getByRole("button", { name: /^(Send to .+ to sign|Order this|Lähetä hyväksyttäväksi|Tilaa tämä)/ }).first();
+  // A check the agent asks first (a likely slip, a repeat of a recent order) is answered as the judge means it: one tap.
+  const confirm = log.getByRole("button", { name: /^(Yes, that is right|Kyllä, tämä on oikein)$/ }).last();
+  for (let i = 0; i < 2; i++) {
+    const which = await Promise.race([lead.waitFor({ timeout: 60_000 }).then(() => "lead"), confirm.waitFor({ timeout: 60_000 }).then(() => "confirm")]);
+    if (which === "lead") break;
+    marks.checked ??= Date.now() - t0;
+    await confirm.click();
+    taps++;
+    await confirm.waitFor({ state: "detached", timeout: 30_000 }).catch(() => undefined);
+  }
   await lead.waitFor({ timeout: 60_000 });
   marks.options = Date.now() - t0;
   await shot(page, `${String(n).padStart(2, "0")}-${lang}-${width}-1-options`);

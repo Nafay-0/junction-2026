@@ -149,7 +149,9 @@ export async function submitTurn(kitchen: Kitchen | string, input: unknown): Pro
   }
 
   // One agent turn at a time per thread: a turn sent while one works is answered next.
-  const prev = e.queues.get(slug) ?? Promise.resolve();
+  // One agent turn at a time per thread (a reset starts a new queue), and never stuck behind one that hangs.
+  const queued = e.queues.get(thread.threadId) ?? Promise.resolve();
+  const prev = Promise.race([queued, new Promise<void>((r) => setTimeout(r, 20_000))]);
   const next = prev.then(() =>
     withTurn(turnCtx(), () => work(run, body, first)).catch((err) => {
       console.error("[thread]", err);
@@ -157,7 +159,7 @@ export async function submitTurn(kitchen: Kitchen | string, input: unknown): Pro
       e.store.status(thread, agentTurn.turnId, "failed", { ms: Date.now() - t0 });
     }),
   );
-  e.queues.set(slug, next);
+  e.queues.set(thread.threadId, next);
   return { threadId: thread.threadId, buyerTurnId: buyer.turnId, agentTurnId: agentTurn.turnId, seq: thread.seq };
 }
 
@@ -223,13 +225,14 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
 /** The end of an agent turn: what to remember, its status (waiting for the buyer, for a person, or done) and the record. */
 async function finishTurn(run: TurnRun): Promise<void> {
   const { store, thread } = run;
-  await proposeMemory(run);
   const a = store.agentTurn(thread, run.turnId)!;
   const waitingApprover = a.cards.some((c) => c.type === "gate" && c.outcome === "waiting");
   const waitingBuyer = !waitingApprover && a.cards.some((c) => (c.type === "anomaly" && !c.answered) || c.type === "question" || (c.type === "options" && !c.chosen) || (c.type === "plan" && c.state === "planned" && c.canOrder) || (c.type === "price" && !a.cards.some((x) => x.type === "gate" && x.requestId === c.requestId)));
   store.mark(thread, run.turnId, "done", Date.now() - run.t0);
   store.status(thread, run.turnId, waitingApprover ? "waiting_approver" : waitingBuyer ? "waiting_buyer" : "done", { ms: Date.now() - run.t0, marks: a.marks });
   record(run, "turn_done", `Agent turn finished (${a.status}) in ${Date.now() - run.t0} ms: ${a.cards.map((c) => c.type).join(", ") || "no cards"}.`, { status: a.status, marks: a.marks, cards: a.cards.map((c) => c.type), requests: [...run.requests], orders: [...run.orders.keys()] });
+  // What to remember comes after: the memory writer reads the order with a model, and nothing waits for it.
+  await proposeMemory(run);
 }
 
 // ---------- a door that converses itself (the voice call) ----------
