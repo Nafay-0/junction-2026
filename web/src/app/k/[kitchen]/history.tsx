@@ -21,7 +21,7 @@ export function authorisedText(o: PortalOrder, lang: Lang = "en"): string {
   if (a.by === "person") return `${tx.signedBy(a.name, roleLabelL(a.role, lang))}${(a.method && tx.method[a.method]) ?? ""}`;
   if (a.by === "waiting") return tx.waitingFor(a.name, roleLabelL(a.role, lang));
   if (a.by === "before_dock") return tx.fromHistory;
-  return o.status === "declined" ? tx.declined : tx.refused;
+  return o.status === "declined" ? tx.declined : o.status === "withdrawn" ? tx.withdrawn : o.status === "expired" ? tx.expired : tx.refused;
 }
 
 /** The request's words as the buyer would recognise them; a basket shows as a basket. */

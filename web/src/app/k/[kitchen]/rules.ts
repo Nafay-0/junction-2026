@@ -1,7 +1,9 @@
 import { attrL, roleLabelL } from "../../_i18n/format";
 import type { Lang } from "../../_i18n/lang";
 import { moneyShort } from "../../_ui/plain";
-import { familyL } from "./family.text";
+import { groupsL } from "./groups";
+
+const listL = (xs: string[], lang: Lang) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} ${lang === "fi" ? "ja" : lang === "sv" ? "och" : "and"} ${xs.at(-1)}`);
 import { RULES_TEXT } from "./rules.text";
 import type { KitchenInfo } from "./types";
 
@@ -13,7 +15,7 @@ export function mandateWords(m: KitchenInfo["mandate"], lang: Lang = "en"): { al
   const tx = RULES_TEXT[lang];
   const attr = (a: string) => attrL(a, lang);
   const limit = moneyShort(m.perOrderLimitCents);
-  const alone: string[] = [tx.upTo(limit), tx.buyOnly(m.allowedCategories.map((c) => familyL(c, lang)).join(", ")), tx.lead(m.maxLeadDays)];
+  const alone: string[] = [tx.upTo(limit), tx.buyOnly(listL(groupsL(m.allowedCategories, lang, 8), lang)), tx.lead(m.maxLeadDays)];
   const person: string[] = [tx.above(limit)];
   const never: string[] = [tx.budget(moneyShort(m.weeklyBudgetCents)), tx.split(limit), tx.unsigned, tx.own];
   if (m.requiredAttributes.length) alone.push(tx.every(m.requiredAttributes.map(attr).join(", ")));
