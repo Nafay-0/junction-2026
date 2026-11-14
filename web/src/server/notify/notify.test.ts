@@ -377,6 +377,20 @@ describe("the conversation's adapter", () => {
     expect(mailWordsOf("1000 litres of lactose-free milk by Monday")).toBeUndefined();
     expect(mailWordsOf("stop the order")).toBeUndefined();
     expect(mailWordsOf("email receipts to chef@")).toEqual({ kind: "set_invalid" });
+    // Asked for without an address: where they go, or "tell me the address"; never the model's "I can't email".
+    expect(mailWordsOf("can you email me the receipts?")).toEqual({ kind: "ask" });
+    expect(mailWordsOf("email us when an order is placed")).toEqual({ kind: "ask" });
+    expect(mailWordsOf("voitko lähettää kuitit sähköpostiin?")).toEqual({ kind: "ask" });
+    expect(mailWordsOf("kan du skicka kvittot per mejl?")).toEqual({ kind: "ask" });
+    expect(mailWordsOf("send 20 l of milk to the usual address")).toBeUndefined();
+    expect(mailWordsOf("20 l of milk for Friday and email me the receipt")).toBeUndefined();
+  });
+
+  it("asked for receipts by email without an address: asks for it once, in the kitchen's words", async () => {
+    const { rt, k } = await kaari();
+    setMailTransport(rt, new FakeTransport());
+    expect((await answerMailWords(rt, k, { kind: "ask" }, { person: { name: "Kaari (kaari)" }, via: "thread", lang: "en" })).reply).toBe("Tell me the address and I'll email each order's receipt there, and let you know if anything changes.");
+    expect((await answerMailWords(rt, k, { kind: "ask" }, { person: undefined, via: "thread", lang: "fi" })).reply).toMatch(/^Kerro osoite/);
   });
 
   it("offers email once per conversation, needs the signed-in person to set it, then says where the receipt went", async () => {

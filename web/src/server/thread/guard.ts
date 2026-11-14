@@ -25,7 +25,7 @@ function reasonOf(k: AnomalyCard["concerns"][number], lang: Lang): string {
   const f = fmtFor(lang);
   // An amount against the usual: both figures, and where the usual comes from ("your last 8 orders").
   const e = (k.evidence ?? {}) as { usualAmount?: number; unit?: string; basedOnOrders?: number; asked?: { amount?: number; unit?: string } };
-  if ((k.code === "quantity_tenfold" || k.code === "quantity_unusual" || k.code === "amount_above_usual" || k.code === "amount_below_usual") && e.usualAmount && e.asked?.amount !== undefined) {
+  if ((k.code === "quantity_tenfold" || k.code === "quantity_unusual" || k.code === "amount_above_usual" || k.code === "amount_below_usual" || k.code === "unit_confusion") && e.usualAmount && e.asked?.amount !== undefined) {
     const asked = f.measure(e.asked.amount, e.asked.unit ?? e.unit ?? "");
     const usual = f.measure(e.usualAmount, e.unit ?? "");
     const n = e.basedOnOrders;
@@ -53,7 +53,7 @@ function reasonOf(k: AnomalyCard["concerns"][number], lang: Lang): string {
     const rule = /"([^"]+)"/.exec(k.message)?.[1];
     if (rule) text = `${text.replace(/\.$/, "")}: "${rule}".`;
     const when = typeof k.evidence?.placedAt === "string" ? f.day(String(k.evidence.placedAt).slice(0, 10)) : "";
-    if (k.code === "duplicate_recent" && when) text = lang === "fi" ? `Tilasit saman jo ${when}.` : `Du beställde samma sak redan ${when}.`;
+    if (k.code === "duplicate_recent" && when) text = lang === "fi" ? `Tilasit saman jo ${when.replace(/\.$/, "")}.` : `Du beställde samma sak redan ${when.replace(/\.$/, "")}.`;
   }
   return text
     .replace(/\s*\((?:order|tilaus|beställning) [a-z]+_[0-9a-z]+\)/gi, "")
@@ -75,14 +75,19 @@ export function guardWords(card: AnomalyCard, lang: Lang): string {
   if (use && asked?.amount !== undefined) {
     // The finding's own question ("did you mean 100 L?") becomes the one plain question with both figures.
     reason = reason.replace(/[,:;]?\s*(did you mean|tarkoititko|menade du)[^?]*\?\s*$/i, ".").replace(/\.\.$/, ".");
-    question = QUESTION[lang].either(f.measure(asked.amount, asked.unit ?? ""), f.measure(Number(use[1]), use[2]));
+    // "20 packs" alone hides what the pack is: said with its size and the total ("20 packs of 20 l, 400 l").
+    const pack = Number((k.evidence as { packSize?: number } | undefined)?.packSize);
+    const unit = String((k.evidence as { unit?: string } | undefined)?.unit ?? "");
+    const fix = use[2] === "pack" && pack > 0 && unit ? `${f.measure(Number(use[1]), "pack")} ${{ en: "of", fi: "à", sv: "à" }[lang]} ${f.measure(pack, unit)} (${f.measure(Number(use[1]) * pack, unit)})` : f.measure(Number(use[1]), use[2]);
+    question = QUESTION[lang].either(f.measure(asked.amount, asked.unit ?? ""), fix);
   } else if (k.corrections.some((x) => /^deliver_\d{4}-\d{2}-\d{2}$/.test(x.id))) {
     // A day the kitchen cannot receive: the next one it can, as the question.
     const days = k.corrections.map((x) => /^deliver_(\d{4}-\d{2}-\d{2})$/.exec(x.id)?.[1]).filter((x): x is string => !!x);
     const next = days.at(-1)!;
     const dayName = (lang === "en" ? englishDays(f.day(next)) : f.day(next)).replace(/\.$/, "");
     question = { en: `Shall I make it ${dayName}?`, fi: `Teenkö sen päivälle ${dayName}?`, sv: `Ska jag göra det till ${dayName}?` }[lang];
-  } else question = k.confirmable ? QUESTION[lang].right : QUESTION[lang].which;
+  } else if (k.code === "duplicate_recent") question = { en: "Shall I order it again on top of it?", fi: "Tilaanko sen uudelleen sen lisäksi?", sv: "Ska jag beställa den igen utöver den?" }[lang];
+  else question = k.confirmable ? QUESTION[lang].right : QUESTION[lang].which;
   if (/\?\s*$/.test(reason)) return lang === "en" ? englishDays(reason) : reason;
   const text = `${reason.replace(/\s*$/, "")}${/[.!]$/.test(reason) ? "" : "."} ${question}`;
   return lang === "en" ? englishDays(text) : text;

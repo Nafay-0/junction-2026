@@ -87,7 +87,7 @@ async function main() {
   });
   await check("landing page /", async () => {
     const r = await get("/");
-    const ok = r.status === 200 && r.text.includes("An AI buyer for every kitchen") && r.text.includes('href="/wall"');
+    const ok = r.status === 200 && r.text.includes("Your AI buyer orders. Plain code decides.") && r.text.includes('href="/wall"');
     return [ok, `HTTP ${r.status}, ${r.text.length} bytes${ok ? "" : ", not the landing page"}`];
   });
   // A public test account: the store steps act as its signed-in session, as a judge would.

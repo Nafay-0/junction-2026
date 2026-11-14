@@ -57,7 +57,8 @@ export function Copilot() {
   const m = info.data?.mcp;
   return (
     <>
-      <PageHead title="Ask the platform" purpose="Questions in plain words, answered from the data on Aiven. Not a chat: every answer is computed by code from the rows a read-only query returned, and the query and rows sit under it. If no query covers the question, it says the data does not say." />
+      <PageHead title="Ask the platform" purpose="Questions in plain words, answered by code from the data on Aiven."
+        about="Questions in plain words, answered from the data on Aiven. Not a chat: every answer is computed by code from the rows a read-only query returned, and the query and rows sit under it. If no query covers the question, it says the data does not say." />
       <PlatformTabs />
       <LoadError message={info.error} />
       <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">

@@ -25,7 +25,8 @@ export function AgentsScreen({ board }: { board?: Board }) {
     <>
       <PageHead
         title="Agents and licences"
-        purpose="Every agent that has come to this gate: its crash-test licence when it has one, its record here, and what it may do alone right now, which is the kitchen's mandate capped by the licence."
+        purpose="Every agent at this gate: its licence, its record, and what it may do alone now."
+        about="Every agent that has come to this gate: its crash-test licence when it has one, its record here, and what it may do alone right now, which is the kitchen's mandate capped by the licence."
         right={d && <LiveMark at={whenSeconds(d.at)} error={live.error} />}
       />
       <LoadError message={live.error} />

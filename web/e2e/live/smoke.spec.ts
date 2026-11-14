@@ -21,9 +21,9 @@ test("health: catalogue, services, ledger, demo caps", async ({ request }) => {
 test("the landing page is at the address, and leads to the agent and the wall", async ({ page }) => {
   const errors = watchErrors(page);
   await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1, name: /An AI buyer for every kitchen/ })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /Your AI buyer orders/ })).toBeVisible();
   await expect(page.getByRole("link", { name: /^Talk to the agent/ }).first()).toHaveAttribute("href", "/k");
-  await expect(page.getByRole("link", { name: "Watch it live at the gate" })).toHaveAttribute("href", "/wall");
+  await expect(page.getByRole("link", { name: "Watch it live" }).first()).toHaveAttribute("href", "/wall");
   await expect(page.getByText(/demo on synthetic data/i).first()).toBeVisible();
   expect(errors).toEqual([]);
 });

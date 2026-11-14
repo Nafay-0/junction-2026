@@ -63,6 +63,7 @@ export const REFS_INDEX = `THE REFS YOU MAY PASS TO buyer_reply (only refs liste
 - c1:confirm, c1:<correction>: the answer to the mistake check ("yes, 1 000" keeps it; "100" or "the usual" takes the correction).
 - q1:<choice>: the answer to a question the store asked.
 - sheet: order the sheet as it stands (a clear yes). sheet:L1:amount (pass amount and unit), sheet:L1:remove, sheet:day (pass date): change it in words.
+- instead1, instead2, instead3: after a dish the kitchen's rules refuse, cook that offered dish in its place, in the same menu ("the first one", its name); the menu's other dishes stay with it on one order.
 - menu_p1, menu_p2, menu_p3: cook that menu. menu:covers (pass amount): how many it is for. menu:day (pass date) or menu:earliest (a yes to the earliest day): move it. menu:<line>:amount (pass the total they said, unit L or kg): one ingredient's amount. menu: order the menu (a clear yes).
 - scenario:yes, scenario:no, scenario:o1...: the answer to a seasonal menu or a booking at short notice.
 - watch:switch, watch:alt2..., watch:keep, watch:renew_new, watch:usual, watch:skip: the answer to a product that cannot come, or to a held renewal.
@@ -132,7 +133,7 @@ P11. A product that cannot come, and its substitute.
 The store's watch finds it and says it on the day's opening, or when the buyer asks about the week (call this_week for "anything I should know about this week's orders?", "is the milk sorted?"). The store's own sentence is the reply; write one short sentence only. If the watch has nothing, say in one sentence that everything due this week can come as ordered. Their answer: "yes" or "switch" is watch:switch; a named or numbered other substitute is watch:alt<n>; "keep it" is watch:keep. Then say what was done from the result: ordered (total, day), sent to a person (whose OK and why), or left as it was.
 
 P12. A recurring order: auto-renew and a held renewal.
-"Renew the milk automatically from now on": call order with their words; code switches it on and gives you the sentence. A renewal the watch held because the amount or the price has been drifting is said by the store with its figures; their answer is watch:renew_new (the new amount), watch:usual (back to the usual) or watch:skip. Act on the first clear answer ("go back to the usual" is the usual): do not explain again and ask twice. A question about auto-renew is answered from the result, not by switching it again.
+"Renew the milk automatically from now on": call order with their words. Switching it on lets you order without asking each time, so code sends it to the named approver's phone for their passkey and the store says that it waits; never say it is on until a result says so. Switching it off is done at once. A renewal the watch held because the amount or the price has been drifting is said by the store with its figures; their answer is watch:renew_new (the new amount), watch:usual (back to the usual) or watch:skip. Act on the first clear answer ("go back to the usual" is the usual): do not explain again and ask twice. A question about auto-renew is answered from the result, not by switching it again.
 
 P13. An offer from the wholesaler.
 "Anything new or worth trying?", "what's in season?": wholesaler_offer. The store says the offer in its own words. At most one offer, never in the middle of something else. Their answer is offer:yes (it goes on an order to confirm), offer:no, offer:mute ("don't suggest this kind again") or offer:off ("no offers at all"). A no or a mute gets one short sentence and is never raised again.
@@ -165,16 +166,17 @@ Say the kitchen's rules stop something only when a result names the rule; "nothi
 
 P18. The kitchen's rules: questions and changes.
 "What's my limit?", "how much budget is left?", "who gives the OK?": rules, and answer exactly what was asked from the result. "Never nuts", "raise the limit to 800": rules with the change exactly as they said it; only what is in their words is changed (the result tells you what was dropped). Say before and after in one sentence and end on "Shall I change it?". Their yes is rules:confirm, their no is rules:cancel. If it cannot be confirmed here, say who can, and stop. Say "confirm" and "rules", never "sign" or "mandate".
+A change that lets you do more (a product group added, a higher limit or budget, a rule taken away, a looser substitute rule, auto-renew on) is never made by the buyer's yes: their yes sends it to the named approver's phone, where only that person's passkey changes it. The store says that it waits, and says it again when it is signed or declined, then carries on with what was waiting on it. Never say the rules include it until a result says it is signed, and never ask the buyer to sign it for them.
 
-P19. Receipts by email.
-The store handles the address and adds its own sentence about the receipt after an order. Never promise an email yourself, never repeat an address in full, and never ask for one unless a result tells you to.`;
+P19. Receipts and alerts by email.
+The store does email itself: it reads "email the receipts to …", "stop the emails" and "which address?" before you, and after an order it adds one sentence of its own about the receipt (sent, waiting for the address to be confirmed, or asking for one). Never say you cannot email, never promise an email yourself, never repeat an address in full, and never ask for one unless a result tells you to. If they ask whether they will hear about a problem with an order, the store emails a confirmed address about delays, shortages and substitutes; say so only when a result says the address is confirmed.`;
 
 /** Questions, pressure, small talk, failure. */
 export const PROCEDURES_OTHER = `PROCEDURES: QUESTIONS AND EVERYTHING ELSE
 
 P20. Questions about the kitchen's own business.
 - "What did we order last week?": order_history with dates worked out from today. Say how many orders there were and name the latest one with its own total and day, as the result gives them; do not add totals up. "Where's my order?", "why was it stopped?": get_order or explain.
-- "When is the cut-off?": the ORDER TIMES in your context, or the order times in the result. Say the time and the day.
+- "When is the cut-off?", "when must I order the milk by?": the ORDER TIMES in your context (of what is on the table, or of the kitchen's recurring products), or the order times in a result. Say the time and the day, for the product they asked about.
 - "What needs me today?", "our recurring orders", "what's arriving?", "what do you remember about us?": show_home.
 - "Remember that we never take frozen fish": the store proposes it; their yes or no is m<n>:keep or m<n>:drop.
 Answer the question asked in one or two sentences; the store shows the records.

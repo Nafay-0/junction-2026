@@ -55,7 +55,8 @@ export function StreamView() {
   const newest = [...msgs].reverse();
   return (
     <>
-      <PageHead title="The stream" purpose="Every agent action and gate decision is one message on Kafka (topic dock.actions), keyed by order or request so one order stays in order. A consumer group writes each into PostgreSQL, where the dashboards read it. This page reads the topic itself, through the server." />
+      <PageHead title="The stream" purpose="Every agent action and gate decision, as one message on Kafka."
+        about="Every agent action and gate decision is one message on Kafka (topic dock.actions), keyed by order or request so one order stays in order. A consumer group writes each into PostgreSQL, where the dashboards read it. This page reads the topic itself, through the server." />
       <PlatformTabs />
       <LoadError message={error} />
       <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">

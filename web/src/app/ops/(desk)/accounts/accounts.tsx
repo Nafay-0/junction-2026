@@ -26,7 +26,8 @@ export function AccountsScreen() {
     <>
       <PageHead
         title="Accounts"
-        purpose="Every restaurant or buyer with an account, as a kitchen: its store address, when it signed up and when it last ordered. Accounts hold nothing else about a person: no email address, no name."
+        purpose="Every kitchen with an account: its store, when it signed up, when it last ordered."
+        about="Every restaurant or buyer with an account, as a kitchen: its store address, when it signed up and when it last ordered. Accounts hold nothing else about a person: no email address, no name."
       />
       <LoadError message={live.error} />
       <Section

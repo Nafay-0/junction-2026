@@ -387,7 +387,10 @@ function evaluateLine(spec: LineSpec, input: PlanInput): PlanLineView {
   for (const c of input.draft.corrections) if (c.toLowerCase().includes(spec.name.toLowerCase()) && /beyond|no usable amount/.test(c)) addDoubt("amount_check", c, "The amount is right");
   const allergenRefused = set.rejected.some((r) => /contains|may contain/.test(r.reason));
   const keyWords = spec.key.split("_").filter((w) => w.length >= 4);
-  const conflict = input.draft.conflicts.find((c) => keyWords.some((w) => c.toLowerCase().includes(w)));
+  // A conflict about a dish the rules refused (fish fingers under "No fish") is that dish's, said with its refusal: it
+  // never holds a line of another dish that merely shares a word ("Mashed potatoes themselves contain no fish").
+  const refusedNames = (input.refused ?? []).map((r) => r.name.toLowerCase());
+  const conflict = input.draft.conflicts.filter((c) => !refusedNames.some((n) => c.toLowerCase().includes(n))).find((c) => keyWords.some((w) => c.toLowerCase().includes(w)));
   if (conflict && allergenRefused) addDoubt("rule_conflict", `The request clashes with a kitchen rule: ${conflict}`, undefined, "conflict");
   if (spec.uses.some((u) => u.perCover.unit === "pcs") && !set.candidates.some((c) => piecesPerSalesUnit(c.product))) {
     addDoubt("amount_check", "Counted in pieces, but none of the products found says how many pieces its pack holds, so AimoPilot will not guess how many packs that is. Give the amount per cover in g or ml, or strike the line.", undefined, "pieces");

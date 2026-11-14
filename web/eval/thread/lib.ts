@@ -105,6 +105,8 @@ export type Outcome = {
   refusals: { code?: string; rule?: string; message: string }[];
   /** Read-only answers (the assistant panel, or a records card). */
   answers: { text: string; citations: { kind?: string; productId?: string; orderId?: string; label?: string }[]; kind?: string }[];
+  /** Every line the agent said, in order (thread driver only). */
+  lines?: string[];
   /** How each concern was settled: confirmed as said, and whether it counted as the person's own. */
   acknowledgements: { code: string; action?: string; channel?: string; verified?: boolean }[];
   notices: { kind: string; message: string; rule?: string }[];

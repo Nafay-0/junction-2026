@@ -22,7 +22,8 @@ export function ControlScreen() {
     <>
       <PageHead
         title="Control"
-        purpose="Stop an agent, or a whole organisation, with a reason: its next call over any door is refused, and the suspension is written to the ledger. Nothing is deleted; resume it here at any time."
+        purpose="Suspend an agent or a whole organisation, with a reason; resume it at any time."
+        about="Stop an agent, or a whole organisation, with a reason: its next call over any door is refused, and the suspension is written to the ledger. Nothing is deleted; resume it here at any time."
         right={c && <LiveMark at={whenSeconds(c.at)} error={live.error} />}
       />
       <LoadError message={live.error} />

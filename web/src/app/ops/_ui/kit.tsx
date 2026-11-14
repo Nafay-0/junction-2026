@@ -44,15 +44,28 @@ export function useNow(ms = 1000): number | undefined {
   return now;
 }
 
-/** The page's title, the one question it answers, and on the right whether it is live. */
-export function PageHead({ title, purpose, right }: { title: string; purpose: string; right?: ReactNode }) {
+/**
+ * The page's top, the same on every operations page: the title, one line saying what the page is for, and on the right
+ * whether it is live (or the page's one action). The longer explanation, when there is one, waits behind "How this
+ * page works".
+ */
+export function PageHead({ title, purpose, about, right }: { title: string; purpose: string; about?: ReactNode; right?: ReactNode }) {
   return (
-    <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 pb-5">
-      <div className="min-w-0">
-        <h1 className="display text-[1.9rem] text-ink sm:text-[2.2rem]">{title}</h1>
-        <p className="mt-2 max-w-[72ch] text-[0.98rem] leading-relaxed text-ink-soft">{purpose}</p>
+    <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 pb-6">
+      <div className="min-w-0 max-w-[72ch]">
+        <h1 className="display text-[1.9rem] leading-[1.1] text-ink sm:text-[2.2rem]">{title}</h1>
+        <p className="mt-2 text-[1rem] leading-relaxed text-ink-soft">{purpose}</p>
+        {about && (
+          <details className="group mt-1 text-[0.92rem]">
+            <summary className="inline-flex min-h-9 cursor-pointer select-none list-none items-center gap-1 rounded-full pr-2 font-medium text-petrol hover:underline [&::-webkit-details-marker]:hidden">
+              <ChevronRight aria-hidden size={15} className="transition-transform duration-150 group-open:rotate-90 motion-reduce:transition-none" />
+              How this page works
+            </summary>
+            <p className="mt-1 max-w-[68ch] leading-relaxed text-ink-soft">{about}</p>
+          </details>
+        )}
       </div>
-      {right && <div className="flex items-center gap-3 text-[0.86rem] text-ink-soft">{right}</div>}
+      {right && <div className="flex flex-wrap items-center gap-3 text-[0.86rem] text-ink-soft">{right}</div>}
     </header>
   );
 }

@@ -30,7 +30,8 @@ export function CustomersScreen({ orgId }: { orgId?: string }) {
     <>
       <PageHead
         title="Customers"
-        purpose="What do we know about this kitchen, and where did we learn it? Only what the kitchen shares, each item with who stated it or which orders taught it, and when it was last used. Corrections go to the kitchen to confirm."
+        purpose="What each kitchen shares with us, and where we learned it."
+        about="What do we know about this kitchen, and where did we learn it? Only what the kitchen shares, each item with who stated it or which orders taught it, and when it was last used. Corrections go to the kitchen to confirm."
       />
       <LoadError message={agents.error} />
       {!agents.data ? (
