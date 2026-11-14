@@ -112,8 +112,13 @@ model adds next to it; an allergen only the second reading avoids must be avoide
 The first reader's new errors come from main's grounding check, not the model: it removes a delivery day written
 as "huomiseksi", "ylihuomiseksi" or "den 19:e" (6 requests, all caught by the second reader as "only the second
 reading has a day"), and an amount written in words ("two dozen", "tusina", "six 10-litre boxes"; the buyer is then
-asked for the amount, which is not compared). Those should be fixed in `core/grounding.ts`; until they are, the second
-reader is what asks about the dropped day. The numbers below are from before the merge.
+asked for the amount, which is not compared). Fixed on `claude/grounding-days`: the grounding check now recognises the day in the forms people use
+(`dayStated` in `core/grounding.ts`: inflected weekdays, "huomiseksi", "i övermorgon", "den 19:e", "16/11", "ensi
+viikon tiistaiksi", "before Tuesday") and amounts counted in dozens or as "double", and it is stricter in the other
+direction: with today known, the day must be one the words name, not merely any day. The evaluation now prints the
+first reader's dropped days and amounts on every run: before the fix 7 of 132 stated days and 10 of 137 stated
+amounts; after it 0 days and 2 amounts (both a message naming several items that the model merged into one need, not
+the grounding check), with no needless question in 268 comparisons. The numbers below are from before the merge.
 
 ### Results, production settings (two runs of the second reader on each set)
 

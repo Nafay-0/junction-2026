@@ -247,7 +247,7 @@ export async function interpretNeed(opts: InterpretOptions): Promise<InterpretRe
     throw new DockError(status, "interpret_failed", `The model call failed: ${describeError(err)}`);
   }
   // Nothing the buyer did not say: a claim, allergen, product, amount or date with no backing is removed (grounding check).
-  const raw = groundInterpretation(res.output as LlmNeed | LlmFollowUp, { text, earlier, extra: opts.evidence }).raw;
+  const raw = groundInterpretation(res.output as LlmNeed | LlmFollowUp, { text, earlier, extra: opts.evidence, today: localNow(now).date }).raw;
   const tokens = tokensFromUsage(res.usage);
   recordLlmSpend(costOf(tokens, price));
   const basedOn = earlier.length ? checkBasedOn(raw as LlmFollowUp, earlier) : undefined;

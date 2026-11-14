@@ -2598,12 +2598,13 @@
      "amount": 3,
      "unit": "pack"
     },
+    "deliverBy": "2026-11-15",
     "requiredClaims": [],
     "forbiddenAllergens": [],
     "optimise": "unstated",
     "sameAsLastTime": false
    },
-   "ms": 1948,
+   "ms": 2182,
    "costUsd": 0.014456
   },
   "h-fi-01": {
@@ -2811,13 +2812,14 @@
      "amount": 200,
      "unit": "L"
     },
+    "deliverBy": "2026-11-16",
     "requiredClaims": [],
     "forbiddenAllergens": [],
     "optimise": "unstated",
     "sameAsLastTime": false
    },
-   "ms": 2841,
-   "costUsd": 0.016856
+   "ms": 2760,
+   "costUsd": 0.016576
   },
   "h-sv-01": {
    "ok": true,
@@ -3023,13 +3025,14 @@
      "amount": 5,
      "unit": "kg"
     },
+    "deliverBy": "2026-11-19",
     "requiredClaims": [],
     "forbiddenAllergens": [],
     "optimise": "unstated",
     "sameAsLastTime": false
    },
-   "ms": 2844,
-   "costUsd": 0.016836
+   "ms": 2322,
+   "costUsd": 0.014516
   },
   "h-sv-10": {
    "ok": true,
@@ -4509,6 +4512,78 @@
    },
    "ms": 1251,
    "costUsd": 0.000062
+  }
+ },
+ "anthropic:claude-opus-5-5~before-refresh": {
+  "h-fi-02": {
+   "ok": true,
+   "need": {
+    "text": "Kolme laatikkoa laktoositonta jogurttia huomiseksi",
+    "item": {
+     "text": "laktoositonta jogurttia",
+     "attributes": [
+      "lactose_free"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 3,
+     "unit": "pack"
+    },
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 1948,
+   "costUsd": 0.014456
+  },
+  "h-fi-10": {
+   "ok": true,
+   "need": {
+    "text": "Kaksisataa litraa kevytmaitoa ylihuomiseksi",
+    "item": {
+     "text": "kevytmaitoa",
+     "attributes": [
+      "fat_1_5"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 200,
+     "unit": "L"
+    },
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 2841,
+   "costUsd": 0.016856
+  },
+  "h-sv-07": {
+   "ok": true,
+   "need": {
+    "text": "5 kg glutenfri riven mozzarella till den 19:e",
+    "item": {
+     "text": "glutenfri riven mozzarella",
+     "attributes": [
+      "gluten_free",
+      "grated"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 5,
+     "unit": "kg"
+    },
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 2844,
+   "costUsd": 0.016836
   }
  }
 }

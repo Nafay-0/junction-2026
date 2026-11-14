@@ -443,6 +443,11 @@ function compareKind(a: Reading, b: Reading): ReadingDifference | undefined {
   const ta = a.item.text.trim();
   const tb = b.item.text.trim();
   if (!ta || !tb || fold(ta) === fold(tb)) return undefined;
+  // One word that begins the other's one word is the same product in a Finnish or Swedish compound: "voi" and
+  // "voirasiaa" (butter tubs), "kerma" and "kermaa". ("Maito" and "kahvimaito" are not: that word ends, not begins, so.)
+  const one = (t: string) => tokenize(t);
+  const [xa, xb] = [one(ta), one(tb)];
+  if (xa.length === 1 && xb.length === 1 && Math.min(xa[0].length, xb[0].length) >= 3 && (xa[0].startsWith(xb[0]) || xb[0].startsWith(xa[0]))) return undefined;
   const fa = facetsOf(ta);
   const fb = facetsOf(tb);
   const facetDiff = [...fa.filter((f) => !fb.includes(f)), ...fb.filter((f) => !fa.includes(f))];

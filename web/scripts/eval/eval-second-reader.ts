@@ -320,7 +320,32 @@ function firstSummary(set: Case[], readings: Readings) {
   const wrong = set.map((c) => ({ id: c.id, wrong: fieldsWrong(firsts[c.id]?.ok ? readingOf((firsts[c.id] as { need: unknown }).need) : undefined, c.expect) })).filter((x) => x.wrong.length);
   const ms = set.map((c) => firsts[c.id]?.ms).filter((x): x is number => typeof x === "number");
   const cost = set.reduce((s, c) => s + ((firsts[c.id] as { costUsd?: number | null })?.costUsd ?? 0), 0);
-  return { model: FIRST, right: set.length - wrong.length, of: set.length, pct: pct(set.length - wrong.length, set.length), wrong, latencyMs: { p50: quantile(ms, 0.5), p90: quantile(ms, 0.9) }, costUsd: Math.round(cost * 1000) / 1000 };
+  return { model: FIRST, right: set.length - wrong.length, of: set.length, pct: pct(set.length - wrong.length, set.length), wrong, dropped: droppedFields(set, readings), latencyMs: { p50: quantile(ms, 0.5), p90: quantile(ms, 0.9) }, costUsd: Math.round(cost * 1000) / 1000 };
+}
+
+/**
+ * Fields the buyer stated that the first reading came back without (a day, an amount): what the grounding check, or
+ * the model, dropped. Measured on every run, because a dropped field is lost silently when the second reader is off.
+ */
+function droppedFields(set: Case[], readings: Readings) {
+  const firsts = readings[FIRST] ?? {};
+  const days: string[] = [];
+  const amounts: string[] = [];
+  let withDay = 0;
+  let withAmount = 0;
+  for (const c of set) {
+    const f = firsts[c.id];
+    const need = (f?.ok ? f.need : undefined) as { quantity?: unknown; deliverBy?: unknown; deliverOn?: unknown } | undefined;
+    if (c.expect.date !== null) {
+      withDay++;
+      if (!need?.deliverBy && !need?.deliverOn) days.push(c.id);
+    }
+    if (c.expect.amount !== null) {
+      withAmount++;
+      if (!need?.quantity) amounts.push(c.id);
+    }
+  }
+  return { days: { dropped: days.length, of: withDay, pct: pct(days.length, withDay), ids: days }, amounts: { dropped: amounts.length, of: withAmount, pct: pct(amounts.length, withAmount), ids: amounts } };
 }
 
 const SWEEP: { name: string; rules: Partial<ReadingRules> }[] = [
@@ -365,7 +390,14 @@ async function main() {
     console.log(`vocabulary from the ${catalogSource.kind} catalogue: ${vocabulary.attributes.length} attributes, ${vocabulary.allergens.length} allergens`);
     const jobs: { key: string; spec: string; c: Case; timeoutMs: number }[] = [];
     readings[FIRST] ??= {};
-    for (const c of set) if (!readings[FIRST][c.id]) jobs.push({ key: FIRST, spec: FIRST, c, timeoutMs: 30_000 });
+    // --refresh-dropped: read again the first readings that came back without a stated day or amount (after a fix to
+    // the grounding check), keeping the earlier ones under FIRST~before-refresh.
+    const refresh = args.includes("--refresh-dropped") ? new Set([...droppedFields(set, readings).days.ids, ...droppedFields(set, readings).amounts.ids]) : new Set<string>();
+    if (refresh.size) {
+      readings[`${FIRST}~before-refresh`] ??= {};
+      for (const id of refresh) readings[`${FIRST}~before-refresh`][id] = readings[FIRST][id];
+    }
+    for (const c of set) if (!readings[FIRST][c.id] || refresh.has(c.id)) jobs.push({ key: FIRST, spec: FIRST, c, timeoutMs: 30_000 });
     for (const s of seconds)
       for (let r = 1; r <= runs; r++) {
         const key = r === 1 ? s : `${s}@${r}`;
@@ -388,7 +420,7 @@ async function main() {
     save();
   }
 
-  const models = Object.keys(readings).filter((k) => k !== FIRST);
+  const models = Object.keys(readings).filter((k) => !k.startsWith(FIRST));
   const results = {
     at: new Date().toISOString(),
     set: { cases: set.length, byLanguage: Object.fromEntries(["en", "fi", "sv"].map((l) => [l, set.filter((c) => c.lang === l).length])), tags: [...new Set(set.flatMap((c) => c.tags))] },
@@ -407,6 +439,8 @@ async function main() {
   };
   writeFileSync(join(DIR, `results${suffix}.json`), `${JSON.stringify(results, null, 1)}\n`);
   console.log(`\nFirst reader ${FIRST}: ${results.first.right}/${results.first.of} right; wrong: ${results.first.wrong.map((w) => `${w.id} (${w.wrong.join(", ")})`).join("; ") || "none"}`);
+  const d = results.first.dropped;
+  console.log(`  dropped a stated day ${d.days.dropped}/${d.days.of} (${d.days.pct} %) ${d.days.ids.join(" ")}; a stated amount ${d.amounts.dropped}/${d.amounts.of} (${d.amounts.pct} %) ${d.amounts.ids.join(" ")}`);
   for (const s of results.second) {
     console.log(`\n${s.second}`);
     console.log(`  alone right ${s.alone.right}/${s.alone.of} (${s.alone.pct} %), by field ${JSON.stringify(s.alone.byField)}`);

@@ -83,7 +83,7 @@
     "optimise": "unstated",
     "sameAsLastTime": false
    },
-   "ms": 5006,
+   "ms": 7705,
    "incomplete": true,
    "costUsd": null
   },
@@ -160,7 +160,7 @@
    "need": {
     "text": "100 liter mjölk och 20 kg smör till måndag",
     "item": {
-     "text": "100 liter mjölk och 20 kg smör",
+     "text": "mjölk och smör",
      "attributes": [],
      "excludedAttributes": []
     },
@@ -170,7 +170,7 @@
     "optimise": "unstated",
     "sameAsLastTime": false
    },
-   "ms": 3900,
+   "ms": 4135,
    "incomplete": true,
    "costUsd": null
   },
@@ -847,6 +847,46 @@
    },
    "ms": 1393,
    "costUsd": 0.000072
+  }
+ },
+ "anthropic:claude-opus-5-5~before-refresh": {
+  "m-en-04": {
+   "ok": true,
+   "need": {
+    "text": "Please send 50 litres of organic milk, 10 kg of cheese and 5 kg of butter on Friday",
+    "item": {
+     "text": "organic milk, cheese and butter",
+     "attributes": [],
+     "excludedAttributes": []
+    },
+    "deliverBy": "2026-11-20",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 5006,
+   "incomplete": true,
+   "costUsd": null
+  },
+  "m-sv-01": {
+   "ok": true,
+   "need": {
+    "text": "100 liter mjölk och 20 kg smör till måndag",
+    "item": {
+     "text": "100 liter mjölk och 20 kg smör",
+     "attributes": [],
+     "excludedAttributes": []
+    },
+    "deliverBy": "2026-11-16",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 3900,
+   "incomplete": true,
+   "costUsd": null
   }
  }
 }

@@ -43,6 +43,8 @@ describe("compareReadings: agreement", () => {
     expect(compareReadings(r({ item: { text: "maitoa" } }), r({ item: { text: "laktoositonta maitoa" } })).agreed).toBe(true);
     expect(compareReadings(r({ item: { text: "maito" } }), r({ item: { text: "maitoa" } })).agreed).toBe(true);
     expect(compareReadings(r({ item: { text: "kermaa" } }), r({ item: { text: "ruokakermaa" } })).agreed).toBe(true);
+    expect(compareReadings(r({ item: { text: "voi" } }), r({ item: { text: "voirasiaa" } })).agreed).toBe(true);
+    expect(compareReadings(r({ item: { text: "maito" } }), r({ item: { text: "kahvimaito" } })).agreed).toBe(false);
   });
 
   it("small amount differences are not material, and 'by' against 'on' the same day is not", () => {

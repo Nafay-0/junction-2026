@@ -1525,13 +1525,14 @@
      "amount": 120,
      "unit": "kg"
     },
+    "deliverBy": "2026-11-15",
     "requiredClaims": [],
     "forbiddenAllergens": [],
     "optimise": "unstated",
     "sameAsLastTime": false
    },
-   "ms": 1714,
-   "costUsd": 0.014284
+   "ms": 3455,
+   "costUsd": 0.016264
   },
   "f-fi-05": {
    "ok": true,
@@ -1562,9 +1563,13 @@
    "need": {
     "text": "Tarvitaan kaksi tusinaa voirasiaa torstaiksi",
     "item": {
-     "text": "voirasia",
+     "text": "voi",
      "attributes": [],
      "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 24,
+     "unit": "pack"
     },
     "deliverBy": "2026-11-19",
     "requiredClaims": [],
@@ -1572,9 +1577,8 @@
     "optimise": "unstated",
     "sameAsLastTime": false
    },
-   "ms": 2970,
-   "incomplete": true,
-   "costUsd": null
+   "ms": 5815,
+   "costUsd": 0.02088
   },
   "f-sv-02": {
    "ok": true,
@@ -2673,6 +2677,50 @@
    },
    "ms": 2217,
    "costUsd": 0.000061
+  }
+ },
+ "anthropic:claude-opus-5-5~before-refresh": {
+  "f-fi-04": {
+   "ok": true,
+   "need": {
+    "text": "Huomiseksi 120 kg luomujogurttia",
+    "item": {
+     "text": "luomujogurttia",
+     "attributes": [
+      "organic"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 120,
+     "unit": "kg"
+    },
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 1714,
+   "costUsd": 0.014284
+  },
+  "f-fi-03": {
+   "ok": true,
+   "need": {
+    "text": "Tarvitaan kaksi tusinaa voirasiaa torstaiksi",
+    "item": {
+     "text": "voirasia",
+     "attributes": [],
+     "excludedAttributes": []
+    },
+    "deliverBy": "2026-11-19",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 2970,
+   "incomplete": true,
+   "costUsd": null
   }
  }
 }
