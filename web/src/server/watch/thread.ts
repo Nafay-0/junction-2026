@@ -151,7 +151,7 @@ export async function watchMomentForThread(rt: Runtime, session: AgentSession, l
     const back = backWord(f.shortfall.backOn, lang);
     const order = f.need.source === "order";
     const best = f.substitutes[0];
-    const say = [t.cannot(dayWord(f.need.date, lang), what, back, order), best ? t.closest(nameIn(ps.get(best.productId), best.name, lang), figures(f, lang)) : t.noneCloser, f.staged ? t.staged : ""].filter(Boolean).join(" ");
+    const say = [t.cannot(dayWord(f.need.date, lang), what, back, order, !f.staged && f.problems.includes("cutoff_passed")), best ? t.closest(nameIn(ps.get(best.productId), best.name, lang), figures(f, lang)) : t.noneCloser, f.staged ? t.staged : ""].filter(Boolean).join(" ");
     return {
       id: f.findingId,
       kind: "stock_out",

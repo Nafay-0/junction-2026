@@ -294,7 +294,7 @@ function StageForm({ kitchens, refresh }: { kitchens: Kitchens; refresh: () => v
               <select value={slug} onChange={(e) => (setSlug(e.target.value), setFamily(""))} className="mt-1 min-h-11 w-full rounded-lg border border-line-strong bg-paper px-3">
                 {kitchens.map((x) => (
                   <option key={x.slug} value={x.slug}>
-                    {x.name} ({x.kind})
+                    {x.name} ({x.kind === "account" ? "test account" : x.kind})
                   </option>
                 ))}
               </select>

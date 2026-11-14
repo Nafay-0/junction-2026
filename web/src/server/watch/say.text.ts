@@ -11,7 +11,7 @@ import { defineText } from "@/app/_i18n/lang";
  */
 export const WATCH_SAY_TEXT = defineText({
   en: {
-    cannot: (day: string, what: string, back: string, order: boolean) => `Your ${day} ${what} can't come ${order ? "on that order" : "this week"}: ${back ? `the supplier is out until ${back}` : "the wholesaler cannot deliver it for that day"}.`,
+    cannot: (day: string, what: string, back: string, order: boolean, cutoff = false) => `Your ${day} ${what} can't come ${order ? "on that order" : "this week"}: ${cutoff ? "the order cut-off for that day has passed" : back ? `the supplier is out until ${back}` : "the wholesaler cannot deliver it for that day"}.`,
     closest: (name: string, figures: string) => `The closest is ${name}: ${figures}.`,
     noneCloser: "Nothing like it can come by that day either.",
     askSwitch: (order: boolean): string => (order ? "Shall I switch that order to it?" : "Shall I switch this week's order?"),
@@ -54,7 +54,7 @@ export const WATCH_SAY_TEXT = defineText({
     autoOff: (what: string) => `Auto-renew is off for ${what}: I'll only remind you.`,
   },
   fi: {
-    cannot: (day: string, what: string, back: string, order: boolean) => `${day}n ${what} ei tule ${order ? "siinä tilauksessa" : "tällä viikolla"}: ${back ? `toimittajalta se on loppu ${back} asti` : "tukku ei voi toimittaa sitä sille päivälle"}.`,
+    cannot: (day: string, what: string, back: string, order: boolean, cutoff = false) => `${day}n ${what} ei tule ${order ? "siinä tilauksessa" : "tällä viikolla"}: ${cutoff ? "sen päivän tilausten viimeinen jättöaika on mennyt" : back ? `toimittajalta se on loppu ${back} asti` : "tukku ei voi toimittaa sitä sille päivälle"}.`,
     closest: (name: string, figures: string) => `Lähin vaihtoehto on ${name}: ${figures}.`,
     noneCloser: "Mikään vastaava ei ehdi sille päivälle.",
     askSwitch: (order: boolean) => (order ? "Vaihdanko tilauksen siihen?" : "Vaihdanko tämän viikon tilauksen?"),
@@ -94,7 +94,7 @@ export const WATCH_SAY_TEXT = defineText({
     autoOff: (what: string) => `Automaattinen uusinta on pois päältä: ${what}. Muistutan vain.`,
   },
   sv: {
-    cannot: (day: string, what: string, back: string, order: boolean) => `Din ${what} för ${day} kan inte komma ${order ? "med den beställningen" : "den här veckan"}: ${back ? `leverantören har slut till ${back}` : "grossisten kan inte leverera den den dagen"}.`,
+    cannot: (day: string, what: string, back: string, order: boolean, cutoff = false) => `Din ${what} för ${day} kan inte komma ${order ? "med den beställningen" : "den här veckan"}: ${cutoff ? "sista beställningstid för den dagen har gått ut" : back ? `leverantören har slut till ${back}` : "grossisten kan inte leverera den den dagen"}.`,
     closest: (name: string, figures: string) => `Närmast är ${name}: ${figures}.`,
     noneCloser: "Inget liknande hinner fram till den dagen heller.",
     askSwitch: (order: boolean) => (order ? "Ska jag byta beställningen till den?" : "Ska jag byta veckans beställning?"),
