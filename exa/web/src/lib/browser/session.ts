@@ -378,10 +378,17 @@ export class BrowserSession {
    * measures a button in one layout and is shown over another points at empty space.
    */
   private async keepFit(page: Page) {
-    const wanted = this.layoutWidth();
-    if (wanted === undefined || page.isClosed()) return;
+    if (page.isClosed()) return;
     await this.measure(page);
-    if (Math.abs(this.state.viewport.width - wanted) > 2) await this.applyFit();
+    if (!this.room) {
+      // The interface has not said how much room the view has (it can miss the moment the browser
+      // starts). Nothing has been set yet, so the page's own size is the view's: go by that.
+      const { width, height } = this.state.viewport;
+      if (width < 100 || height < 100) return;
+      this.room = { width, height };
+    }
+    const wanted = this.layoutWidth();
+    if (wanted !== undefined && Math.abs(this.state.viewport.width - wanted) > 2) await this.applyFit();
   }
 
   private async applyFit() {
@@ -475,6 +482,8 @@ export class BrowserSession {
   }
 
   private onClosed() {
+    // The next view may be another size: what this one had room for is forgotten with it.
+    this.room = undefined;
     this.viewEndpoint = undefined;
     this.context = undefined;
     this.page = undefined;
