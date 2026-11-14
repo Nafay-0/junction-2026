@@ -74,7 +74,7 @@ The address is baked into the app. The installers in the bucket open `https://be
 ## Changing a setting
 
 - A key: `printf %s "<value>" | gcloud secrets versions add <NAME> --project beryl-exa --data-file=-`, then `gcloud run services update beryl --project beryl-exa --region europe-north1 --update-secrets <NAME>=<NAME>:latest`.
-- The demo video: `gcloud run services update beryl --project beryl-exa --region europe-north1 --update-env-vars BERYL_DEMO_VIDEO=<link>`.
+- The demo video: the film is a file in the downloads bucket, not in the image. Put it there with `gcloud storage cp <film>.mp4 gs://beryl-exa-downloads/beryl-demo.mp4 --project beryl-exa`, then point the page at it: `gcloud run services update beryl --project beryl-exa --region europe-north1 --update-env-vars BERYL_DEMO_VIDEO=https://storage.googleapis.com/beryl-exa-downloads/beryl-demo.mp4`. The still shown before play, `web/public/landing/demo-poster.jpg`, is in the image: a new film needs a new poster (a frame of it) and a deploy.
 
 Each of these starts a new revision, so the same warning about running tasks applies.
 

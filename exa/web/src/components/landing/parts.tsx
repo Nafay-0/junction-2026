@@ -301,12 +301,17 @@ function youtubeId(url: string): string | null {
   return match ? match[1] : null;
 }
 
+/** The still shown before a video file is played: a frame of the film itself. Retake it when the film changes. */
+const DEMO_POSTER = "/landing/demo-poster.jpg";
+
 /**
  * The demo. `src` is a YouTube link or the address of a video file; it comes from the
  * BERYL_DEMO_VIDEO setting on the server. Until there is one, the frame says the video is coming.
+ * Nothing of the video is fetched until the visitor presses play.
  */
 export function DemoVideo({ src }: { src: string }) {
   const [playing, setPlaying] = React.useState(false);
+  const film = React.useRef<HTMLVideoElement>(null);
   const youtube = src ? youtubeId(src) : null;
   const frame = "relative aspect-video w-full overflow-hidden rounded-3xl border border-border bg-card shadow-float";
 
@@ -348,7 +353,22 @@ export function DemoVideo({ src }: { src: string }) {
   }
   return (
     <div className={frame}>
-      <video src={src} controls playsInline preload="metadata" className="absolute inset-0 size-full bg-black object-contain" />
+      <video ref={film} src={src} poster={DEMO_POSTER} controls={playing} playsInline preload="none" onPlay={() => setPlaying(true)} className="absolute inset-0 size-full bg-black object-contain" />
+      {playing ? null : (
+        <button
+          type="button"
+          aria-label="Play the demo"
+          className="group/play absolute inset-0 flex items-center justify-center bg-black/30 transition-colors hover:bg-black/20"
+          onClick={() => {
+            setPlaying(true);
+            void film.current?.play().catch(() => {});
+          }}
+        >
+          <span className="relative flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-float transition-transform group-hover/play:scale-105 sm:size-20">
+            <Play className="size-6 translate-x-0.5 sm:size-7" aria-hidden />
+          </span>
+        </button>
+      )}
     </div>
   );
 }

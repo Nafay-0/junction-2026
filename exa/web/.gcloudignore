@@ -16,3 +16,6 @@ desktop/dist
 scripts/fixtures
 *.md
 !README.md
+
+# The demo film: hosted with the installers, not in the image (see DEPLOYMENT.md).
+public/landing/demo.mp4
