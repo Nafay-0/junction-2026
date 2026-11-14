@@ -134,9 +134,15 @@ const INTAKE_TOOLS = [
     title: "Start an order from the buyer's need",
     description:
       "START HERE for any new purchase. Send the buyer's need as structured fields (what, how much, by when, must-haves). AimoPilot checks it against the kitchen's own order history for likely mistakes (for example 1,000 L where they usually order 100 L, or a delivery day it cannot make), asks at most two short questions its memory cannot answer, then offers option cards with pros and cons. Returns a step whose `state` is needs_confirmation, needs_input, options_ready, quoted, no_options or cancelled; `nextStep` says exactly which tool to call next and `waitingFor` says whether you must wait for the human buyer.",
-    input: z.object({ need: NeedArg, by: by.optional().describe("The name of the person asking, if you know it.") }),
+    // Loose: some models put quantity or deliverBy next to `need` instead of inside it (Gemini 3.1 Flash-Lite through
+    // Google ADK, five times in a row on 14 Nov). Those fields are folded into the need, never invented.
+    input: z.looseObject({ need: NeedArg, by: by.optional().describe("The name of the person asking, if you know it.") }),
     output: intakeOut,
-    run: async ({ dock, session, defaultBy }, args) => intakeResult(await dock.intake.open(session, { ...args, by: args.by ?? defaultBy })),
+    run: async ({ dock, session, defaultBy }, args) => {
+      const { need, by: who, ...stray } = args as typeof args & Record<string, unknown>;
+      const folded = { ...Object.fromEntries(Object.entries(stray).filter(([k]) => k in NeedArg.shape)), ...need };
+      return intakeResult(await dock.intake.open(session, { need: folded as typeof need, by: who ?? defaultBy }));
+    },
   }),
   tool({
     name: "respond_to_concerns",
@@ -195,8 +201,8 @@ const INTAKE_TOOLS = [
     input: z.object({ requestId: intakeId, optionId: ChoiceInput.shape.optionId.describe("An optionId from step.options."), by: by.optional().describe("Who chose: the buyer's name if they told you, or yours if they asked you to decide.") }),
     output: intakeOut,
     run: async ({ dock, session, defaultBy }, { requestId, optionId, by: chooser }) => {
-      const who = chooser ?? defaultBy;
-      if (!who) throw new DockError(400, "invalid_request", "Say who chose: send by with the buyer's name, or yours if they asked you to decide.");
+      // Choosing is the agent's own step (not the buyer's answer), so without a name the record says the agent chose.
+      const who = chooser ?? defaultBy ?? `the agent ${session.agentId}`;
       return intakeResult(await dock.intake.choose(session, requestId, { optionId, by: who }));
     },
   }),

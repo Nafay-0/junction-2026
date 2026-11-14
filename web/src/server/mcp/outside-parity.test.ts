@@ -114,4 +114,16 @@ describe("an outside agent gets what the kitchen's own agent gets", () => {
     const none = await call("place_order", { requestId: b.request.requestId, replaces: first.order.orderId });
     expect(none.error).toMatchObject({ code: "nothing_to_replace" });
   });
+
+  it("forgives a need's fields sent next to it, and a choice without a name (seen in the 14 Nov runtime runs)", async () => {
+    const day3 = day(3);
+    const r = await call("submit_need", { need: { item: { text: "lactose-free milk", category: "milk" }, deliverBy: day3 }, quantity: { amount: 40, unit: "L" } });
+    expect(r.ok).toBe(true);
+    expect(r.step.need.quantity).toMatchObject({ amount: 40, unit: "L" });
+    let s = r;
+    for (let i = 0; i < 3 && s.step.state !== "options_ready"; i++) s = await call(s.step.state === "needs_confirmation" ? "respond_to_concerns" : "answer_questions", { requestId: r.step.requestId, by: "Hotel buyer", ...(s.step.state === "needs_confirmation" ? { responses: s.step.concerns.map((c: S) => ({ key: c.key, choice: c.confirmable ? "confirm" : c.corrections[0].id })) } : { answers: s.step.questions.map((q: S) => ({ questionId: q.id, optionId: q.options[0].id })) }) });
+    expect(s.step.state).toBe("options_ready");
+    const chosen = await call("choose_option", { requestId: r.step.requestId, optionId: s.step.options[0].optionId });
+    expect(chosen).toMatchObject({ ok: true, step: { state: "quoted" } });
+  });
 });
