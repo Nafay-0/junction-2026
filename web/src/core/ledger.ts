@@ -18,7 +18,8 @@ export type LedgerEntryType =
   | "control" // the wholesaler's operations staff suspended or resumed an agent or a kitchen
   | "offer" // the wholesaler's selling agent offered a product to a kitchen (or held one back, and why), and the kitchen's answer
   | "watch" // the kitchen agent's watch: a key product that cannot come (and the substitutes), a recurring order renewed or held, a staged condition
-  | "agent"; // the kitchen's own agent conversation: a turn, a model call, a tool call, a grounding refusal, a memory read or write
+  | "agent" // the kitchen's own agent conversation: a turn, a model call, a tool call, a grounding refusal, a memory read or write
+  | "mail"; // an email to the kitchen (server/notify): sent, skipped or failed, and the kitchen's address set, confirmed or removed (never the address or the body)
 
 export type LedgerInput = {
   type: LedgerEntryType;
@@ -78,6 +79,8 @@ export class Ledger {
   private readonly byRequest = new Map<string, LedgerEntry[]>();
   private readonly byOrder = new Map<string, LedgerEntry[]>();
   private indexed = 0;
+  /** Called after every append, in this process (server/notify reads the watch's entries this way). */
+  private readonly listeners = new Set<(e: LedgerEntry) => void>();
   /** How far the chain has been verified: entries [0, length) are fine, the last of them has hash `hash`. */
   private verified: { length: number; hash: string } = { length: 0, hash: GENESIS_HASH };
 
@@ -108,7 +111,20 @@ export class Ledger {
     const entry: LedgerEntry = { ...body, hash: Ledger.hashOf(body) };
     this.store.append(entry);
     this.catchUp();
+    for (const fn of [...this.listeners]) {
+      try {
+        fn(structuredClone(entry));
+      } catch {
+        // a listener never breaks an append (the order flow writes here)
+      }
+    }
     return structuredClone(entry);
+  }
+
+  /** Be told of every entry appended from now on, after it is stored. Returns the function that stops it. */
+  onAppend(fn: (e: LedgerEntry) => void): () => void {
+    this.listeners.add(fn);
+    return () => void this.listeners.delete(fn);
   }
 
   /** Copies of the entries (all, or one request's / one order's), in order. */

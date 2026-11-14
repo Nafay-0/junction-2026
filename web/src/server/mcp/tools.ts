@@ -20,6 +20,7 @@ import {
 import { AskHuman, answersFromBuyer, concernsFromBuyer, type HumanChannel } from "./ask-human";
 import type { LiveBudget } from "@/server/aiven/valkey";
 import { nextStepForIntake, nextStepForOrder, nextStepForQuote, waitingFor } from "./next-step";
+import { receiptEmail } from "../notify/outside";
 import { AlternativesInput, ListOrdersInput, LookupInput, awaitDecision, findAlternatives, listOrders, lookupProducts } from "../lookup";
 
 /**
@@ -338,7 +339,7 @@ const CORE_TOOLS = [
         .optional()
         .describe("Only with quoteToken: the quote's lines (productId, quantity, unitPriceCents) copied from quote.lines."),
     }),
-    output: z.object({ order: OrderSchema, replaced: z.looseObject({ orderId: z.string(), status: z.string() }).optional().describe("With replaces: what happened to the order this one replaces."), nextStep }),
+    output: z.object({ order: OrderSchema, replaced: z.looseObject({ orderId: z.string(), status: z.string() }).optional().describe("With replaces: what happened to the order this one replaces."), receiptEmail: z.looseObject({ emailed: z.boolean() }).optional().describe("Receipt emailed to the kitchen (masked address)."), nextStep }),
     run: async ({ dock, session }, { requestId, quoteToken, lines, replaces }) => {
       // Without a quoteToken the core places the quote it signed for this request (at choose_option, or the latest
       // request_quote outside the intake); no_current_quote if none.
@@ -350,7 +351,8 @@ const CORE_TOOLS = [
       }
       const { replaced, ...placed } = order;
       const also = replaced ? (replaced.refused ? ` The order it was to replace (${replaced.orderId}) still stands: ${replaced.refused.message} Tell the buyer both orders stand.` : ` Order ${replaced.orderId} was taken back: one order stands.`) : "";
-      return { order: placed, ...(replaced ? { replaced } : {}), nextStep: nextStepForOrder(order) + also };
+      const mail = await receiptEmail(placed);
+      return { order: placed, ...(replaced ? { replaced } : {}), ...(mail ? { receiptEmail: mail } : {}), nextStep: nextStepForOrder(order) + also };
     },
   }),
   tool({
@@ -359,15 +361,17 @@ const CORE_TOOLS = [
     description:
       "An order's status (pending_approval, committed, declined, rejected, withdrawn, expired), the gate's decision with every rule's result, the sign-off and, once committed, the wholesaler-signed confirmation. With waitSeconds (at most 55) it answers as soon as the person decides an order waiting for sign-off: the way to learn the outcome. It only reads; no tool can approve.",
     input: z.object({ orderId: z.string().min(1).describe("orderId returned by place_order."), waitSeconds: z.number().int().min(0).max(55).optional().describe("Wait up to this long for a sign-off decision.") }),
-    output: z.object({ order: OrderSchema, decided: z.boolean().optional(), nextStep }),
+    output: z.object({ order: OrderSchema, decided: z.boolean().optional(), receiptEmail: z.looseObject({ emailed: z.boolean() }).optional(), nextStep }),
     readOnly: true,
     run: async ({ dock, session }, { orderId, waitSeconds }) => {
       if (!waitSeconds) {
         const order = await dock.getOrder(session, orderId);
-        return { order, nextStep: nextStepForOrder(order) };
+        const mail = await receiptEmail(order);
+        return { order, ...(mail ? { receiptEmail: mail } : {}), nextStep: nextStepForOrder(order) };
       }
       const r = await awaitDecision(dock, session, orderId, waitSeconds);
-      return { order: r.order, decided: r.decided, nextStep: r.decided ? nextStepForOrder(r.order) : `Still waiting for ${r.order.approval?.approver.name ?? "the approver"} to decide on their phone. Wait again, or stop and tell the buyer; never place it again.` };
+      const mail = await receiptEmail(r.order);
+      return { order: r.order, decided: r.decided, ...(mail ? { receiptEmail: mail } : {}), nextStep: r.decided ? nextStepForOrder(r.order) : `Still waiting for ${r.order.approval?.approver.name ?? "the approver"} to decide on their phone. Wait again, or stop and tell the buyer; never place it again.` };
     },
   }),
   tool({
