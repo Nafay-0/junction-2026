@@ -138,7 +138,7 @@ export type SellerContext = {
   live?: Map<string, LiveOffer>;
 };
 
-export const GUARD_RULES = ["offers_off", "forbidden_by_rule", "muted", "declined_recently", "weekly_cap", "not_available", "unsupported_claim"] as const;
+export const GUARD_RULES = ["offers_off", "forbidden_by_rule", "muted", "declined_recently", "already_offered", "weekly_cap", "not_available", "unsupported_claim"] as const;
 export type GuardRule = (typeof GUARD_RULES)[number];
 export type GuardResult = { ok: true } | { ok: false; rule: GuardRule; reason: string };
 
@@ -288,6 +288,8 @@ export function guardOffer(c: { product: Product; reasons: OfferReason[]; claime
   if (mute) return { ok: false, rule: "muted", reason: `${mute.by} asked not to be offered ${mute.scope === "product" ? "this product" : mute.scope === "family" ? `${mute.value.replaceAll("_", " ")} products` : `"${mute.value.replaceAll("_", " ")}" suggestions`} (${mute.at.slice(0, 10)}).` };
   const declined = k.past.find((o) => o.productId === p.id && o.status === "declined" && ctx.now.getTime() - Date.parse(o.at) < DECLINED_QUIET_DAYS * DAY);
   if (declined) return { ok: false, rule: "declined_recently", reason: `The kitchen declined this product on ${declined.at.slice(0, 10)}; not offered again for ${DECLINED_QUIET_DAYS} days.` };
+  const open = k.past.find((o) => o.productId === p.id && o.status === "offered" && ctx.now.getTime() - Date.parse(o.at) < 7 * DAY);
+  if (open) return { ok: false, rule: "already_offered", reason: `The kitchen already has an open offer of this product (${open.at.slice(0, 10)}): one is enough.` };
   const sent = sentThisWeek(k.past, ctx.now);
   if (sent >= OFFER_WEEKLY_CAP) return { ok: false, rule: "weekly_cap", reason: `${k.name} already had ${sent} offers in the last seven days; the cap is ${OFFER_WEEKLY_CAP}.` };
   const live = ctx.live?.get(p.id);
@@ -334,7 +336,7 @@ export function shortlist(k: KitchenView, products: Product[], ctx: SellerContex
     if (seen.has(p.id)) continue;
     seen.add(p.id);
     const isCampaign = campaign?.productId === p.id;
-    if (!isCampaign && (k.bought.includes(p.id) || forbiddenBy(p, k, ctx.now) || muteFor(k.prefs, { productId: p.id, category: p.category }, []))) continue;
+    if (!isCampaign && (k.bought.includes(p.id) || k.past.some((o) => o.productId === p.id && o.status === "offered") || forbiddenBy(p, k, ctx.now) || muteFor(k.prefs, { productId: p.id, category: p.category }, []))) continue;
     const reasons = reasonsFor(p, k, usuals, pre);
     const lfl = usuals.some((u) => likeForLike(p, u.product));
     if (!isCampaign && !lfl && !reasons.some((r) => PRIMARY_REASONS.includes(r.kind))) continue;

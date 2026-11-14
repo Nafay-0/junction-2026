@@ -25,6 +25,7 @@ const RULE: Record<string, string> = {
   forbidden_by_rule: "The kitchen's rules forbid it",
   muted: "The kitchen muted this kind",
   declined_recently: "Declined in the last 30 days",
+  already_offered: "Already offered, still open",
   weekly_cap: "Weekly cap reached",
   not_available: "No live price or delivery",
   unsupported_claim: "The data does not back the claim",

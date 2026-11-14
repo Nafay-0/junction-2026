@@ -51,6 +51,7 @@ ledger with its rule (`core/offers.ts guardOffer`, tests in `core/offers.test.ts
 | `forbidden_by_rule` | what the kitchen's signed mandate, a rule its people stated, or its memory forbids (the core's own hard-rule check, `core/clarify.ts violation`, including the allergen-evidence rule), or what its memory says to avoid |
 | `muted` | the product, its family, or the kind of reason the kitchen muted |
 | `declined_recently` | a product the kitchen declined in the last 30 days |
+| `already_offered` | the same product again while an offer of it is open |
 | `weekly_cap` | a third offer within seven days, whatever campaigns staff start |
 | `not_available` | no live price or delivery now |
 | `unsupported_claim` | a reason (or a campaign's wanted claim) the data does not back as stated, recomputed from the sources; or nothing worth saying at all |
