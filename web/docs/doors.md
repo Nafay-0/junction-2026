@@ -17,9 +17,9 @@ they call `dock.intake` and `dock.placeOrder` as the kitchen's own agent, exactl
 
 ## How the portal mounts them
 
-- **Assistant panel:** `k/[kitchen]/channel-slot.tsx` renders `<DoorButtons kitchen disabled>`: a microphone (opens the
-  call) and a camera ("add a photo or document"), 48 px squares beside the field. Both open over the page and run the
-  flow themselves; nothing is put back into the text field, so nothing is interpreted twice.
+- **The agent thread** (`k/[kitchen]/thread.tsx`, docs/agent-thread.md): the composer's microphone sends each final
+  transcript as a voice turn, and its photo button reads the image through the scan door and sends the text it read
+  as a photo turn. Both land in the same conversation as typed words; nothing is interpreted twice.
 - **"Call your agent" control:** `GET /ui-api/voice/{kitchen}/call` returns `{ url, qrSvg }` (on a phone the control
   links to `url`, on a laptop it shows the QR code). Server-side helper: `callLink(req, { kitchen? })` in
   `src/server/channels/call-links.ts`, shaped like `approvalLink`.
