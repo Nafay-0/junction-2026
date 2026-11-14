@@ -12,7 +12,10 @@ npx remotion render Film out/aimopilot-film.mp4 --codec=h264 --crf=15 --jpeg-qua
 
 ## How it is put together
 
-- `src/Film.tsx`: the nine scenes in order, one transition between them, the narration, the music and two sounds.
+- `src/Film.tsx`: the nine scenes in order, the camera move into each, the narration, the music and two sounds.
+- `src/camera.tsx`: the camera rig. The film is one world drawn once behind every scene (`World`, with parallax
+  layers); scenes are joined by camera moves over it: a pan (beside, below, above, with a floor to tilt through) or a
+  nested zoom that swaps two scenes while the object they share is under the camera. The opening and title are cuts.
 - `src/scenes/`: one file per scene. The product's widgets (the conversation on its line, the sign-off slab, the
   approver's phone, the dish card) are rebuilt in `src/ui.tsx` from the product's own markup and tokens
   (`web/src/app/globals.css`), so they stay sharp at any zoom. Wide shots of the catalogue and the operations portal
@@ -25,15 +28,17 @@ npx remotion render Film out/aimopilot-film.mp4 --codec=h264 --crf=15 --jpeg-qua
 ## The narration drives the timing
 
 - `src/script.json`: what is said, scene by scene.
-- `node scripts/vo.mjs`: records each scene with ElevenLabs (model `eleven_v4_turbo`, voice George) through the
+- `node scripts/vo.mjs`: records each scene with ElevenLabs (model `eleven_v4_turbo`, voice Lily, stability 0.35, style 0.6) through the
   endpoint that returns the time of every character. It keeps the take as recorded in `public/vo/raw/`, writes the
   film's clip to `public/vo/` (ten per cent faster, pitch kept, levelled) and the word times to `src/vo.json`.
   `node scripts/vo.mjs gate` re-records one scene; `node scripts/vo.mjs --post` rebuilds from the raw takes.
 - `src/vo.ts`: a scene lasts its narration plus a lead-in and a tail; `cue("flow", "One passkey")` is the frame
   those words are spoken on. Scenes place their moments with `cue()`, so a re-recorded line moves its picture with
   it, and a line that no longer contains the phrase fails the build instead of drifting.
-- `src/extra.json`: the frames each scene holds after its last word, chosen so that every cut falls on a beat of the
-  music (100 beats a minute is 18 frames a beat) and the film ends with the track.
+- `src/extra.json`: `into` is the length of the move (or cut) into each scene; `min` the least each scene holds after
+  its last word. `node scripts/holds.mjs` solves `extra` from them: the middle of every cut on a beat of the music
+  (100 beats a minute, 18 frames a beat), of every camera move on a beat or half beat, and the film ends with the
+  track (3541 frames).
 - `node scripts/music.mjs bed 1 2 3` makes music candidates of the film's exact length (ElevenLabs Music,
   instrumental); `node scripts/beat.mjs <file>` measures a candidate's tempo, loudness shape and ending.
   `public/music/bed.mp3` is the one the film uses. `node scripts/music.mjs sfx` makes the two small sounds.
