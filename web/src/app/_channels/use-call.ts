@@ -415,7 +415,16 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
         cleanup();
         set({ phase: "lost", talking: false, latched: false, agentSpeaking: false, thinking: false, endReason: timeUp ? say().timeLimit : say().lost });
       });
-      // If nothing connects in 12 s (blocked WebSocket, captive portal), fall back to typing.
+      // A provider that accepts the socket but does not start the session in 6 s (seen on Gemini's free tier under
+      // load): try the other provider once. If nothing connects in 12 s (blocked WebSocket, captive portal), type.
+      window.setTimeout(() => {
+        if (sock.current === s && !s.ready && !why.avoid) {
+          cleanup(true);
+          void post(`${base}/call/${start.callId}`, { op: "end", reason: "slow start" });
+          set({ notice: say().switching });
+          void dial(mode, start.callId, a, { avoid: start.live!.provider, reconnect: why.reconnect });
+        }
+      }, 6_000);
       window.setTimeout(() => {
         if (sock.current === s && !s.ready) {
           cleanup();

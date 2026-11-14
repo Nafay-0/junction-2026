@@ -317,6 +317,22 @@ const MONTHS: string[][] = [
   ["december", "joulukuu", "december"],
 ];
 
+/** The month a word names (0-based), by the longest matching name: Finnish "marraskuuta" is November, not Swedish "mars". */
+function monthOf(word: string): number {
+  let best = -1;
+  let len = 0;
+  MONTHS.forEach((ns, i) => {
+    for (const n of ns) {
+      const stem = n.slice(0, Math.max(3, n.length - 1));
+      if (word.startsWith(stem) && stem.length > len) {
+        best = i;
+        len = stem.length;
+      }
+    }
+  });
+  return best;
+}
+
 const weekdayOf = (iso: string) => new Date(`${iso}T12:00:00Z`).getUTCDay() || 7;
 
 /**
@@ -394,7 +410,7 @@ export function checkText(spoken: string, facts: Facts, opts: CheckOptions = {})
   });
   const factDayMonth = new Set([...facts.dates].map((d) => `${Number(d.slice(8, 10))}-${Number(d.slice(5, 7))}`));
   for (const m of lower.matchAll(/\b(\d{1,2})\.?\s*(?:of\s+)?([a-zåäö]+)/g)) {
-    const month = MONTHS.findIndex((ns) => ns.some((n) => m[2].startsWith(n.slice(0, Math.max(3, n.length - 1)))));
+    const month = monthOf(m[2]);
     if (month >= 0 && !factDayMonth.has(`${Number(m[1])}-${month + 1}`)) out.push({ kind: "date", said: m[0] });
   }
   for (const m of lower.matchAll(/\b([a-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?\b/g)) {

@@ -48,6 +48,13 @@ describe("numbersIn", () => {
 });
 
 describe("checkSpeech", () => {
+  it("reads a Finnish November date as November (not the Swedish 'mars')", () => {
+    const f = addFacts(emptyFacts(), { say: "60 L of milk, for Friday 20 November.", deliverBy: "2026-11-20" });
+    expect(checkSpeech("60 litraa maitoa perjantaiksi 20. marraskuuta. Onko tämä oikein?", f, { final: true })).toEqual([]);
+    expect(checkSpeech("60 liter mjölk till fredag den 20 november.", f, { final: true })).toEqual([]);
+    expect(checkSpeech("60 litraa maitoa 20. maaliskuuta.", f, { final: true }).map((v) => v.kind)).toContain("date");
+  });
+
   it("passes speech that only repeats the tool result, in any of the three languages", () => {
     const f = facts();
     expect(checkSpeech("Option 1 is 100 packs of 10 litres for 1,570.31 euros, delivered Monday 16 November.", f, { brands: BRANDS, final: true })).toEqual([]);

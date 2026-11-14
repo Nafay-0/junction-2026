@@ -150,6 +150,9 @@ async function main() {
     let phase: "greeting" | "turn" | "done" = "greeting";
     let endAt = 0;
     let firstSound: number | undefined;
+    /** End of speech to the first sound after AimoPilot's read-back went back to the model: the read-back starting. */
+    let answerSound: number | undefined;
+    let toolDone = false;
     let toolAt: number | undefined;
     let closed: string | undefined;
     let cost = 0;
@@ -167,6 +170,7 @@ async function main() {
       onReady: () => ready(),
       onAudio: () => {
         if (phase === "turn" && endAt && firstSound === undefined) firstSound = Date.now() - endAt;
+        if (phase === "turn" && endAt && toolDone && answerSound === undefined) answerSound = Date.now() - endAt;
       },
       onHeard: (x) => {
         heard += x;
@@ -204,6 +208,7 @@ async function main() {
             responses.push({ id: fc.id, name: fc.name, response: r.forModel });
           }
           pendingTools = false;
+          if (phase === "turn") toolDone = true;
           sock.toolResponse(responses);
         })();
       },
@@ -278,6 +283,7 @@ async function main() {
     const requestHeard = (heardFinal ?? heard).trim();
     const requestSaid = said.trim();
     const firstSoundMs = firstSound;
+    const answerSoundMs = answerSound;
     const toolMs = toolAt;
     const submit = log.find((l) => l.name === "submit_request" && l.state !== "refused");
     const readBack = submit?.state === "read_back" ? (submit.need as { item: { text: string; category?: string }; quantity?: { amount: number; unit: string }; deliverBy?: string }) : undefined;
@@ -348,6 +354,7 @@ async function main() {
       grounded: violations.length === 0,
       violations: violations.map((v) => v.said),
       firstSoundMs: firstSoundMs ?? null,
+      answerSoundMs: answerSoundMs ?? null,
       toolMs: toolMs ?? null,
       orderMs: orderMs ?? null,
       order: order ? `${order.status} ${(order.totalCents / 100).toFixed(2)}` : undefined,
@@ -361,7 +368,7 @@ async function main() {
 
   const rows: Row[] = [];
   for (const [file, t] of Object.entries(truth)) {
-    if (only && !file.startsWith(only)) continue;
+    if (only && !only.split(",").some((o) => file.startsWith(o))) continue;
     let r: Row | undefined;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
@@ -409,6 +416,8 @@ async function main() {
     medianFirstSoundMs: med("firstSoundMs"),
     p90FirstSoundMs: p90("firstSoundMs"),
     medianToolMs: med("toolMs"),
+    medianAnswerSoundMs: med("answerSoundMs"),
+    p90AnswerSoundMs: p90("answerSoundMs"),
     medianOrderMs: med("orderMs"),
     orders: rows.filter((r) => r.order).length,
     costUsd: Number(rows.reduce((s, r) => s + (Number(r.costUsd) || 0), 0).toFixed(3)),
