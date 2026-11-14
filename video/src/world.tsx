@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import { useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { C, display, sans, SHADOW } from "./theme";
 import { GateMark, IconCheck } from "./ui";
 
@@ -82,3 +82,70 @@ export const Block = ({ label, hash, ok = true, style }: { label: string; hash: 
     <span style={{ fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace', fontSize: 17, color: "rgb(255 255 255 / 0.62)", whiteSpace: "nowrap" }}>{hash}</span>
   </div>
 );
+
+/**
+ * The catalogue as a material: 17 546 round, soft dots in three depth layers, one per product, drawn on a canvas.
+ * `pull` moves the recalled fifty toward the hub along curved paths with a glowing strand each; `rules` dims the
+ * products the kitchen's rules exclude and lets them fall away.
+ */
+export const FIELD_N = 17546;
+const picked = (i: number) => i % 351 === 7;
+export const Field = ({ appear = 1, pull = 0, rules = 0, pulse = 0, top = 170, height = 760, hub = [1085, 520] }: { appear?: number; pull?: number; rules?: number; pulse?: number; top?: number; height?: number; hub?: [number, number] }) => {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useLayoutEffect(() => {
+    const g = ref.current?.getContext("2d");
+    if (!g) return;
+    g.clearRect(0, 0, 1920, 1080);
+    for (let i = 0; i < FIELD_N; i++) {
+      if (picked(i)) continue;
+      const d = rnd(i, 2);
+      const fails = rnd(i, 7) < 0.42;
+      const x = -60 + rnd(i, 1) * 1500;
+      const y = top + rnd(i, 3) * height + (d - 0.5) * 60 + (fails ? 90 * rules * rules : 0);
+      const r = d < 0.4 ? 1.2 : d < 0.75 ? 1.9 : 2.9;
+      const a = (d < 0.4 ? 0.16 : d < 0.75 ? 0.3 : 0.5) * appear * (fails ? 1 - 0.88 * rules : 1) * (0.7 + 0.3 * Math.min(1, Math.max(0, appear * 2 - rnd(i, 4))));
+      if (a < 0.01) continue;
+      g.fillStyle = `rgba(226,238,241,${a})`;
+      g.beginPath();
+      g.arc(x, y, r, 0, 6.2832);
+      g.fill();
+    }
+    let k = 0;
+    for (let i = 0; i < FIELD_N; i++) {
+      if (!picked(i)) continue;
+      const d = rnd(i, 2);
+      const hx = -60 + rnd(i, 1) * 1500;
+      const hy = top + rnd(i, 3) * height + (d - 0.5) * 60;
+      const ang = rnd(i, 5) * 6.2832;
+      const rad = 150 * Math.sqrt(rnd(i, 6));
+      const tx = hub[0] + Math.cos(ang) * rad;
+      const ty = hub[1] + Math.sin(ang) * rad;
+      const t = Math.min(1, Math.max(0, pull * 1.5 - (k++ / 50) * 0.5));
+      const e = t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+      const cx = (hx + tx) / 2;
+      const cy = (hy + ty) / 2 - 70;
+      const u = 1 - e;
+      const x = u * u * hx + 2 * u * e * cx + e * e * tx;
+      const y = u * u * hy + 2 * u * e * cy + e * e * ty;
+      if (e > 0.01) {
+        const grad = g.createLinearGradient(hx, hy, x, y);
+        grad.addColorStop(0, "rgba(192,224,33,0)");
+        grad.addColorStop(1, `rgba(192,224,33,${0.5 * appear})`);
+        g.strokeStyle = grad;
+        g.lineWidth = 1.4;
+        g.beginPath();
+        g.moveTo(hx, hy);
+        g.quadraticCurveTo(hx + (cx - hx) * e, hy + (cy - hy) * e, x, y);
+        g.stroke();
+      }
+      g.shadowColor = "rgba(192,224,33,0.9)";
+      g.shadowBlur = 8 + 12 * e + 14 * pulse;
+      g.fillStyle = e > 0.02 ? `rgba(192,224,33,${appear})` : `rgba(226,238,241,${0.5 * appear})`;
+      g.beginPath();
+      g.arc(x, y, 3 + 3.5 * e + 1.5 * pulse, 0, 6.2832);
+      g.fill();
+      g.shadowBlur = 0;
+    }
+  }, [appear, pull, rules, pulse, top, height, hub]);
+  return <canvas ref={ref} width={1920} height={1080} style={{ position: "absolute", inset: 0 }} />;
+};

@@ -1,8 +1,9 @@
 import { AbsoluteFill, interpolate, useCurrentFrame } from "remotion";
-import { clamp, EASE, EASE_IO, fi, L, M, prog, Q, Rise } from "../anim";
+import { clamp, EASE, EASE_IO, L, M, prog, Q, Rise } from "../anim";
 import { C, display, sans, SHADOW } from "../theme";
 import { Ground } from "../ui";
 import { cue } from "../vo";
+import { Field } from "../world";
 
 const c = (phrase: string, shift = 0) => cue("search", phrase, shift);
 const T = {
@@ -18,66 +19,41 @@ const T = {
 };
 
 /**
- * How a search runs (web/docs/smart-search.md), as a machine: the whole catalogue, vector and keyword recall pulling
- * fifty candidates through the kitchen's rules, a decision model judging them (it can say "not sold here"), and plain
- * code checking the judge.
+ * How a search runs (web/docs/smart-search.md), as a machine: every product a dot, vector and keyword recall pulling
+ * fifty of them forward, the kitchen's rules dropping what they exclude, a decision model judging the fifty (it can
+ * say "not sold here"), and plain code checking the judge.
  */
-const COLS = 22;
-const DOTS = COLS * 7;
-const PICKED = Array.from({ length: 28 }, (_, k) => (k * 37 + 5) % DOTS);
-const home = (i: number): [number, number] => [70 + (i % COLS) * 30, 318 + Math.floor(i / COLS) * 38];
-const spot = (k: number): [number, number] => [930 + (k % 7) * 34, 356 + Math.floor(k / 7) * 34];
-const ANSWER: [number, number] = [1420, 400];
-
+const HUB: [number, number] = [1010, 560];
+const BAR = 1250;
 const Machine = () => {
   const frame = useCurrentFrame();
-  const sweep = interpolate(frame, [T.recall, T.recall + 44], [0, 1], { ...clamp, easing: EASE_IO });
-  const rules = prog(frame, T.rules, M);
-  const judged = prog(frame, T.judge + 6, L);
+  const appear = interpolate(frame, [4, 4 + L], [0, 1], { ...clamp, easing: EASE });
+  const pull = interpolate(frame, [T.recall + 8, T.fifty + L], [0, 1], { ...clamp, easing: EASE_IO });
+  const rules = prog(frame, T.rules, L);
+  const judging = interpolate(frame, [T.judge, T.judge + 10, T.judge + 34], [0, 1, 0], clamp);
   const answer = prog(frame, T.judge + 18, M);
   const no = prog(frame, T.judge + 30, M);
   const checked = prog(frame, T.code + 4, Q);
-  const count = Math.round(interpolate(frame, [6, 6 + L], [0, 17546], { ...clamp, easing: EASE }));
   return (
     <>
-      {Array.from({ length: DOTS }, (_, i) => {
-        const k = PICKED.indexOf(i);
-        const [hx, hy] = home(i);
-        const inP = prog(frame, 4 + (i % COLS) * 0.7 + Math.floor(i / COLS), Q);
-        const near = 1 - Math.min(1, Math.abs((i % COLS) / COLS - sweep) * 5);
-        if (k < 0) return <span key={i} style={{ position: "absolute", left: hx, top: hy, width: 18, height: 18, borderRadius: 5, background: "rgb(255 255 255 / 0.5)", opacity: inP * (0.5 + 0.5 * near * (sweep < 1 ? 1 : 0)) * (1 - 0.5 * rules) }} />;
-        const pull = interpolate(frame, [T.fifty - 14 + k * 1.1, T.fifty + 16 + k * 1.1], [0, 1], { ...clamp, easing: EASE_IO });
-        const [sx, sy] = spot(k);
-        const chosen = k === 10;
-        const go = chosen ? interpolate(frame, [T.judge + 10, T.judge + 10 + M], [0, 1], { ...clamp, easing: EASE_IO }) : 0;
-        const scan = Math.max(0, 1 - Math.abs(judged * 30 - k) / 3) * (judged < 1 ? 1 : 0);
-        const x = hx + (sx - hx) * pull + (ANSWER[0] - sx) * go;
-        const y = hy + (sy - hy) * pull + (ANSWER[1] + 40 - sy) * go;
-        return <span key={i} style={{ position: "absolute", left: x, top: y, width: 18, height: 18, borderRadius: 5, background: pull > 0.05 ? C.lime : "rgb(255 255 255 / 0.5)", opacity: inP * (chosen ? 1 - go : 1 - 0.55 * judged * (1 - scan)), scale: String(1 + 0.5 * scan + 0.3 * pull * (1 - pull) * 4), boxShadow: scan > 0.2 ? "0 0 16px rgb(192 224 33 / 0.9)" : "none" }} />;
-      })}
-      <div style={{ position: "absolute", left: 850, top: 300, width: 8, height: 290, borderRadius: 4, background: C.safety, opacity: 0.25 + 0.75 * rules, boxShadow: `0 0 ${30 * rules}px rgb(255 194 14 / ${0.7 * rules})` }} />
-
-      <div style={{ position: "absolute", left: 70, top: 606, ...sans, fontSize: 34, color: C.paper }}>
-        <span style={{ ...display, fontSize: 48, color: C.lime, fontVariantNumeric: "tabular-nums" }}>{fi(count)}</span> products
-      </div>
-      <Rise at={T.rules} dur={Q} y={10} style={{ position: "absolute", left: 742, top: 606, width: 220, ...sans, fontSize: 28, color: C.safety, fontWeight: 600, textAlign: "center" }}>
+      <Field appear={appear} pull={pull} rules={rules} pulse={judging} top={250} height={640} hub={HUB} />
+      <div style={{ position: "absolute", left: BAR, top: 250, width: 8, height: 640, borderRadius: 4, background: C.safety, opacity: 0.2 + 0.8 * rules, boxShadow: `0 0 ${34 * rules}px rgb(255 194 14 / ${0.8 * rules})` }} />
+      <Rise at={T.rules} dur={Q} y={10} style={{ position: "absolute", left: BAR - 110, top: 196, width: 228, textAlign: "center", ...sans, fontSize: 28, fontWeight: 700, color: C.safety, whiteSpace: "nowrap" }}>
         the kitchen&apos;s rules
       </Rise>
-      <Rise at={T.fifty} dur={Q} y={10} style={{ position: "absolute", left: 930, top: 606, ...sans, fontSize: 34, color: C.paper, whiteSpace: "nowrap" }}>
-        <span style={{ ...display, fontSize: 48, color: C.lime }}>50</span> candidates
-      </Rise>
-      <Rise at={T.recall + M} dur={Q} y={10} style={{ position: "absolute", left: 70, top: 668, ...sans, fontSize: 28, color: "rgb(255 255 255 / 0.74)" }}>
-        vectors and keyword lists, on Aiven for OpenSearch
-      </Rise>
-
-      <div style={{ position: "absolute", left: ANSWER[0], top: ANSWER[1] - 110, width: 430, height: 190, boxSizing: "border-box", borderRadius: 26, background: C.paper, boxShadow: SHADOW.xl, borderTop: `8px solid ${C.lime}`, padding: "20px 26px", ...sans, opacity: answer, translate: `${(1 - answer) * 40}px 0px` }}>
-        <div style={{ fontSize: 24, color: C.inkSoft }}>The judge: a decision model</div>
-        <div style={{ ...display, fontSize: 46, color: C.ink, marginTop: 8, whiteSpace: "nowrap" }}>Valio Eila, 1 l</div>
-        <div style={{ fontSize: 24, color: C.good, fontWeight: 700, marginTop: 6 }}>the right product</div>
-        <div style={{ position: "absolute", right: -14, top: -24, height: 56, padding: "0 22px", borderRadius: 28, background: C.lime, color: C.ink, display: "flex", alignItems: "center", gap: 10, fontSize: 26, fontWeight: 800, opacity: checked, scale: String(1.4 - 0.4 * checked), rotate: "4deg" }}>checked by code</div>
+      <div style={{ position: "absolute", left: 1330, top: 330, width: 500, height: 210, boxSizing: "border-box", borderRadius: 28, background: C.paper, boxShadow: SHADOW.xl, borderTop: `8px solid ${C.lime}`, padding: "22px 28px", ...sans, opacity: answer, translate: `${(1 - answer) * 40}px 0px` }}>
+        <div style={{ fontSize: 26, color: C.inkSoft }}>The judge: a decision model</div>
+        <div style={{ ...display, fontSize: 52, color: C.ink, marginTop: 8, whiteSpace: "nowrap" }}>Valio Eila, 1 l</div>
+        <div style={{ fontSize: 26, color: C.good, fontWeight: 700, marginTop: 6 }}>the right product</div>
+        <div style={{ position: "absolute", right: -10, top: -26, height: 58, padding: "0 24px", borderRadius: 29, background: C.lime, color: C.ink, display: "flex", alignItems: "center", fontSize: 27, fontWeight: 800, opacity: checked, scale: String(1.4 - 0.4 * checked), rotate: "4deg" }}>checked by code</div>
       </div>
-      <div style={{ position: "absolute", left: ANSWER[0], top: ANSWER[1] + 104, width: 430, height: 96, boxSizing: "border-box", borderRadius: 22, background: "rgb(255 255 255 / 0.08)", border: `2.5px dashed ${C.safety}`, display: "flex", alignItems: "center", padding: "0 26px", ...sans, fontSize: 30, color: C.paper, opacity: no, translate: `${(1 - no) * 40}px 0px` }}>
+      <div style={{ position: "absolute", left: 1330, top: 566, width: 500, height: 100, boxSizing: "border-box", borderRadius: 24, background: "rgb(255 255 255 / 0.08)", border: `2.5px dashed ${C.safety}`, display: "flex", alignItems: "center", padding: "0 28px", ...sans, fontSize: 32, color: C.paper, opacity: no, translate: `${(1 - no) * 40}px 0px` }}>
         or: &quot;not sold here&quot;
+      </div>
+      <div style={{ position: "absolute", left: 60, top: 916, display: "flex", alignItems: "baseline", gap: 22, opacity: appear }}>
+        <span style={{ ...display, fontSize: 120, color: C.lime, fontVariantNumeric: "tabular-nums" }}>17 546</span>
+        <span style={{ ...display, fontSize: 68, color: C.paper }}>products.</span>
+        <span style={{ ...display, fontSize: 68, color: C.paper, opacity: prog(frame, T.fifty, M) }}>Fifty recalled.</span>
       </div>
     </>
   );
@@ -96,7 +72,8 @@ export const Search = () => {
   const frame = useCurrentFrame();
   // One move: the pipeline settles up and back as the comparison arrives under it.
   const up = interpolate(frame, [T.bars, T.bars + L], [0, 1], { ...clamp, easing: EASE_IO });
-  const ours = interpolate(frame, [T.ours + 6, T.big + 4, T.big + M], [0, 99.5, 97], { ...clamp, easing: EASE });
+  // The bar and its number never read more than the measured 97.
+  const ours = interpolate(frame, [T.ours + 6, T.big + 6], [0, 97], { ...clamp, easing: EASE });
   const land = prog(frame, T.big, M);
   return (
     <AbsoluteFill>
@@ -105,11 +82,11 @@ export const Search = () => {
           The right product, first.
         </Rise>
 
-        <div style={{ position: "absolute", left: 0, top: 0, width: 1920, height: 1080, transformOrigin: "60px 240px", scale: String(1 - 0.5 * up), translate: `0px ${-34 * up}px`, opacity: 1 - 0.35 * up, willChange: "transform" }}>
+        <div style={{ position: "absolute", left: 0, top: 0, width: 1920, height: 1080, transformOrigin: "50% 50%", scale: String(1 + 0.05 * up), opacity: 1 - up, willChange: "transform" }}>
           <Machine />
         </div>
 
-        <div style={{ position: "absolute", left: 60, top: 452, width: 1800 }}>
+        <div style={{ position: "absolute", left: 60, top: 320, width: 1800 }}>
           {ROWS.map((r, i) => {
             const at = T.bars + 10 + i * 4;
             const g = interpolate(frame, [at, at + M], [0, r.v], { ...clamp, easing: EASE });
@@ -129,7 +106,7 @@ export const Search = () => {
             <div style={{ ...display, fontSize: 210, lineHeight: 1, color: C.lime, marginLeft: 30, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", opacity: ours > 1 ? 1 : 0, scale: String(1 + 0.06 * (1 - land)), transformOrigin: "0 60%" }}>{Math.round(ours)} %</div>
           </div>
         </div>
-        <Rise at={T.bars + 6} style={{ position: "absolute", right: 60, top: 306, ...sans, fontSize: 32, color: "rgb(255 255 255 / 0.7)", textAlign: "right" }}>
+        <Rise at={T.bars + 6} style={{ position: "absolute", left: 60, top: 216, ...sans, fontSize: 36, color: "rgb(255 255 255 / 0.74)" }}>
           Right first answer, 189 real requests
         </Rise>
       </Ground>

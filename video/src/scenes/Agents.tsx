@@ -2,7 +2,8 @@ import type { ReactNode } from "react";
 import { AbsoluteFill, Img, interpolate, staticFile, useCurrentFrame } from "remotion";
 import { clamp, EASE, EASE_IO, M, prog, Q, Rise, Wire } from "../anim";
 import { C, display, sans, SHADOW } from "../theme";
-import { Agent, B, BrowserFrame, Buyer, DishRow, GateMark, Ground, IconMic, PhoneFrame, Say, ThreadLine } from "../ui";
+import { Agent, B, BrowserFrame, Buyer, DishRow, Ground, IconMic, PhoneFrame, Say, ThreadLine } from "../ui";
+import { Block, GateObject, NodeCard } from "../world";
 import { cue } from "../vo";
 
 const c = (phrase: string) => cue("agents", phrase);
@@ -134,44 +135,50 @@ const Outside = () => {
   );
 };
 
-/** The whole frame: six agents, their lines converging on the gate, one order through it, its entry in the ledger. */
+/** The whole frame: the gate at the centre, six agents around it, a pulse from each, the ledger chaining below. */
+const RING = [
+  { name: "Buying agent", sub: "text or hands-free voice", x: 150, y: 150 },
+  { name: "Menu planner", sub: "dishes, checked against rules", x: 90, y: 390 },
+  { name: "The watch", sub: "sees a stock-out first", x: 150, y: 630 },
+  { name: "Selling agent", sub: "signed offers, never a purchase", x: 1370, y: 150 },
+  { name: "Any outside agent", sub: "over MCP or REST", x: 1430, y: 390 },
+  { name: "Operations copilot", sub: "answers from rows", x: 1370, y: 630 },
+];
+const CHAIN = [
+  { l: "quote signed", h: "96a5c12f…b17f" },
+  { l: "sign-off", h: "469b5e71…0fa3" },
+  { l: "order placed", h: "fa63b6cc…535d" },
+];
 const Meet = () => {
   const frame = useCurrentFrame();
   if (frame < T.meet - 1) return null;
   const p = prog(frame, T.meet, M);
-  const gate = { x: 790, y: 360, w: 340, h: 300 };
-  const through = interpolate(frame, [T.meet + 34, T.meet + 58], [0, 1], { ...clamp, easing: EASE_IO });
-  const entry = prog(frame, T.meet + 56, M);
   return (
     <div style={{ position: "absolute", inset: 0, opacity: p }}>
       <svg width={1920} height={1080} style={{ position: "absolute", inset: 0 }}>
-        {SIX.map((s, k) => {
-          const y = 196 + k * 116;
-          return <Wire key={s.short} at={T.meet + 4 + k * 3} dur={M + 6} pts={[[470, y], [650, y], [640, 510], [gate.x, 510]]} rest={0.6} />;
+        {RING.map((a, k) => {
+          const left = a.x < 960;
+          const x0 = left ? a.x + 400 : a.x;
+          const x1 = left ? 800 : 1120;
+          return <Wire key={a.name} at={T.meet + 8 + k * 4} dur={M + 6} every={44} offset={k * 7} pts={[[x0, a.y + 64], [left ? x0 + 130 : x0 - 130, a.y + 64], [left ? x1 - 130 : x1 + 130, 480], [x1, 480]]} rest={0.55} />;
         })}
-        <Wire at={T.meet + 52} dur={Q} pts={[[gate.x + gate.w, 510], [gate.x + gate.w + 80, 510], [1310, 510], [1390, 510]]} rest={0.6} />
+        <Wire at={T.meet + 40} dur={Q} pts={[[960, 762], [960, 790], [960, 800], [960, 830]]} rest={0.7} />
       </svg>
-      {SIX.map((s, k) => {
-        const q = prog(frame, T.meet + k * 3, M);
-        return (
-          <div key={s.short} style={{ position: "absolute", left: 110, top: 196 + k * 116 - 40, width: 360, height: 80, boxSizing: "border-box", borderRadius: 40, background: "rgb(255 255 255 / 0.09)", border: "2px solid rgb(255 255 255 / 0.24)", color: C.paper, display: "flex", alignItems: "center", padding: "0 30px", ...sans, fontSize: 34, fontWeight: 600, opacity: q, translate: `${(1 - q) * -30}px 0px` }}>{s.short}</div>
-        );
+      {RING.map((a, k) => {
+        const q = prog(frame, T.meet + 2 + k * 4, M);
+        const left = a.x < 960;
+        return <NodeCard key={a.name} name={a.name} sub={a.sub} w={400} lit={0.25 + 0.75 * q} style={{ position: "absolute", left: a.x, top: a.y, opacity: q, translate: `${(1 - q) * (left ? -40 : 40)}px 0px` }} />;
       })}
-      <div style={{ position: "absolute", left: gate.x, top: gate.y, width: gate.w, height: gate.h, boxSizing: "border-box", borderRadius: 34, background: C.slab, boxShadow: SHADOW.xl, border: `2.5px solid ${C.safety}`, padding: 34, scale: String(0.92 + 0.08 * EASE(p)) }}>
-        <GateMark size={72} />
-        <div style={{ ...display, fontSize: 68, color: C.safety, marginTop: 20 }}>The gate</div>
-        <div style={{ ...sans, fontSize: 28, color: C.chalkSoft, marginTop: 6 }}>plain code, 20 rules</div>
+      <div style={{ position: "absolute", left: 960 - 160, top: 192, scale: String(0.94 + 0.06 * EASE(p)), transformOrigin: "50% 50%" }}>
+        <GateObject passed={Math.floor(interpolate(frame, [T.meet + 14, T.meet + 44], [0, 4.99], clamp))} scale={0.89} />
       </div>
-      <div style={{ position: "absolute", left: 640 + (1390 - 640) * through, top: 510, translate: "-50% -50%", height: 46, padding: "0 20px", borderRadius: 23, background: C.lime, color: C.ink, display: "flex", alignItems: "center", ...sans, fontSize: 24, fontWeight: 700, opacity: Math.sin(Math.min(1, Math.max(0, through)) * Math.PI) ** 0.3 }}>order</div>
-      <div style={{ position: "absolute", left: 1390, top: 430, width: 440, opacity: entry, translate: `${(1 - entry) * 24}px 0px` }}>
-        <div style={{ ...sans, fontSize: 28, color: "rgb(255 255 255 / 0.74)", marginBottom: 12 }}>One hash-chained ledger</div>
-        <div style={{ ...sans, display: "flex", alignItems: "center", gap: 16, height: 76, padding: "0 24px", borderRadius: 18, background: "rgb(255 255 255 / 0.09)", border: `2px solid ${C.lime}` }}>
-          <span style={{ width: 14, height: 14, borderRadius: "50%", background: C.lime }} />
-          <span style={{ fontSize: 30, color: C.paper, flex: 1, whiteSpace: "nowrap" }}>order placed</span>
-          <span style={{ fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace', fontSize: 20, color: "rgb(255 255 255 / 0.66)" }}>fa63b6cc…535d</span>
-        </div>
+      <div style={{ position: "absolute", left: 0, right: 0, top: 832, display: "flex", justifyContent: "center", gap: 18 }}>
+        {CHAIN.map((b, i) => {
+          const q = prog(frame, T.meet + 44 + i * 6, M);
+          return <Block key={b.h} label={b.l} hash={b.h} style={{ opacity: q, translate: `0px ${(1 - q) * 18}px` }} />;
+        })}
       </div>
-      <Rise at={T.meet + 8} style={{ position: "absolute", left: 0, right: 0, top: 880, textAlign: "center", ...display, fontSize: 84, color: C.paper }}>
+      <Rise at={T.meet + 10} style={{ position: "absolute", left: 0, right: 0, top: 934, textAlign: "center", ...display, fontSize: 80, color: C.paper }}>
         Six agents. None can order past the gate.
       </Rise>
     </div>

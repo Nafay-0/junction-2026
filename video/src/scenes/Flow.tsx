@@ -481,25 +481,24 @@ const Funnel = () => {
     <>
       <div
         style={{
-          display: "flex",
-          alignItems: "baseline",
-          gap: 26,
           opacity: swap,
-          height: 170,
+          height: 236,
         }}
       >
         <span
           style={{
             ...display,
-            fontSize: 160,
+            display: "block",
+            fontSize: 168,
             color: C.lime,
             fontVariantNumeric: "tabular-nums",
+            whiteSpace: "nowrap",
           }}
         >
           {value}
         </span>
         <span
-          style={{ ...sans, fontSize: 40, color: "rgb(255 255 255 / 0.86)" }}
+          style={{ ...sans, display: "block", marginTop: 6, fontSize: 44, whiteSpace: "nowrap", color: "rgb(255 255 255 / 0.86)" }}
         >
           {label}
         </span>
@@ -594,7 +593,7 @@ const RANKS = [
   {
     rank: "Best",
     what: "Valio Eila, 1 l cartons",
-    why: "Cheapest by 550,00 €. Exact amount.",
+    why: "Cheapest by 550,00 €.",
     price: "1 010,00 €",
   },
   {
@@ -624,7 +623,7 @@ const Ranks = () => {
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 24,
+              gap: 18,
               boxSizing: "border-box",
               height: best ? 170 : 122,
               marginTop: i ? 16 : 0,
@@ -640,9 +639,10 @@ const Ranks = () => {
             <span
               style={{
                 ...display,
-                width: 150,
+                width: 128,
+                flexShrink: 0,
                 color: best ? C.lime : "rgb(255 255 255 / 0.8)",
-                fontSize: best ? 58 : 44,
+                fontSize: best ? 52 : 40,
               }}
             >
               {r.rank}
@@ -651,7 +651,7 @@ const Ranks = () => {
               <span
                 style={{
                   display: "block",
-                  fontSize: best ? 34 : 30,
+                  fontSize: best ? 31 : 28,
                   color: C.paper,
                   fontWeight: 600,
                   whiteSpace: "nowrap",
@@ -662,7 +662,7 @@ const Ranks = () => {
               <span
                 style={{
                   display: "block",
-                  fontSize: 25,
+                  fontSize: 23,
                   color: "rgb(255 255 255 / 0.7)",
                   marginTop: 6,
                   whiteSpace: "nowrap",
@@ -674,7 +674,7 @@ const Ranks = () => {
             <span
               style={{
                 ...sans,
-                fontSize: best ? 38 : 30,
+                fontSize: best ? 33 : 28,
                 fontWeight: 700,
                 color: C.paper,
                 fontVariantNumeric: "tabular-nums",

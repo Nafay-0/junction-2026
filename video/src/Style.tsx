@@ -1,70 +1,18 @@
-import { useLayoutEffect, useRef } from "react";
 import { AbsoluteFill, Sequence } from "remotion";
 import { Aiven } from "./scenes/Aiven";
 import { ApprovePage, T as FLOW } from "./scenes/Flow";
 import { C, display, sans } from "./theme";
 import { PhoneFrame } from "./ui";
-import { Block, Card, GateObject, NodeCard, OrderCard, rnd, Space } from "./world";
+import { Block, Card, Field, GateObject, NodeCard, OrderCard, Space } from "./world";
 
 /** Style frames for "one order, one journey": four stills that show the world before it is animated. */
-
-const N = 17546;
-const PICK = (i: number) => i % 351 === 7;
-const dot = (i: number) => {
-  const d = rnd(i, 2);
-  return { x: -60 + rnd(i, 1) * 1500, y: 170 + rnd(i, 3) * 760 + (d - 0.5) * 60, d };
-};
-const HUB = { x: 1085, y: 520 };
-
-/** Every product as one dot: 17 546 of them, drawn once on a canvas; the recalled fifty pulled toward the hub. */
-const Field = ({ pull }: { pull: number }) => {
-  const ref = useRef<HTMLCanvasElement>(null);
-  useLayoutEffect(() => {
-    const g = ref.current?.getContext("2d");
-    if (!g) return;
-    g.clearRect(0, 0, 1920, 1080);
-    for (let i = 0; i < N; i++) {
-      if (PICK(i)) continue;
-      const p = dot(i);
-      g.fillStyle = `rgba(255,255,255,${0.1 + 0.42 * p.d})`;
-      const r = 1 + 2.2 * p.d;
-      g.fillRect(p.x - r, p.y - r, r * 2, r * 2);
-    }
-    for (let i = 0; i < N; i++) {
-      if (!PICK(i)) continue;
-      const p = dot(i);
-      const a = rnd(i, 5) * Math.PI * 2;
-      const tx = HUB.x + Math.cos(a) * 150 * Math.sqrt(rnd(i, 6));
-      const ty = HUB.y + Math.sin(a) * 150 * Math.sqrt(rnd(i, 6));
-      const x = p.x + (tx - p.x) * pull;
-      const y = p.y + (ty - p.y) * pull;
-      const grad = g.createLinearGradient(p.x, p.y, x, y);
-      grad.addColorStop(0, "rgba(192,224,33,0)");
-      grad.addColorStop(1, "rgba(192,224,33,0.55)");
-      g.strokeStyle = grad;
-      g.lineWidth = 1.5;
-      g.beginPath();
-      g.moveTo(p.x, p.y);
-      g.quadraticCurveTo((p.x + x) / 2, (p.y + y) / 2 - 40, x, y);
-      g.stroke();
-      g.shadowColor = "rgba(192,224,33,0.9)";
-      g.shadowBlur = 16;
-      g.fillStyle = C.lime;
-      g.beginPath();
-      g.arc(x, y, 6.5, 0, Math.PI * 2);
-      g.fill();
-      g.shadowBlur = 0;
-    }
-  }, [pull]);
-  return <canvas ref={ref} width={1920} height={1080} style={{ position: "absolute", inset: 0 }} />;
-};
 
 const Line = ({ children, top = 930 }: { children: string; top?: number }) => <div style={{ position: "absolute", left: 100, top, ...display, fontSize: 84, color: C.paper }}>{children}</div>;
 
 export const StyleSearch = () => (
   <AbsoluteFill>
     <Space>
-      <Field pull={0.72} />
+      <Field pull={0.8} rules={0.6} />
       <div style={{ position: "absolute", left: 1286, top: 250, width: 8, height: 560, borderRadius: 4, background: C.safety, boxShadow: "0 0 34px rgb(255 194 14 / 0.8)" }} />
       <div style={{ position: "absolute", left: 1196, top: 196, width: 190, textAlign: "center", ...sans, fontSize: 26, fontWeight: 700, color: C.safety }}>kitchen&apos;s rules</div>
       <div style={{ position: "absolute", inset: 0, perspective: 2200 }}>
