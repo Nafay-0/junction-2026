@@ -4,8 +4,8 @@ import { readJson } from "@/server/http";
 
 /**
  * POST /ui-api/account/signup { restaurant, username, password }: step 1 of opening an account. Nothing else is
- * asked: no email address, no person's name. Signs this browser in; step 2 is signing the mandate
- * (POST /ui-api/account/mandate), which makes the kitchen.
+ * asked: no email address, no person's name. Signs this browser in; step 2 is the set-up interview
+ * (POST /ui-api/account/interview), which ends in signing the mandate that makes the kitchen.
  */
 export async function POST(req: Request) {
   return accountRoute(req, async (rt, { address }) => {
