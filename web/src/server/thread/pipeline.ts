@@ -51,6 +51,8 @@ export type TurnRun = {
   placedPlan?: string;
   /** A sentence plain code has for the buyer's words: said as the reply, with no model call. */
   sayNow?: string;
+  /** Plain code's own reply to a tap or a plain answer (the watch's answer): said as it is, no model. */
+  saidByCode?: string;
   /** The demo guide's own words for this turn ("what can I try?", a staged condition): the reply, as they are. */
   demoSaid?: string;
   /** A change to the rules sent in this turn to the signer's passkey (said by plain code, never as done). */
@@ -143,7 +145,8 @@ export function humanVia(run: TurnRun, words?: string): HumanVia {
 }
 
 export function byLine(run: TurnRun): string {
-  const who = run.person?.name ?? run.k.info.by;
+  // A person's name, never a username: "Hotel Lumo kitchen (hotel-lumo)" says "Hotel Lumo kitchen".
+  const who = (run.person?.name ?? run.k.info.by).replace(/\s*\([^)]*\)/g, "").trim();
   return `${who} (${run.door === "voice" ? "by voice" : run.buyer.via === "tap" ? "tapped in the store" : "typed in the store"})`.slice(0, 120);
 }
 

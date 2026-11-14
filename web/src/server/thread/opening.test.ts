@@ -52,3 +52,27 @@ describe("the opening's drift question", () => {
     if (sheet?.type === "sheet") expect(sheet.deliveryDate).toBe(drift.nextDue);
   }, 30_000);
 });
+
+describe("the held renewal: said on the opening, settled by one answer", () => {
+  it("'go back to the usual' renews at the usual amount at once, in the watch's own words, with no question again", async () => {
+    const { getRuntime } = await import("@/server/runtime");
+    const { setAutoRenew, standingFor } = await import("@/server/watch/service");
+    const rt = await getRuntime();
+    const base = (await resolveKitchen("hotel-lumo"))!;
+    const k = { ...base, console: { kitchen: "hotel-lumo", session: "s_lumo", person: { channel: "portal_session" as const, name: "Hotel Lumo kitchen (hotel-lumo)", account: "hotel-lumo" } } } as Kitchen;
+    const session = await rt.dock.authenticate(base.mandateToken, base.agentId, { via: "onsite", path: "/test", method: "POST" } as never);
+    const crept = (await standingFor(rt, base.info.orgId)).find((x) => x.drifted && x.next && x.drift.portions)!;
+    expect((await setAutoRenew(rt, session, { family: crept.family, on: true, by: "Tester", via: "test" })).renewal?.state).toBe("held");
+    const o = await settle("hotel-lumo", (await openToday(k))!);
+    const watch = o.cards.find((c) => c.type === "watch");
+    expect(watch?.type === "watch" && watch.kind).toBe("renewal_held");
+    const r = await submitTurn(k, { door: "typed", via: "typed", text: "go back to the usual" });
+    const a = await settle("hotel-lumo", r.agentTurnId);
+    const store = await threadStore();
+    const card = store.cards(store.peek("hotel-lumo")!).map((x) => x.card).find((c) => c.type === "watch");
+    expect(card?.type === "watch" && card.state).toBe("answered");
+    expect(a.line ?? "").not.toMatch(/\?\s*$/);
+    expect(a.line ?? "").toBeTruthy();
+  }, 30_000);
+});
+
