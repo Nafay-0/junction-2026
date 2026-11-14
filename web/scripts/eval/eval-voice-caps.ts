@@ -55,10 +55,22 @@ function sayClip(text: string, lang: string): Int16Array {
 }
 
 const words = (s: string) => s.toLowerCase().normalize("NFC").replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter(Boolean);
+/** Numbers as digits, units and symbols as words, so "ten litres" and "10 L" are the same words heard. */
+let numbersIn: (t: string) => { value: number; text?: string }[] = () => [];
+function norm(s: string): string {
+  let t = s.replace(/(\d),(\d{3})\b/g, "$1$2").replace(/\s?%/g, " percent").replace(/\s\+\s/g, " plus ").replace(/@/g, " at ").replace(/\.(?=[a-z])/gi, " dot ");
+  t = t.replace(/(\d)\s?(L|l)\b/g, "$1 litres").replace(/(\d)\s?kg\b/g, "$1 kilos");
+  const nums = numbersIn(t).map((n) => n.value);
+  for (const w of t.match(/[\p{L}-]+/gu) ?? []) {
+    const n = numbersIn(w);
+    if (n.length === 1 && !/^\d/.test(w) && nums.includes(n[0].value)) t = t.replace(new RegExp(`\\b${w}\\b`), String(n[0].value));
+  }
+  return t.replace(/\b(\d+)\s+(thousand|hundred)\b/gi, (_, a: string, b: string) => String(Number(a) * (/^t/i.test(b) ? 1000 : 100)));
+}
 /** Word error rate of what was heard against what was said (edit distance over words). */
 function wer(heard: string, said: string): number {
-  const a = words(said);
-  const b = words(heard);
+  const a = words(norm(said));
+  const b = words(norm(heard));
   const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
   for (let j = 1; j <= b.length; j++) d[0][j] = j;
   for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
@@ -81,6 +93,8 @@ async function main() {
   const { threadStore } = await import("@/server/thread/engine");
   const { LiveSocket } = await import("@/app/_channels/live-socket");
   const { dailyUsage } = await import("@/server/limits");
+  const { RealtimeSocket } = await import("@/app/_channels/realtime-socket");
+  numbersIn = (await import("@/core/grounding")).numbersIn as typeof numbersIn;
   type Card = import("@/server/thread/types").Card;
   const usd0 = dailyUsage().llm.usd;
   let audioIn = 0;
@@ -128,12 +142,22 @@ async function main() {
     let replyGiven = false;
     let replySpoken = false;
     let pending = 0;
+    /** What the door gave the model to say, and what the model said each turn: anything else is its own words. */
+    const given: string[] = ["hello what do you need hei mitä tarvitsette"];
+    let saidNow = "";
+    const own: string[] = [];
+    const overlapOf = (a: string, b: string) => {
+      const w = new Set(words(b));
+      const x = words(a);
+      return x.length ? x.filter((y) => w.has(y)).length / x.length : 1;
+    };
     const flush = () => {
       if (modelBusy || !queue.length || !ready) return;
       modelBusy = true;
       sock.text(`[AimoPilot] ${queue.shift()}`);
     };
-    const sock = new LiveSocket(live.wsUrl, live.token, live.model, {
+    const openai = live.provider === "openai";
+    const sock = new (openai ? RealtimeSocket : LiveSocket)(live.wsUrl, live.token, live.model, {
       onReady: () => {
         ready = true;
       },
@@ -149,9 +173,18 @@ async function main() {
         heard += x;
         lastHeardAt = Date.now();
       },
-      onSaid: () => {},
+      onHeardFinal: (x) => {
+        heard = x;
+        lastHeardAt = Date.now();
+      },
+      onSaid: (x) => {
+        saidNow += x;
+      },
       onTurnComplete: () => {
         modelBusy = false;
+        const t = saidNow.replace(/<\/?[a-z_]{2,20}>/gi, "").trim();
+        saidNow = "";
+        if (t && !given.slice(-4).some((g) => overlapOf(t, g) >= 0.5)) own.push(t.slice(0, 160));
         if (cur && replyGiven && cur.replySoundMs !== undefined && cur.replyDoneMs === undefined) {
           cur.replyDoneMs = Date.now() - endAt;
           replySpoken = true;
@@ -164,7 +197,7 @@ async function main() {
       onToolCall: (fcs) => {
         pending += 1;
         void (async () => {
-          for (let i = 0; i < 20 && Date.now() - lastHeardAt < 300; i++) await sleep(100);
+          for (let i = 0; i < 40 && Date.now() - lastHeardAt < 150; i++) await sleep(50);
           const text = heard.trim();
           heard = "";
           if (cur && cur.relayMs === undefined) cur.relayMs = Date.now() - endAt;
@@ -180,6 +213,7 @@ async function main() {
             }
             const r = await heardTurn("kaari", call, { text, turn: ++turn, modelWords: typeof fc.args?.words === "string" ? fc.args.words : undefined, lang });
             responses.push({ id: fc.id, name: fc.name, response: { say: r.say } });
+            if (r.say) given.push(r.say);
             if (cur) cur.state = r.state;
             if (r.state !== "working" && r.state !== "waiting") {
               replyGiven = true;
@@ -198,6 +232,7 @@ async function main() {
                     }
                   }
                   if (n.say) {
+                    given.push(n.say);
                     queue.push(n.say);
                     flush();
                   } else if (n.state === "reply") replySpoken = true;
@@ -228,7 +263,16 @@ async function main() {
     sock.text("[call connected]");
     for (let i = 0; i < 80 && modelBusy; i++) await sleep(100);
     // Silence flows between turns, as a microphone's does.
-    const quiet = b64(new Int16Array(1600));
+    const rate = sock.inputRate;
+    const up = (x: Int16Array) => {
+      if (rate === 16000) return x;
+      const n = Math.floor((x.length * rate) / 16000);
+      const o = new Int16Array(n);
+      for (let i = 0; i < n; i++) o[i] = x[Math.floor((i * 16000) / rate)] ?? 0;
+      return o;
+    };
+    const chunk = rate / 10;
+    const quiet = b64(new Int16Array(chunk));
     let talking = true;
     let speaking = false;
     void (async () => {
@@ -243,8 +287,9 @@ async function main() {
       replyGiven = false;
       replySpoken = false;
       speaking = true;
-      for (let i = 0; i < pcm.length; i += 1600) {
-        sock.audio(b64(pcm.subarray(i, i + 1600)));
+      const pcmUp = up(pcm);
+      for (let i = 0; i < pcmUp.length; i += chunk) {
+        sock.audio(b64(pcmUp.subarray(i, i + chunk)));
         audioIn += 0.1;
         await sleep(100);
       }
@@ -270,15 +315,18 @@ async function main() {
     }
     talking = false;
     const spoken = await snapshot("kaari");
-    const typed = parity.rows.find((r) => r.id === id || `fi-${r.id}` === id)?.typed;
+    // The same words typed (the parity run): a Finnish conversation is compared only where it has the same turns.
+    const typedRow = parity.rows.find((r) => r.id === id || (`fi-${r.id}` === id && (r as unknown as { times: unknown[] }).times.length === conv.turns.length));
+    const typed = typedRow?.typed;
     const outcomeSame = typed ? JSON.stringify([typed.orders, typed.gates, typed.end]) === JSON.stringify([spoken.orders, spoken.gates, spoken.end]) : null;
     calls().end(start.callId, "kaari", "eval");
     sock.close();
-    const row = { id, capability: conv.capability, lang: conv.lang, noise: conv.noise, rate: conv.rate, heardRight: turns.filter((t) => t.wer <= 0.2).length, turns: turns.length, outcomeSame, typed, spoken, detail: turns };
+    const relayed = turns.filter((t) => t.relayMs !== undefined).length;
+    const row = { id, relayed, ownWords: own, capability: conv.capability, lang: conv.lang, noise: conv.noise, rate: conv.rate, heardRight: turns.filter((t) => t.wer <= 0.2).length, turns: turns.length, outcomeSame, typed, spoken, detail: turns };
     rows.push(row);
-    console.log(`${outcomeSame === null ? "?   " : outcomeSame ? "SAME" : "DIFF"} ${id.padEnd(11)} heard ${row.heardRight}/${row.turns}  first ${turns.map((t) => t.firstSoundMs ?? "-").join("/")} ms  reply ${turns.map((t) => (t.replyDoneMs ? (t.replyDoneMs / 1000).toFixed(1) : "-")).join("/")} s  ${turns.map((t) => `"${t.heard.slice(0, 50)}"`).join(" | ")}`);
+    console.log(`${outcomeSame === null ? "?   " : outcomeSame ? "SAME" : "DIFF"} ${id.padEnd(11)} heard ${row.heardRight}/${row.turns} relayed ${relayed}/${row.turns} own ${own.length}  first ${turns.map((t) => t.firstSoundMs ?? "-").join("/")} ms  reply ${turns.map((t) => (t.replyDoneMs ? (t.replyDoneMs / 1000).toFixed(1) : "-")).join("/")} s  ${turns.map((t) => `"${t.heard.slice(0, 50)}"`).join(" | ")}`);
   }
-  const voiceUsd = (audioIn / 60) * 0.005 + (audioOut / 60) * 0.018;
+  const voiceUsd = model.startsWith("gpt-") ? (audioIn * 10 * 32 + audioOut * 20 * 64) / 1e6 : (audioIn / 60) * 0.005 + (audioOut / 60) * 0.018;
   const out = path.join(ROOT, "results", `caps-${model}.json`);
   fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.writeFileSync(out, JSON.stringify({ at: new Date().toISOString(), model, engineUsd: Number((dailyUsage().llm.usd - usd0).toFixed(3)), voiceUsd: Number(voiceUsd.toFixed(3)), rows }, null, 2));

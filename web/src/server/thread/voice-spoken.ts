@@ -101,7 +101,7 @@ export function speakable(text: string, lang: Lang, max = 45): string {
   return out.join(" ");
 }
 
-const shortName = (name: string) => name.replace(/[®™]/g, "").split(/\s+/).slice(0, 5).join(" ");
+const shortName = (name: string) => name.replace(/[®™]/g, "").replace(/\s+\d.*$/, "").split(/\s+/).slice(0, 4).join(" ");
 
 /** The read-back of an order the voice door held (pipeline.ts spokenHold): what, how much, which day, the total. */
 export function readBackOf(turn: AgentTurn, hold: SpokenReadBack, lang: Lang): string | undefined {
@@ -185,10 +185,12 @@ export function spokenReply(turn: AgentTurn, lang: Lang, hold?: SpokenReadBack):
     const rb = readBackOf(turn, hold, lang);
     if (rb) return { say: rb, hold };
   }
-  let line = speakable(turn.line ?? "", lang);
   const ask = optionsAsk(turn, lang);
-  // One question at a time: the options' question replaces the written reply's own.
-  if (ask) line = line.split(/(?<=[.!?])\s+/).filter((x) => !/\?\s*$/.test(x)).join(" ");
+  // Spoken is shorter than written: about thirty words, whole sentences. With the options' question, the written
+  // reply's first statement only, and its own question gives way (one question at a time).
+  let line = speakable(turn.line ?? "", lang, ask ? 18 : 32);
+  // With options to ask about, the question says it all (what, how much, the day): the written reply is not repeated.
+  if (ask) line = "";
   const extra = fromCards(turn, line, lang);
   const said = [line, ...extra, ask?.say ?? ""].filter(Boolean).join(" ").trim();
   if (said) return { say: said, ...(ask ? { hold: ask.hold } : {}) };

@@ -239,12 +239,12 @@ export function useCall(kitchen: string) {
   const onRelay = useCallback(
     async (fcs: FunctionCall[]) => {
       // The buyer's last words may still be arriving as transcript: wait for the final transcript when the provider
-      // sends one, otherwise until it has been quiet for 300 ms (at most 2 s).
+      // sends one, otherwise until it has been quiet for 150 ms (at most 2 s): the provider's turn detection has already waited for the pause.
       const s0 = sock.current;
-      for (let i = 0; i < 20; i++) {
-        const settled = s0?.finalTranscripts ? heardFinal.current !== undefined && Date.now() - lastHeardAt.current > 100 : Date.now() - lastHeardAt.current > 300;
+      for (let i = 0; i < 40; i++) {
+        const settled = s0?.finalTranscripts ? heardFinal.current !== undefined && Date.now() - lastHeardAt.current > 100 : Date.now() - lastHeardAt.current > 150;
         if (settled) break;
-        await new Promise((r) => setTimeout(r, 100));
+        await new Promise((r) => setTimeout(r, 50));
       }
       const words = (heardFinal.current ?? heard.current).trim();
       const t = turn.current;

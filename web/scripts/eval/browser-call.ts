@@ -1,167 +1,186 @@
 /**
- * Drives the call screen in a real Chromium with a phone viewport, against a running server:
+ * The hands-free voice door, driven end to end in a real Chromium (phone viewport) against a running server, with a
+ * fake microphone: the page's getUserMedia gets a WebAudio stream this script plays synthesised speech into (macOS
+ * `say`), so each utterance can be spoken at its moment (the browser's --use-file-for-fake-audio-capture loops one
+ * file forever). Everything else is real: the passkey join (virtual authenticator), the store, the server's call, the
+ * live voice model (Gemini Live, paid key, about a cent a minute), the voice door, the engine and its models, the gate,
+ * the passkey sign-off.
  *
- *   pnpm tsx scripts/eval/browser-call.ts <baseUrl> <outDir> <micWav> [scenario...]
+ *   pnpm tsx scripts/eval/browser-call.ts <baseUrl> <outDir>
  *
- * scenarios: voice (hands-free call, the microphone fed from micWav), denied (microphone refused: typed
- * fallback), lost (the voice connection cut after 9 s), join (the call QR path: passkey join with a virtual
- * authenticator, then the call screen for the visitor's own kitchen). Screenshots go to outDir.
- * The voice scenario spends real money (one short Gemini Live call, about $0.01).
- * The stage kitchens are accounts: each page first signs in to the one it calls, with DOCK_KAARI_PASSWORD or
- * DOCK_LAAKSO_PASSWORD from the environment (web/.env.local).
+ * Steps: join -> tap the microphone -> "200 litres of lactose-free milk for Thursday" -> the options question ->
+ * barge-in (talk over the agent) -> "yes" (the spoken yes orders the first option) -> "600 litres ..." over the limit
+ * -> "the first one" -> waiting for the OK -> sign on /approve with the passkey -> the agent says it is signed -> End.
+ * Prints what the thread shows and how long each step took; screenshots to outDir.
  */
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { chromium, devices, type Page } from "@playwright/test";
 
-const [base, out, wav, ...which] = process.argv.slice(2);
-const want = (s: string) => !which.length || which.includes(s);
-const phone = { ...devices["Pixel 7"] };
+const [base, out] = process.argv.slice(2);
+if (!base || !out) throw new Error("usage: browser-call.ts <baseUrl> <outDir>");
 fs.mkdirSync(out, { recursive: true });
+const t0 = Date.now();
+const log = (s: string) => console.log(`${((Date.now() - t0) / 1000).toFixed(1).padStart(6)} s  ${s}`);
 
-/** Sign this page's browser context in to a stage kitchen's account (its store, call and channels are closed otherwise). */
-async function signIn(page: Page, kitchen: "kaari" | "laakso") {
-  const password = process.env[kitchen === "kaari" ? "DOCK_KAARI_PASSWORD" : "DOCK_LAAKSO_PASSWORD"];
-  if (!password) throw new Error(`Set DOCK_${kitchen.toUpperCase()}_PASSWORD to drive ${kitchen}'s call screen.`);
-  const r = await page.request.post(`${base}/ui-api/account/signin`, { data: { username: kitchen, password } });
-  if (r.status() !== 200) throw new Error(`sign-in as ${kitchen}: HTTP ${r.status()}`);
-}
-
-async function shot(page: Page, name: string) {
-  await page.screenshot({ path: path.join(out, `${name}.png`), fullPage: true });
-}
-async function transcript(page: Page) {
-  return page.locator('[aria-label="Live transcript"]').innerText().catch(() => "");
-}
-
-async function voice() {
-  const browser = await chromium.launch({ args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", `--use-file-for-fake-audio-capture=${wav}`, "--autoplay-policy=no-user-gesture-required"] });
-  const ctx = await browser.newContext({ ...phone, permissions: ["microphone"] });
-  const page = await ctx.newPage();
-  page.on("console", (m) => m.type() === "error" && console.log("console:", m.text()));
-  await signIn(page, "laakso");
-  await page.goto(`${base}/call?k=laakso`);
-  await page.getByText("Hands-free").click();
-  await shot(page, "voice-0-idle");
-  await page.getByRole("button", { name: "Call", exact: true }).click();
-  const t0 = Date.now();
-  for (const at of [3, 9, 16, 24, 32, 40]) {
-    await page.waitForTimeout(Math.max(0, at * 1000 - (Date.now() - t0)));
-    await shot(page, `voice-${at}s`);
-    console.log(`--- ${at}s`, JSON.stringify(await transcript(page)));
+/** Synthesised speech as base64 16-bit mono 16 kHz WAV (cached). */
+function speech(text: string): string {
+  const dir = path.join(os.tmpdir(), "dock-browser-call");
+  fs.mkdirSync(dir, { recursive: true });
+  const f = path.join(dir, `${text.replace(/[^\p{L}\p{N}]+/gu, "_").slice(0, 60)}.wav`);
+  if (!fs.existsSync(f)) {
+    execFileSync("say", ["-v", "Samantha", "-o", f.replace(/\.wav$/, ".aiff"), text]);
+    execFileSync("ffmpeg", ["-loglevel", "error", "-y", "-i", f.replace(/\.wav$/, ".aiff"), "-ar", "16000", "-ac", "1", f]);
   }
-  console.log("cards:", (await page.locator("section h3").allInnerTexts()).join(" | "));
-  await page.getByRole("button", { name: "Hang up" }).click();
-  await page.waitForTimeout(800);
-  await shot(page, "voice-ended");
-  console.log("ended:", (await page.locator("main").innerText()).slice(-300));
-  await browser.close();
+  return fs.readFileSync(f).toString("base64");
 }
 
-async function denied() {
-  // A microphone exists, but the page is refused permission (as when the visitor taps "Don't allow").
-  const browser = await chromium.launch({ args: ["--use-fake-device-for-media-stream", "--deny-permission-prompts"] });
-  const ctx = await browser.newContext({ ...phone, permissions: [] });
-  const page = await ctx.newPage();
-  await signIn(page, "laakso");
-  await page.goto(`${base}/call?k=laakso`);
-  await page.getByRole("button", { name: "Call", exact: true }).click();
-  await page.getByPlaceholder(/100 litres/).waitFor({ timeout: 15000 });
-  await shot(page, "denied-1-typed");
-  console.log("denied notice:", await page.locator("main").innerText().then((t) => t.slice(0, 300)));
-  await page.getByPlaceholder(/100 litres/).fill("200 litres of lactose-free milk for Wednesday, cheapest");
-  await page.getByRole("button", { name: "Send" }).click();
-  await page.locator("section h3").first().waitFor({ timeout: 60000 });
-  await page.waitForTimeout(500);
-  await shot(page, "denied-2-cards");
-  console.log("denied notice:", await page.locator("main").innerText().then((t) => t.slice(0, 600)));
-  await browser.close();
-}
+/** The fake microphone: a WebAudio destination's stream; `__mic.say(b64wav)` plays into it, resolving when done. */
+const FAKE_MIC = () => {
+  const w = window as unknown as { __mic: { ctx?: AudioContext; dest?: MediaStreamAudioDestinationNode; say: (b64: string) => Promise<number> } };
+  w.__mic = {
+    say: async (b64: string) => {
+      const m = w.__mic;
+      if (!m.ctx || !m.dest) throw new Error("microphone not open");
+      const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const buf = await m.ctx.decodeAudioData(bytes.buffer);
+      const src = m.ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(m.dest);
+      src.start();
+      await new Promise((r) => (src.onended = r));
+      return Date.now();
+    },
+  };
+  navigator.mediaDevices.getUserMedia = async () => {
+    const ctx = new AudioContext();
+    const dest = ctx.createMediaStreamDestination();
+    // A faint hum, as a real microphone never gives exact silence.
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    g.gain.value = 0.002;
+    osc.connect(g).connect(dest);
+    osc.start();
+    w.__mic.ctx = ctx;
+    w.__mic.dest = dest;
+    return dest.stream;
+  };
+};
 
-async function lost() {
-  const browser = await chromium.launch({ args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", `--use-file-for-fake-audio-capture=${wav}`] });
-  const ctx = await browser.newContext({ ...phone, permissions: ["microphone"] });
-  const page = await ctx.newPage();
-  await page.routeWebSocket(/generativelanguage\.googleapis\.com/, (ws) => {
-    const server = ws.connectToServer();
-    setTimeout(() => {
-      ws.close({ code: 1006 as never, reason: "test cut" }).catch(() => {});
-      server.close().catch(() => {});
-    }, 9000);
-  });
-  await signIn(page, "kaari");
-  await page.goto(`${base}/call?k=kaari`);
-  await page.getByRole("button", { name: "Call", exact: true }).click();
-  await page.getByText(/dropped/).waitFor({ timeout: 30000 });
-  await shot(page, "lost-1");
-  console.log("lost:", await page.locator("main").innerText().then((t) => t.slice(-400)));
-  await browser.close();
+const status = (page: Page) => page.locator("[data-voice-status]").first().getAttribute("data-voice-status").catch(() => null);
+async function until(page: Page, want: (s: string | null) => boolean, ms: number): Promise<number | undefined> {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    if (want(await status(page))) return Date.now();
+    await page.waitForTimeout(50);
+  }
+  return undefined;
 }
+const say = (page: Page, text: string) => page.evaluate((b) => (window as unknown as { __mic: { say: (b: string) => Promise<number> } }).__mic.say(b), speech(text));
+const shot = (page: Page, name: string) => page.screenshot({ path: path.join(out, `${name}.png`), fullPage: false });
+const lastTurns = async (page: Page, n = 4) => (await page.getByRole("log").first().locator(":scope > li").allInnerTexts()).slice(-n).map((x) => x.replace(/\s+/g, " ").slice(0, 220));
 
-async function join() {
-  const browser = await chromium.launch();
-  const ctx = await browser.newContext({ ...phone });
-  const page = await ctx.newPage();
-  const cdp = await ctx.newCDPSession(page);
-  await cdp.send("WebAuthn.enable");
-  await cdp.send("WebAuthn.addVirtualAuthenticator", { options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true } });
-  await page.goto(`${base}/call`);
-  await page.getByRole("button", { name: /Create passkey and call/ }).waitFor({ timeout: 15000 });
-  await shot(page, "join-1");
-  await page.getByRole("button", { name: /Create passkey and call/ }).click();
-  await page.getByRole("button", { name: "Call", exact: true }).waitFor({ timeout: 20000 });
-  await shot(page, "join-2-call-screen");
-  console.log("joined:", (await page.locator("main").innerText()).slice(0, 200));
-  await browser.close();
-}
-
-async function scan() {
-  const browser = await chromium.launch();
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  const page = await ctx.newPage();
-  await signIn(page, "kaari");
-  await page.goto(`${base}/channels?k=kaari`);
-  await page.locator('input[type=file][accept="image/*,application/pdf"]').setInputFiles(path.join(__dirname, "..", "..", "eval", "scan", "07-injection.jpg"));
-  await page.getByText(/lines? read by/).waitFor({ timeout: 90000 });
-  await shot(page, "scan-1-review");
-  console.log("review:", (await page.locator("li").allInnerTexts()).map((t) => t.replace(/\s+/g, " ").slice(0, 120)).join("\n  "));
-  await page.getByRole("button", { name: /Send \d+ lines? to the agent/ }).click();
-  await page.locator("section h3").first().waitFor({ timeout: 90000 });
-  await page.waitForTimeout(800);
-  await shot(page, "scan-2-first-line");
-  console.log("queue:", await page.locator('[aria-label="Lines going through the agent"] ol').first().innerText());
-  console.log("card:", (await page.locator("section h3").allInnerTexts()).join(" | "));
-  await browser.close();
-}
-
-async function portal() {
-  // The kitchen portal's assistant panel (desktop layout): the two door buttons in its channel slot.
-  const browser = await chromium.launch({ args: ["--use-fake-device-for-media-stream", "--deny-permission-prompts"] });
-  const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });
-  const page = await ctx.newPage();
-  await signIn(page, "kaari");
-  await page.goto(`${base}/k/kaari`);
-  await page.waitForTimeout(1500);
-  console.log("portal door buttons:", await page.getByRole("button", { name: /Call your agent \(voice\)|Add a photo or document/ }).count());
-  await page.getByRole("button", { name: "Add a photo or document" }).first().click();
-  await page.getByText("Take a photo").waitFor({ timeout: 5000 });
-  await shot(page, "portal-scan-overlay");
-  await page.getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("button", { name: "Call your agent (voice)" }).first().click();
-  await page.getByRole("button", { name: "Call", exact: true }).click();
-  await page.getByPlaceholder(/100 litres/).waitFor({ timeout: 15000 });
-  console.log("portal call, microphone refused:", (await page.getByRole("dialog").innerText()).replace(/\s+/g, " ").slice(0, 200));
-  await shot(page, "portal-call-denied");
-  await browser.close();
+/** Speak, then measure: first sound after the end of speech, and the agent back to listening (the reply said). */
+async function turn(page: Page, text: string, opts: { replyMs?: number } = {}) {
+  log(`buyer: "${text}"`);
+  const ended = await say(page, text);
+  const first = await until(page, (s) => s === "speaking", 20_000);
+  const back = await until(page, (s) => s === "listening" || s === "waiting", opts.replyMs ?? 90_000);
+  // A reply that comes in parts (acknowledgement, then the reply): wait for quiet.
+  let done = back;
+  for (let i = 0; i < 60; i++) {
+    await page.waitForTimeout(500);
+    const s = await status(page);
+    if (s === "speaking" || s === "working") done = undefined;
+    else if (!done) done = Date.now();
+    else if (Date.now() - done > 2500) break;
+  }
+  log(`  first sound ${first ? first - ended : "-"} ms, reply said by ${done ? ((done - ended) / 1000).toFixed(1) : "-"} s`);
+  for (const t of await lastTurns(page, 2)) log(`  thread: ${t}`);
+  return { first: first ? first - ended : undefined, done: done ? done - ended : undefined };
 }
 
 (async () => {
-  if (want("scan")) await scan();
-  if (want("portal")) await portal();
-  if (want("join")) await join();
-  if (want("denied")) await denied();
-  if (want("lost")) await lost();
-  if (want("voice")) await voice();
+  const browser = await chromium.launch({ args: ["--use-fake-ui-for-media-stream", "--autoplay-policy=no-user-gesture-required"] });
+  const ctx = await browser.newContext({ ...devices["Pixel 7"], permissions: ["microphone"] });
+  await ctx.addInitScript(FAKE_MIC);
+  const page = await ctx.newPage();
+  page.on("console", (m) => m.type() === "error" && log(`console: ${m.text().slice(0, 200)}`));
+  const cdp = await ctx.newCDPSession(page);
+  await cdp.send("WebAuthn.enable");
+  await cdp.send("WebAuthn.addVirtualAuthenticator", { options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true } });
+
+  // Join: what the "talk to your agent" code opens.
+  await page.goto(`${base}/call`);
+  await page.getByRole("button", { name: /Create passkey and call/ }).click({ timeout: 30_000 });
+  await page.waitForURL(/\/k\/sbx_[^/?]+\?talk=1/, { timeout: 30_000 });
+  const kitchen = /\/k\/(sbx_[^/?]+)/.exec(page.url())![1];
+  log(`joined: ${kitchen}`);
+  await page.getByRole("log").first().waitFor({ timeout: 30_000 });
+  await shot(page, "1-ready");
+
+  // Start: one tap.
+  const tap = Date.now();
+  await page.getByRole("button", { name: "Talk to your agent (hands-free)" }).click();
+  const live = await until(page, (s) => s === "listening", 20_000);
+  log(`listening after ${live ? live - tap : "-"} ms (the greeting said)`);
+  await until(page, (s) => s === "listening", 15_000);
+  await page.waitForTimeout(1500);
+  await shot(page, "2-listening");
+
+  const results: Record<string, unknown> = {};
+  results.request = await turn(page, "Two hundred litres of lactose-free milk for Thursday.");
+  await shot(page, "3-options-question");
+
+  // Barge-in: ask something with a long answer, then talk over it.
+  log("barge-in: a question with a long answer, then the buyer talks over the agent");
+  const ended = await say(page, "What did we order last week, and what is the cut-off for Thursday?");
+  const speaking = await until(page, (s) => s === "speaking", 30_000);
+  await page.waitForTimeout(1200);
+  const over = Date.now();
+  void say(page, "Never mind.");
+  const stopped = await until(page, (s) => s !== "speaking", 5_000);
+  log(`  agent speaking ${speaking ? speaking - ended : "-"} ms after the question; stopped ${stopped ? stopped - over : "-"} ms after the buyer started talking over it`);
+  await page.waitForTimeout(4000);
+  results.bargeIn = { stoppedMs: stopped ? stopped - over : undefined };
+
+  // The read-back question about the first option, and the buyer's yes.
+  results.request2 = await turn(page, "Two hundred litres of lactose-free milk for Thursday.");
+  results.yes = await turn(page, "Yes, order it.");
+  await shot(page, "4-ordered");
+
+  // Over the limit: waiting for the OK, signed with the passkey, and the agent says so.
+  results.over = await turn(page, "Six hundred litres of lactose-free milk for Thursday.");
+  results.choose = await turn(page, "Yes, the first one.");
+  await shot(page, "5-waiting");
+  const th = await page.request.get(`${base}/ui-api/kitchens/${kitchen}/thread`);
+  const cards = ((await th.json()).thread?.turns ?? []).flatMap((t: { cards?: unknown[] }) => t.cards ?? []) as { type: string; outcome?: string; approvalId?: string }[];
+  const approvalId = cards.filter((c) => c.type === "gate" && c.outcome === "waiting").at(-1)?.approvalId;
+  if (approvalId) {
+    const signer = await ctx.newPage();
+    await signer.goto(`${base}/approve/${approvalId}`);
+    const signedAt = Date.now();
+    await signer.getByRole("button", { name: /^Approve \d/ }).click({ timeout: 20_000 });
+    await signer.waitForTimeout(1500);
+    await signer.close();
+    await page.bringToFront();
+    const back = await until(page, (s) => s === "speaking", 20_000);
+    log(`signed: the agent spoke ${back ? back - signedAt : "-"} ms after the OK`);
+    await until(page, (s) => s === "listening", 20_000);
+    for (const t of await lastTurns(page, 1)) log(`  thread: ${t}`);
+  } else log("no order waiting for an OK (nothing to sign)");
+  await shot(page, "6-signed");
+
+  // End.
+  await page.getByRole("button", { name: "End", exact: true }).click();
+  await page.waitForTimeout(800);
+  log(`ended: voice bar ${await page.locator("[data-voice-mode]").count() ? "still there" : "gone"}, composer ${await page.getByRole("textbox").first().isEnabled() ? "ready" : "disabled"}`);
+  const timings = await page.evaluate(() => (window as unknown as { __dockVoiceTimings?: unknown }).__dockVoiceTimings);
+  fs.writeFileSync(path.join(out, "drive.json"), JSON.stringify({ kitchen, results, timings, thread: await lastTurns(page, 30) }, null, 2));
+  await shot(page, "7-ended");
+  await browser.close();
 })().catch((e) => {
   console.error(e);
   process.exit(1);
