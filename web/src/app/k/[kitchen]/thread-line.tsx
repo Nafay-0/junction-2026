@@ -214,13 +214,13 @@ function AgentNode({ turn, thread, tap, busy, latest }: { turn: AgentTurn; threa
       <Lists turn={turn} thread={thread} latest={latest} />
       <Memory turn={turn} />
       {cards.map((c) => (c.type === "gate" && c.outcome === "waiting" && c.approvalId ? <SignOffSlab key={c.cardId} card={c} thread={thread} tap={tap} /> : c.type === "gate" && c.outcome === "approved" && c.orderId ? <SignedSlab key={c.cardId} card={c} thread={thread} /> : null))}
-      {today?.items.filter((i) => i.kind === "sign_off").map((i) => (i.kind === "sign_off" ? <SignOffSlab key={i.approvalId} card={{ type: "gate", cardId: `gate:${i.orderId}`, requestId: i.requestId ?? "", orderId: i.orderId, approvalId: i.approvalId, outcome: "waiting", approver: i.approver, reasons: [], rules: [] } as GateCardT} thread={thread} tap={tap} total={i.totalCents} what={i.lines.map((l) => `${f.num(l.quantity)} × ${l.name}`).join(", ")} /> : null))}
+      {today && <WaitingSlabs today={today} thread={thread} tap={tap} />}
       {/* A change to the rules that waits for the approver: its slab under the reply that said so (the card itself may
           have been first shown a turn earlier), always in view, never inside a disclosure. */}
       {rulesSlabsFor(turn, thread).map((c) => (
         <RulesSignOffSlab key={c.cardId} card={c} />
       ))}
-      {thinks.length > 0 && <Steps steps={thinks} />}
+      {thinks.length > 0 && <Steps steps={thinks} orderId={cards.find((c): c is OrderCard => c.type === "order" && (c.status === "committed" || c.status === "pending_approval"))?.orderId} />}
     </li>
   );
 }
@@ -233,6 +233,29 @@ function rulesSlabsFor(turn: AgentTurn, thread: Thread): RulesCardT[] {
     const here = card.proposal.approval.turnId && thread.turns.some((x) => x.turnId === card.proposal!.approval!.turnId) ? card.proposal.approval.turnId : at;
     return here === turn.turnId ? [card] : [];
   });
+}
+
+/**
+ * The orders waiting for a person's OK on the day's opening: the newest one's slab, and when there are more, one quiet
+ * link to all of them in Orders (never a wall of slabs).
+ */
+function WaitingSlabs({ today, thread, tap }: { today: TodayCard; thread: Thread; tap: Tap }) {
+  const tx = useText(THREAD_LINE_TEXT);
+  const f = useThreadFormat();
+  const { base } = usePortal();
+  const waiting = today.items.filter((i): i is Extract<TodayCard["items"][number], { kind: "sign_off" }> => i.kind === "sign_off");
+  const i = waiting[0];
+  if (!i) return null;
+  return (
+    <>
+      <SignOffSlab key={i.approvalId} card={{ type: "gate", cardId: `gate:${i.orderId}`, requestId: i.requestId ?? "", orderId: i.orderId, approvalId: i.approvalId, outcome: "waiting", approver: i.approver, reasons: [], rules: [] } as GateCardT} thread={thread} tap={tap} total={i.totalCents} what={i.lines.map((l) => `${f.num(l.quantity)} × ${l.name}`).join(", ")} />
+      {waiting.length > 1 && (
+        <a href={`${base}/orders?show=waiting`} className="mt-2 inline-flex min-h-10 items-center text-[0.9rem] font-medium text-petrol underline decoration-petrol/40 underline-offset-4">
+          {tx.today.allWaiting(waiting.length)}
+        </a>
+      )}
+    </>
+  );
 }
 
 // ---------- choices: at most three, only for a real choice ----------
@@ -298,7 +321,7 @@ function perUnitOf(o: OptionView, f: ReturnType<typeof useFormat>): string | und
   return `${money(Math.round(l.unitPriceCents / l.packSize))}/${l.unit.toLowerCase()} · ${f.day(o.deliveryDate)}`;
 }
 
-// ---------- the order's lines, behind "Show the list" ----------
+// ---------- the order's lines, open under the reply ("Hide the list" folds them) ----------
 
 /** A rule's value in words for the list under a reply: product groups and claims by name, never a code. */
 function ruleValue(field: string, v: string, lang: "en" | "fi" | "sv"): string {
@@ -315,11 +338,13 @@ function Lists({ turn, thread, latest }: { turn: AgentTurn; thread: Thread; late
   const rx = useText(THREAD_RULES_TEXT);
   const f = useThreadFormat();
   const lists: { key: string; rows: { item: string; amount?: string; total?: string }[]; total?: string }[] = [];
+  // A menu's products: each with its packs and pack size, and its price.
+  const menuRows = (c: Extract<AgentTurn["cards"][number], { type: "menu" }>) => c.dishes.flatMap((d) => d.lines.filter((l) => l.product).map((l) => ({ item: l.product!.name, amount: `${f.num(l.product!.packs)} × ${f.measure(l.product!.packSize, l.product!.unit)}`, total: money(l.product!.totalCents) })));
   const fromSheet = new Set(thread.turns.flatMap((x) => (x.role === "agent" ? x.cards.flatMap((c) => (c.type === "sheet" && c.orderId ? [c.orderId] : [])) : [])));
   for (const c of turn.cards) {
     if (c.type === "sheet") lists.push({ key: c.cardId, rows: c.lines.map((l) => ({ item: l.name, amount: `${f.num(l.packs)} × ${f.measure(l.packSize, l.unit)}`, total: money(l.lineTotalCents) })), total: money(c.totalCents) });
     else if (c.type === "order" && !fromSheet.has(c.orderId) && c.lines.length > 1) lists.push({ key: c.cardId, rows: c.lines.map((l) => ({ item: l.name, amount: f.num(l.quantity), ...(l.unitPriceCents !== undefined ? { total: money(l.unitPriceCents * l.quantity) } : {}) })), total: money(c.totalCents) });
-    else if (c.type === "menu" && (c.stage === "ready" || c.stage === "ordered")) lists.push({ key: c.cardId, rows: c.dishes.flatMap((d) => d.lines.filter((l) => l.product).map((l) => ({ item: `${l.product!.name}`, amount: f.num(l.product!.packs), total: money(l.product!.totalCents) }))), total: money(c.totalCents) });
+    else if (c.type === "menu" && (c.stage === "ready" || c.stage === "ordered")) lists.push({ key: c.cardId, rows: menuRows(c), total: money(c.totalCents) });
     else if (c.type === "records") lists.push({ key: c.cardId, rows: c.rows.map((r) => ({ item: r.label, ...(r.date ? { amount: f.day(r.date) } : {}), ...(r.totalCents !== undefined ? { total: money(r.totalCents) } : {}) })) });
     else if (c.type === "products") lists.push({ key: c.cardId, rows: c.products.map((p) => ({ item: p.name, amount: f.measure(p.packSize, p.unit) })) });
     else if (c.type === "standing") lists.push({ key: c.cardId, rows: c.items.map((i) => ({ item: i.name, amount: `${f.measure(i.usual.amount, i.usual.unit)} · ${f.weekdays(i.weekdays)}` })) });
@@ -333,7 +358,7 @@ function Lists({ turn, thread, latest }: { turn: AgentTurn; thread: Thread; late
   // away, even when the card it changed sits in an earlier turn.
   if (latest && !lists.length && /\d,\d\d\s?€/.test(turn.line ?? "")) {
     const c = thread.turns.flatMap((x) => (x.role === "agent" ? x.cards : [])).filter((x) => (x.type === "menu" && (x.stage === "ready" || x.stage === "ordered")) || (x.type === "sheet" && x.state === "editing")).at(-1);
-    if (c?.type === "menu") lists.push({ key: `${c.cardId}:here`, rows: c.dishes.flatMap((d) => d.lines.filter((l) => l.product).map((l) => ({ item: `${l.product!.name}`, amount: f.num(l.product!.packs), total: money(l.product!.totalCents) }))), total: money(c.totalCents) });
+    if (c?.type === "menu") lists.push({ key: `${c.cardId}:here`, rows: menuRows(c), total: money(c.totalCents) });
     else if (c?.type === "sheet") lists.push({ key: `${c.cardId}:here`, rows: c.lines.map((l) => ({ item: l.name, amount: `${f.num(l.packs)} × ${f.measure(l.packSize, l.unit)}`, total: money(l.lineTotalCents) })), total: money(c.totalCents) });
   }
   return (
@@ -346,7 +371,8 @@ function Lists({ turn, thread, latest }: { turn: AgentTurn; thread: Thread; late
 }
 
 function ShortList({ rows, total, tx }: { rows: { item: string; amount?: string; total?: string }[]; total?: string; tx: Tx }) {
-  const [open, setOpen] = useState(false);
+  // Open from the start: the products, amounts and prices are what the buyer reads; "Hide the list" folds it.
+  const [open, setOpen] = useState(true);
   return (
     <div className="mt-3">
       <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="inline-flex min-h-9 items-center gap-1.5 text-[0.84rem] font-medium text-petrol">
@@ -524,28 +550,37 @@ function SignedSlab({ card, thread }: { card: GateCardT; thread: Thread }) {
   );
 }
 
-// ---------- the agent's work, folded: "N steps" ----------
+// ---------- the agent's work: "N steps", shown quietly ----------
 
-function Steps({ steps }: { steps: Think[] }) {
+function Steps({ steps, orderId }: { steps: Think[]; orderId?: string }) {
   const tx = useText(THREAD_LINE_TEXT);
-  const [open, setOpen] = useState(false);
+  // Shown from the start, set quieter than the reply: smaller, grey, indented under a thin rule, so the work is there
+  // to read without competing with what the agent said. "N steps" folds it away.
+  const [open, setOpen] = useState(true);
   return (
-    <div className="mt-2.5">
-      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="inline-flex min-h-9 items-center gap-1.5 rounded-full text-[0.8rem] font-medium text-ink-soft transition-colors hover:text-petrol">
+    <div className="mt-3">
+      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="inline-flex min-h-8 items-center gap-1.5 rounded-full text-[0.76rem] font-medium text-ink-soft/80 transition-colors hover:text-petrol">
         <span className="tabular">{tx.steps(steps.length)}</span>
-        <ChevronDown aria-hidden size={14} className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+        <ChevronDown aria-hidden size={13} className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
-        <ol className="mt-1 space-y-2.5">
+        <ol className="ml-1 mt-0.5 space-y-1.5 border-l border-line pl-3.5">
           {steps.map((s, i) => (
-            <li key={i} className="tl-in relative pl-5" style={{ animationDelay: `${i * 50}ms` }}>
-              <span aria-hidden className="absolute -left-[2.85rem] top-[0.62em] h-px w-[2.85rem] bg-line-strong" />
-              <span aria-hidden className={`absolute left-0 top-[0.42em] size-2 rounded-full ${TONE[s.tone ?? "plain"]}`} />
-              <p className="text-[0.86rem] leading-snug text-ink">
-                <span className="font-medium">{s.label}.</span> {s.detail && <span className="text-ink-soft">{s.detail}</span>}
+            <li key={i} className="relative pl-3.5">
+              <span aria-hidden className={`absolute left-0 top-[0.5em] size-1.5 rounded-full opacity-70 ${TONE[s.tone ?? "plain"]}`} />
+              <p className="max-w-[46ch] text-[0.78rem] leading-snug text-ink-soft/90">
+                <span className="font-medium text-ink-soft">{s.label}.</span> {s.detail && <span>{s.detail}</span>}
               </p>
             </li>
           ))}
+          {/* The same order on the wholesaler's side (the operations portal, open to look at): one quiet link. */}
+          {orderId && (
+            <li className="relative pl-5">
+              <a href={`/ops/orders/${encodeURIComponent(orderId)}`} target="_blank" rel="noreferrer" className="text-[0.84rem] text-petrol underline decoration-petrol/40 underline-offset-4 hover:decoration-petrol">
+                {tx.asWholesaler}
+              </a>
+            </li>
+          )}
         </ol>
       )}
     </div>
@@ -672,7 +707,12 @@ function todaySentence(card: TodayCard, tx: Tx, f: ReturnType<typeof useFormat>)
   const parts: string[] = [];
   let asked = false;
   for (const i of card.items.slice(0, 3)) {
-    if (i.kind === "sign_off") parts.push(tx.today.signOff(money(i.totalCents), ""));
+    if (i.kind === "sign_off") {
+      // Several waiting: one sentence for all of them, the newest one's slab under it (WaitingSlabs).
+      const waiting = card.items.filter((x) => x.kind === "sign_off");
+      if (waiting.length > 1 && i !== waiting[0]) continue;
+      parts.push(waiting.length > 1 ? tx.today.signOffMany(waiting.length, money(i.totalCents)) : tx.today.signOff(money(i.totalCents), ""));
+    }
     else if (i.kind === "cutoff") parts.push(tx.today.cutoff(i.name, clock(i.orderBy)));
     else if (i.kind === "drift") {
       // What changed, with its figures, and the one question a yes answers (the next one at the usual amount): only
@@ -739,9 +779,7 @@ function Landing({ today, offer, watch, thread }: { today?: TodayCard; offer?: O
       )}
       {watch && watch.state !== "answered" && <WatchWords card={watch} lang={f.lang} big />}
       {offer?.state === "open" && <OfferWords card={offer} lang={f.lang} big />}
-      {today?.items.filter((i) => i.kind === "sign_off").map((i) =>
-        i.kind === "sign_off" && thread ? <SignOffSlab key={i.approvalId} card={{ type: "gate", cardId: `gate:${i.orderId}`, requestId: i.requestId ?? "", orderId: i.orderId, approvalId: i.approvalId, outcome: "waiting", approver: i.approver, reasons: [], rules: [] } as GateCardT} thread={thread} tap={(action, label) => void api.submit({ door: "typed", via: "tap", action, label, lang })} total={i.totalCents} what={i.lines.map((l) => `${f.num(l.quantity)} × ${l.name}`).join(", ")} /> : null,
-      )}
+      {today && thread && <WaitingSlabs today={today} thread={thread} tap={(action, label) => void api.submit({ door: "typed", via: "tap", action, label, lang })} />}
       <ul className="mt-6 flex flex-col gap-1.5">
         {/* A demo account with nothing yet has no "last week": a first order, a menu, and what to try. */}
         {(demoOwn && today && !today.pending && today.items.length === 0 ? tx.examplesNew : tx.examples).map((e) => (

@@ -63,7 +63,8 @@ export function OrdersList() {
         label={tx.show}
         value={tab}
         onChange={setTab}
-        options={TABS.map((t) => ({ id: t.id, label: tx.tabs[t.id], count: o ? all.filter(t.test).length : undefined }))}
+        // Only what there is: a tab with nothing in it ("Placed 0" beside six orders from history) is not offered.
+        options={TABS.map((t) => ({ id: t.id, label: tx.tabs[t.id], count: o ? all.filter(t.test).length : undefined })).filter((t) => !o || t.id === "all" || t.id === tab || (t.count ?? 0) > 0)}
       />
 
       {!o && !overview.error && (

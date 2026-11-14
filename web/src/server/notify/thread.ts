@@ -11,7 +11,7 @@ import { MAIL_SAY_TEXT } from "./say.text";
  *
  *   mailFactAfterOrder(rt, k, order, { lang, threadId })   after an order is placed (or sent for an OK): one clause
  *        -> string | undefined                             to add to the agent's line, or undefined to say nothing.
- *                                                          No address yet: "Want the receipt by email? Tell me the
+ *                                                          No address yet: "Shall I email the receipt? I'd need an
  *                                                          address", at most once per conversation (threadId).
  *   mailWordsOf(words)                                     the buyer's words about email, or undefined:
  *        -> { kind: "set", address } | { kind: "stop" } | { kind: "which" } | { kind: "set_invalid" }

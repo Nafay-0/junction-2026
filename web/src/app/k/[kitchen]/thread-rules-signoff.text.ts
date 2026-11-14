@@ -41,7 +41,7 @@ export const RULES_SIGNOFF_TEXT = defineText({
     autoRenew: (what: string) => `Agentti saa uusia vakiotilauksen itse kysymättä joka kerta: ${what}`,
     signer: (who: string) => `Hyväksyjäksi ${who}`,
     nothing: "Mikään ei muutu ennen allekirjoitusta.",
-    testSigner: (who: string) => `Jaettu testitili: tämä selain allekirjoittaa roolissa ${who} pääsyavaimella.`,
+    testSigner: (who: string) => `Jaettu testitili: tämä selain allekirjoittaa hyväksyjän (${who}) puolesta pääsyavaimella.`,
     sign: "Allekirjoita pääsyavaimella",
     signing: "Odottaa kasvojasi tai sormenjälkeäsi",
     signed: "Allekirjoitettu: muutos on säännöissä",
