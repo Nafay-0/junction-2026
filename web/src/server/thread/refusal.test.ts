@@ -35,6 +35,11 @@ describe("refusals in words", () => {
     expect(sayRefusal({ ...(ALL[0] as Extract<Refusal, { code: "out_of_mandate" }>), draft: true }, "en")).toMatch(/Shall I draft that change \(fresh bakery added to your rules\) for Owner to confirm\?$/);
   });
 
+  it("offers another day only when the reason is the day (a yes to it is carried out)", () => {
+    expect(sayRefusal({ code: "nothing_fits", what: "Peltolan butter", detail: "Not churned: its maker does not state it." }, "en")).toBe("I couldn't find Peltolan butter that I can order: not churned: its maker does not state it. Would another product do?");
+    expect(sayRefusal({ code: "nothing_fits", what: "cream", day: true, detail: "Out of stock." }, "en")).toMatch(/for that day: out of stock\. Shall I look at another day\?$/);
+  });
+
   it("names a kitchen's product groups in words, at most three", () => {
     expect(groupOf("milk", "en")).toBe("dairy and cheese");
     expect(groupOf("milk", "fi")).toBe("maito- ja juustotuotteet");

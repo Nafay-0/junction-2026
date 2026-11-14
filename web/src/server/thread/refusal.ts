@@ -29,7 +29,7 @@ export type Refusal =
   | { code: "recall"; what: string }
   | { code: "no_such_kind"; what: string }
   | { code: "claim_missing"; what: string; claims: string[]; products?: string[] }
-  | { code: "nothing_fits"; what: string; detail?: string; noOffer?: boolean };
+  | { code: "nothing_fits"; what: string; detail?: string; noOffer?: boolean; /** The reason is about the day asked (stock, a cut-off, too late): another day may have it. */ day?: boolean };
 
 const DATA = generated as { departments: Record<string, string>; categories: Record<string, { label: string }> };
 
@@ -40,6 +40,19 @@ export function groupOf(category: string, lang: Lang): string | undefined {
   if (!dept || !DATA.departments[dept]) return undefined;
   const name = lang === "en" ? DATA.departments[dept] : (DEPARTMENT_NAME[lang][dept] ?? DATA.departments[dept]);
   return name.charAt(0).toLowerCase() + name.slice(1);
+}
+
+/** A group (department) id in words, in the buyer's language: "15" is "fresh meat". */
+export function groupNameOf(id: string, lang: Lang): string | undefined {
+  if (!DATA.departments[id]) return undefined;
+  const name = lang === "en" ? DATA.departments[id] : (DEPARTMENT_NAME[lang][id] ?? DATA.departments[id]);
+  return name.charAt(0).toLowerCase() + name.slice(1);
+}
+
+/** The group (department) id a group's English name ("Fresh meat", "Fresh meat: Pork") stands for. */
+export function groupIdByName(name: string): string | undefined {
+  const dept = name.split(":")[0].trim().toLowerCase();
+  return Object.entries(DATA.departments).find(([, n]) => n.toLowerCase() === dept)?.[0];
 }
 
 /** A product family's group id (the department number the kitchen's terms list), when it is one. */
@@ -158,6 +171,13 @@ export function sayRefusal(r: Refusal, lang: Lang): string {
         if (sv) return `Grossisten erbjuder inte ${r.what} just nu. Ska jag leta efter en annan produkt?`;
         return `The wholesaler isn't offering ${r.what} right now. Shall I look for another product?`;
       }
+      // "Another day" only when the reason is the day: an offer the agent makes is one a yes carries out (engine.ts
+      // anotherDay); a reason of another kind ends on a question the buyer answers in their own words.
+      if (!r.day) {
+        if (fi) return `En löytänyt tuotetta ${r.what}, jonka voisin tilata${r.detail ? `: ${r.detail.replace(/\.$/, "")}` : ""}. Kelpaako jokin muu tuote?`;
+        if (sv) return `Jag hittade inget ${r.what} som jag kan beställa${r.detail ? `: ${r.detail.replace(/\.$/, "")}` : ""}. Duger en annan produkt?`;
+        return `I couldn't find ${r.what} that I can order${r.detail ? `: ${r.detail.replace(/\.$/, "").replace(/^./, (c) => c.toLowerCase())}` : ""}. Would another product do?`;
+      }
       if (fi) return `En löytänyt tuotetta ${r.what}, jonka voisin tilata sille päivälle${r.detail ? `: ${r.detail.replace(/\.$/, "")}` : ""}. Katsonko toisen päivän?`;
       if (sv) return `Jag hittade inget ${r.what} som kan beställas för den dagen${r.detail ? `: ${r.detail.replace(/\.$/, "")}` : ""}. Ska jag titta på en annan dag?`;
       return `I couldn't find ${r.what} that can be ordered for that day${r.detail ? `: ${r.detail.replace(/\.$/, "").replace(/^./, (c) => c.toLowerCase())}` : ""}. Shall I look at another day?`;
@@ -190,6 +210,9 @@ export function refusalOfStep(run: TurnRun, step: IntakeView, lang: Lang): Refus
   for (const e of step.excluded) if (e.code && e.code !== "compromise") codes.set(e.code, (codes.get(e.code) ?? 0) + 1);
   const top = [...codes.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
   const day = step.need?.deliverBy;
+  // Another day was already looked at (the buyer's yes to that offer): never offered a second time.
+  if (run.anotherDayFor && (top === "cutoff_passed" || top === "too_late" || top === "out_of_stock" || top === "no_substitute"))
+    return { code: "nothing_fits", what, detail: { en: `nothing can come in the week after the day you asked for either${day ? `, up to ${dayWords(day, lang)}` : ""}`, fi: `mikään ei ehdi myöskään pyytämääsi päivää seuraavalla viikolla${day ? ` (${dayWords(day, lang)} mennessä)` : ""}`, sv: `inget kan komma veckan efter den dag du bad om heller${day ? ` (senast ${dayWords(day, lang)})` : ""}` }[lang] };
   if (top === "cutoff_passed" || top === "too_late") return { code: "cutoff_passed", what, ...(day ? { day } : {}) };
   if (top === "out_of_stock") return { code: "out_of_stock", what, ...(day ? { day } : {}) };
   if (top === "over_budget") return { code: "over_budget", ...(signerOf(run) ? { signer: signerOf(run) } : {}) };
@@ -204,8 +227,9 @@ export function refusalOfStep(run: TurnRun, step: IntakeView, lang: Lang): Refus
   if (allergens.length) return { code: "forbidden_allergen", what, allergens: [...new Set(allergens.map((a) => a.trim()))].slice(0, 3) };
   if (top === "no_offer") return { code: "nothing_fits", what, noOffer: true };
   const first = step.excluded.find((e) => e.code && e.code !== "compromise") ?? step.excluded[0];
+  const byDay = !!first?.code && ["cutoff_passed", "too_late", "out_of_stock", "no_substitute"].includes(first.code);
   // The reason is the store's own English words: said in English only (Finnish and Swedish keep the plain sentence).
-  return { code: "nothing_fits", what, ...(first && lang === "en" ? { detail: plainDetail(first.reason) } : {}) };
+  return { code: "nothing_fits", what, ...(byDay ? { day: true } : {}), ...(first && lang === "en" ? { detail: plainDetail(first.reason) } : {}) };
 }
 
 /** A gate rule that refused or stopped an order, as a refusal. */
@@ -299,7 +323,7 @@ export function readable(text: string, lang: Lang): string {
   return t.replace(/(\d{1,2}\.\d{1,2}\.)\./g, "$1").replace(/(\d{1,2}\.\d{1,2})\.(?=[?;:,!])/g, "$1");
 }
 
-const TELL = /\b(send|type|write|re-?send|give me|tell me)\b[^.?!]{0,60}\b(product name|the name and|with the amount|order with|the exact|again as|as its own message|request again)\b|\b(kirjoita|lähetä)\b[^.?!]{0,40}\b(tuotteen nimi|määrä)/i;
+const TELL = /\b(send|type|write|re-?send|give me|tell me)\b[^.?!]{0,60}\b(product name|the name and|with the amount|order with|the exact|again as|as its own message|request again)\b|\b(kirjoita|lähetä)\b[^.?!]{0,40}\b(tuotteen nimi|määrä)|\b(say|type|reply|answer) (yes|"yes")\b|\bsano (kyllä|"kyllä")\b|\bsäg (ja|"ja")\b/i;
 const INSIDE = /\b(the store treated|treated your message|neither result|the results? (gave|give|show|showed|didn't|don't|did not|do not)|the store's results|tool results?|my tools|none of my tools|the engine|the reader|the intake|routing|(the )?menu planner|the planner|a step did not finish|didn't (connect|link)|did not (connect|link)|the (system|backend|server|database)|ruokalistasuunnittelija|suunnittelija ei)\b/i;
 
 /** A sentence that tells the buyer what to type, or says how the system works inside: never shown. */

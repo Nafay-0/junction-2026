@@ -28,13 +28,15 @@ export type Reason =
 /** What was asked for or proposed: an item of a request, an ingredient of a dish. */
 export type Wanted = { key: string; name: string; need?: Amount; day?: string };
 /** What the result holds for it: bought (with amount and day), bought as something else, or not bought (with why). */
-export type Got = { key: string; out?: boolean; reason?: Reason; amount?: Amount; day?: string; instead?: string; insteadWhy?: Reason; packs?: string };
+export type Got = { key: string; out?: boolean; reason?: Reason; amount?: Amount; day?: string; instead?: string; insteadWhy?: Reason; packs?: string; pack?: Pack };
+/** The packs an amount was rounded up to: how many, and what one holds. */
+export type Pack = { count: number; size: number; unit: string };
 
 export type Difference =
   | { kind: "left_out"; key: string; name: string; reason: Reason }
   | { kind: "swapped"; key: string; name: string; to: string; reason?: Reason }
   | { kind: "reduced"; key: string; name: string; from: Amount; to: Amount }
-  | { kind: "rounded_up"; key: string; name: string; from: Amount; to: Amount; packs?: string }
+  | { kind: "rounded_up"; key: string; name: string; from: Amount; to: Amount; packs?: string; pack?: Pack }
   | { kind: "moved_day"; key: string; name: string; from: string; to: string };
 
 /** The differences between what was wanted and what the result holds, in the wanted order. */
@@ -51,7 +53,7 @@ export function differencesOf(wanted: Wanted[], got: Got[], opts: { roundingCoun
       const a = toBase(w.need);
       const b = toBase(g.amount);
       if (b < a * 0.999) out.push({ kind: "reduced", key: w.key, name: w.name, from: w.need, to: g.amount });
-      else if (opts.roundingCounts !== false && b > a * 1.001) out.push({ kind: "rounded_up", key: w.key, name: w.name, from: w.need, to: g.amount, ...(g.packs ? { packs: g.packs } : {}) });
+      else if (opts.roundingCounts !== false && b > a * 1.001) out.push({ kind: "rounded_up", key: w.key, name: w.name, from: w.need, to: g.amount, ...(g.packs ? { packs: g.packs } : {}), ...(g.pack ? { pack: g.pack } : {}) });
     }
     if (w.day && g.day && g.day !== w.day) out.push({ kind: "moved_day", key: w.key, name: w.name, from: w.day, to: g.day });
   }
@@ -80,7 +82,7 @@ export type Context = {
   /** Whoever can widen the kitchen's rules here, when that can be asked from this conversation. */
   canAskOwner?: boolean;
   /** For a dish or a menu: how many ingredients it has to buy, and what can be bought (the "just these" choice). */
-  dish?: { toBuy: number; buyable: string[]; left?: number; totalCents?: number };
+  dish?: { toBuy: number; buyable: string[]; left?: number; totalCents?: number; /** The earliest day every ingredient can come, when some cannot by the day asked. */ later?: string };
 };
 
 /**
@@ -130,16 +132,22 @@ export function sayDifferences(diffs: Difference[], c: Context): { said: string;
   for (const d of diffs) {
     if (d.kind === "swapped") parts.push(fi ? `${cap(low(d.name))}: tilalla ${d.to}.` : sv ? `${cap(low(d.name))}: ${d.to} i stället.` : `${cap(low(d.name))}: ${d.to} in its place.`);
     if (d.kind === "reduced") parts.push(fi ? `${cap(low(d.name))}: vain ${amt(d.to)} pyytämästäsi ${amt(d.from)}.` : sv ? `${cap(low(d.name))}: bara ${amt(d.to)} av de ${amt(d.from)} du bad om.` : `${cap(low(d.name))}: only ${amt(d.to)} of the ${amt(d.from)} you asked for.`);
-    if (d.kind === "rounded_up") parts.push(fi ? `${cap(low(d.name))}: ${amt(d.to)} eikä ${amt(d.from)}, lähimmät kokonaiset pakkaukset${d.packs ? ` (${d.packs})` : ""}.` : sv ? `${cap(low(d.name))}: ${amt(d.to)} i stället för ${amt(d.from)}, närmaste hela förpackningar${d.packs ? ` (${d.packs})` : ""}.` : `${cap(low(d.name))}: ${amt(d.to)} rather than ${amt(d.from)}, the nearest whole packs${d.packs ? ` (${d.packs})` : ""}.`);
+    // "come in packs of 8,1 kg: 2 packs is 16,2 kg rather than 16 kg": the amount in the buyer's unit and in packs.
+    if (d.kind === "rounded_up" && d.pack && d.pack.count > 0) parts.push(fi ? `${cap(low(d.name))} tulee ${amt({ amount: d.pack.size, unit: d.pack.unit })}:n pakkauksissa: ${d.pack.count} pakkausta on ${amt(d.to)} eikä ${amt(d.from)}.` : sv ? `${cap(low(d.name))} kommer i förpackningar om ${amt({ amount: d.pack.size, unit: d.pack.unit })}: ${d.pack.count} förpackningar är ${amt(d.to)} i stället för ${amt(d.from)}.` : `${cap(low(d.name))} come${/s$/i.test(d.name) ? "" : "s"} in packs of ${amt({ amount: d.pack.size, unit: d.pack.unit })}: ${d.pack.count} pack${d.pack.count === 1 ? " is" : "s are"} ${amt(d.to)} rather than ${amt(d.from)}.`);
+    else if (d.kind === "rounded_up") parts.push(fi ? `${cap(low(d.name))}: ${amt(d.to)} eikä ${amt(d.from)}, lähimmät kokonaiset pakkaukset${d.packs ? ` (${d.packs})` : ""}.` : sv ? `${cap(low(d.name))}: ${amt(d.to)} i stället för ${amt(d.from)}, närmaste hela förpackningar${d.packs ? ` (${d.packs})` : ""}.` : `${cap(low(d.name))}: ${amt(d.to)} rather than ${amt(d.from)}, the nearest whole packs${d.packs ? ` (${d.packs})` : ""}.`);
     if (d.kind === "moved_day") parts.push(fi ? `${cap(low(d.name))} tulee ${dayWords(d.to, lang)}, ei ${dayWords(d.from, lang)}.` : sv ? `${cap(low(d.name))} kommer ${dayWords(d.to, lang)}, inte ${dayWords(d.from, lang)}.` : `${cap(low(d.name))} comes ${dayWords(d.to, lang)}, not ${dayWords(d.from, lang)}.`);
   }
   let ask: string;
   if (c.dish && left.length) {
     const just = c.dish.buyable.length ? (c.dish.buyable.length <= 6 ? list(c.dish.buyable.map(low), lang) : fi ? `ne ${c.dish.buyable.length}, jotka voin ostaa` : sv ? `de ${c.dish.buyable.length} jag kan köpa` : `${c.dish.buyable.length} I can buy`) : "";
     const owner = rules.length > 0 && !!c.canAskOwner;
-    if (fi) ask = `${owner ? "Pyydänkö omistajaa lisäämään ne, " : ""}${just ? `${owner ? "tilaanko" : "Tilaanko"} vain ${just}` : ""}${owner || just ? " vai " : ""}${owner || just ? "suunnittelenko" : "Suunnittelenko"} ruuan, jonka voin ostaa kokonaan?`;
-    else if (sv) ask = `Ska jag ${owner ? "be ägaren lägga till dem, " : ""}${just ? `beställa bara ${just}, ` : ""}${owner || just ? "eller " : ""}planera en rätt jag kan köpa helt?`;
-    else ask = `Shall I ${owner ? "ask the owner to add them, " : ""}${just ? `order just the ${just}, ` : ""}${owner || just ? "or " : ""}plan a dish I can buy completely?`;
+    // Only what cannot arrive in time is missing: the way forward that gets the whole dish is the later day.
+    const onlyLate = left.every((d) => d.reason.code === "cannot_arrive");
+    const later = c.dish.later ? dayWords(c.dish.later, lang) : "";
+    if (later && onlyLate) ask = fi ? `Siirränkö sen päivälle ${later}, jolloin kaikki ehtii, vai tilaanko vain ${just || "sen, minkä voin ostaa"}?` : sv ? `Ska jag flytta den till ${later}, då allt hinner fram, eller beställa bara ${just || "det jag kan köpa"}?` : `Shall I move it to ${later}, when everything can come, or order just the ${just || "ones I can buy"}?`;
+    else if (fi) ask = `${later ? `Siirränkö sen päivälle ${later}, ` : ""}${owner ? `${later ? "pyydänkö" : "Pyydänkö"} omistajaa lisäämään ne, ` : ""}${just ? `${owner ? "tilaanko" : "Tilaanko"} vain ${just}` : ""}${owner || just ? " vai " : ""}${owner || just ? "suunnittelenko" : "Suunnittelenko"} ruuan, jonka voin ostaa kokonaan?`;
+    else if (sv) ask = `Ska jag ${later ? `flytta den till ${later}, ` : ""}${owner ? "be ägaren lägga till dem, " : ""}${just ? `beställa bara ${just}, ` : ""}${owner || just ? "eller " : ""}planera en rätt jag kan köpa helt?`;
+    else ask = `Shall I ${later ? `move it to ${later}, when what's late can come, ` : ""}${owner ? "ask the owner to add them, " : ""}${just ? `order just the ${just}, ` : ""}${owner || just ? "or " : ""}plan a dish I can buy completely?`;
   } else ask = fi ? "Tilaanko sen näin?" : sv ? "Ska jag beställa det så?" : "Shall I order it like that?";
   return { said: parts.join(" "), ask, unknown };
 }
@@ -149,13 +157,13 @@ export function sayDifferences(diffs: Difference[], c: Context): { said: string;
 /** One item as asked: what, how much, and the day (`exact`: on that day; else by it). */
 export type AskedItem = { key: string; name: string; amount?: Amount; day?: string; exact?: boolean };
 /** The option that would be ordered for it. */
-export type OfferedItem = { delivered?: Amount; deliveryDate?: string; substituteFor?: string; title?: string };
+export type OfferedItem = { delivered?: Amount; deliveryDate?: string; substituteFor?: string; title?: string; pack?: Pack };
 
 /** The differences between an item as asked and the option that would be ordered: amount, day, a stand-in. */
 export function optionDifferences(a: AskedItem, o: OfferedItem): Difference[] {
   const late = a.day && o.deliveryDate && (a.exact ? o.deliveryDate !== a.day : o.deliveryDate > a.day);
   return differencesOf(
     [{ key: a.key, name: a.name, ...(a.amount ? { need: a.amount } : {}), ...(late ? { day: a.day } : {}) }],
-    [{ key: a.key, ...(o.delivered ? { amount: o.delivered } : {}), ...(late ? { day: o.deliveryDate } : {}), ...(o.substituteFor && o.title ? { instead: o.title } : {}) }],
+    [{ key: a.key, ...(o.delivered ? { amount: o.delivered } : {}), ...(late ? { day: o.deliveryDate } : {}), ...(o.substituteFor && o.title ? { instead: o.title } : {}), ...(o.pack ? { pack: o.pack } : {}) }],
   );
 }

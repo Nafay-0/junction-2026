@@ -17,7 +17,7 @@ import { byLine, combineItems, orderFromWords, record, REPEAT_SCALED, repeatScal
 import { ADDITION, isShort, subjectLine, subjectOf, type Subject } from "./subject";
 import type { Card, RecordsCard, ThreadAction } from "./types";
 import { earlierFor } from "./earlier";
-import { speakFacts } from "./speak";
+import { dishFacts, speakFacts } from "./speak";
 import { AGENT_INSTRUCTIONS } from "./instructions";
 
 /**
@@ -150,6 +150,13 @@ export async function openRefs(run: TurnRun): Promise<OpenRef[]> {
     if (menu.covers) refs.push({ ref: "menu:covers", label: `change the number of covers (now ${menu.covers}); pass amount`, action: { type: "menu_covers", planId: menu.planId, covers: menu.covers }, needs: "amount" });
     if (menu.days.some((d) => d.available)) refs.push({ ref: "menu:day", label: `move the menu to another day (possible: ${menu.days.filter((d) => d.available).map((d) => d.date).join(", ")}); pass date`, action: { type: "menu_day", planId: menu.planId, date: menu.serviceDate ?? "" }, needs: "date" });
   }
+  // A dish of the menu refused under the kitchen's rule: the dishes offered in its place ("the first one"), each taking
+  // the refused dish's place in the same plan, so a main and its side stay one order.
+  if (menu?.type === "menu" && menu.stage === "ready") {
+    const { menuChecks } = await import("@/server/agent/menu/thread");
+    const mc = await menuChecks(run.k.info.slug, menu.planId).catch(() => undefined);
+    if (mc?.refusedDish) mc.instead.slice(0, 3).forEach((x, i) => refs.push({ ref: `instead${i + 1}`, label: `cook ${x.name} in place of the refused ${mc.refusedDish!.name}, in the same menu`, action: { type: "menu_choose", planId: menu.planId, proposalId: `instead:${i}` } }));
+  }
   // The order sheet open now (several items, the usual, a menu or an option changed): ordered, or changed, in words.
   const { currentSheet } = await import("./sheet");
   // A menu scenario's question (a booking at short notice, a seasonal menu): answered in words.
@@ -226,6 +233,20 @@ function orderTimes(cards: Card[]): string {
   return lines.length ? `ORDER TIMES (the wholesaler's own, for "when is the cut-off?"): ${lines.join("; ")}.` : "";
 }
 
+const ASKS_CUTOFF = /\b(cut-?offs?|order by|deadline|order time|latest (time|i can order)|by when|when (must|do|should|can) (i|we) order|tilausaika|viimeinen tilaus\w*|mihin mennessä|milloin (pitää|täytyy) tilata|beställ senast|sista beställningstid|när måste)\b/i;
+
+/**
+ * "When is the cut-off for milk?": the order-by times of the kitchen's recurring products (the home's own live check,
+ * at most three products, cached ten minutes), only when the words ask about one, so the answer is a time and a day.
+ */
+async function standingTimes(run: TurnRun, words: string): Promise<string> {
+  if (!ASKS_CUTOFF.test(words)) return "";
+  const { standingCutoffs } = await import("@/server/kitchen-portal");
+  const cut = await standingCutoffs(run.k).catch(() => undefined);
+  const rows = (cut?.items ?? []).flatMap((c) => (c.result?.offer?.orderBy ? [`${c.name} (a product the kitchen orders every week): order by ${c.result.offer.orderBy} for delivery ${c.result.offer.deliveryDate}`] : []));
+  return rows.length ? `ORDER TIMES OF THE KITCHEN'S RECURRING PRODUCTS (the wholesaler's own, live): ${rows.join("; ")}.` : "";
+}
+
 /** The context the model gets each turn, after the cached instructions: today, the kitchen, and what is open. */
 export function turnContext(run: TurnRun, refs: OpenRef[]): string {
   const today = localNow(new Date()).date;
@@ -236,9 +257,9 @@ export function turnContext(run: TurnRun, refs: OpenRef[]): string {
   const waiting = [
     ...cardsNow.filter((c) => c.type === "gate" && c.outcome === "waiting").map((c) => {
       const o = c.type === "gate" ? cardsNow.find((x) => x.type === "order" && x.orderId === c.orderId) : undefined;
-      return c.type === "gate" ? `${o?.type === "order" ? `${(o.totalCents / 100).toFixed(2).replace(".", ",")} € (${o.lines.slice(0, 2).map((l) => `${l.quantity} × ${l.name}`).join(", ")}), delivery ${o.deliveryDate}` : "an order"} waits for ${c.approver?.name ?? "a person"}'s OK on their phone` : "";
+      return c.type === "gate" ? `${o?.type === "order" ? `${(o.totalCents / 100).toFixed(2).replace(".", ",")} € (${o.lines.slice(0, 2).map((l) => `${String(l.quantity).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} × ${l.name}`).join(", ")}), delivery ${o.deliveryDate}` : "an order"} waits for ${c.approver?.name ?? "a person"}'s OK on their phone` : "";
     }),
-    ...cardsNow.flatMap((c) => (c.type === "today" ? c.items.flatMap((i) => (i.kind === "sign_off" ? [`${(i.totalCents / 100).toFixed(2).replace(".", ",")} € (${i.lines.slice(0, 2).map((l) => `${l.quantity} × ${l.name}`).join(", ")}) waits for ${i.approver.name}'s OK on their phone`] : [])) : [])),
+    ...cardsNow.flatMap((c) => (c.type === "today" ? c.items.flatMap((i) => (i.kind === "sign_off" ? [`${(i.totalCents / 100).toFixed(2).replace(".", ",")} € (${i.lines.slice(0, 2).map((l) => `${String(l.quantity).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} × ${l.name}`).join(", ")}) waits for ${i.approver.name}'s OK on their phone`] : [])) : [])),
   ].filter((x, i, a) => x && a.indexOf(x) === i);
   return [
     `Today is ${weekday} ${today} (Helsinki). Kitchen: ${run.k.info.name}. You are ${run.k.info.agentName}. This turn came through the ${run.door === "voice" ? "voice door (spoken)" : "store (typed)"}.`,
@@ -259,7 +280,7 @@ export type AgentRunResult = { text: string; messages: ModelMessage[]; approval?
 export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { words?: string; context?: string } = {}): Promise<AgentRunResult> {
   const items: ItemOutcome[] = [];
   const refs = await openRefs(run);
-  const context = opts.context ?? turnContext(run, refs);
+  const context = opts.context ?? [turnContext(run, refs), await standingTimes(run, opts.words ?? run.buyer.text ?? "")].filter(Boolean).join("\n\n");
   const words = opts.words ?? run.buyer.text ?? "";
   let usedReply = false;
 
@@ -282,6 +303,13 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
     });
   }
 
+  // A planned dish or menu comes back with every ingredient's coverage (speak.ts dishFacts), so the reply can say what
+  // is ordered, on hand and not covered, with the count, as the playbook asks.
+  const withDish = async (r: Record<string, unknown>) => {
+    const planId = typeof r.planId === "string" && r.stage === "ready" ? r.planId : undefined;
+    const d = planId ? await dishFacts(run, planId).catch(() => undefined) : undefined;
+    return d ? { ...r, ...d } : r;
+  };
   const threadTools = {
     order: tool({
       description: "Start or change an order from the buyer's own words: read them, check them against the kitchen's history and the assortment, rank options with live prices, and place a routine order inside the mandate. Shows its work as cards.",
@@ -389,6 +417,17 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
           const out = await remember(run, r.action.itemId, r.action.yes, words);
           return out;
         }
+        // A dish offered in place of a refused one: it replaces that dish in the same plan (the menu adapter's own edit).
+        if (r.action.type === "menu_choose" && r.action.proposalId.startsWith("instead:")) {
+          const i = Number(r.action.proposalId.split(":")[1]);
+          const { changeMenu } = await import("@/server/agent/menu/thread");
+          const c = await changeMenu(run.k.info.slug, r.action.planId, `the ${["first", "second", "third"][i] ?? "first"} one`, byLine(run), run.lang ?? "en");
+          const { refreshMenu } = await import("./menu");
+          await refreshMenu(run, r.action.planId).catch(() => undefined);
+          run.dishesFor = { planId: r.action.planId, changed: true };
+          record(run, "menu_instead", `The buyer picked a dish offered instead of the refused one: ${c.changed.slice(0, 3).join("; ")}.`, { planId: r.action.planId });
+          return { ok: true, done: "the dish replaced the refused one in the same menu", say: c.say, complete: c.checks.complete };
+        }
         // A widget's action (a menu picked, the order sheet changed or ordered, the rules confirmed): the same handler as a tap.
         const { runWidget } = await import("./widgets");
         if (await runWidget(run, r.action, words)) {
@@ -462,10 +501,10 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
         // A step that fails is tried once more before anything is said; then it is said in the buyer's terms
         // (what is not done, and what happens next), never as a part of the system.
         const first = await menuFromWords(run, `${said}${onTable}`).catch((err) => ({ state: "error", error: String(err) }) as Record<string, unknown>);
-        if ((first as { state?: string }).state !== "error") return first;
+        if ((first as { state?: string }).state !== "error") return withDish(first);
         record(run, "menu_retry", "The menu could not be drafted: tried once more.", {});
         const again = await menuFromWords(run, `${said}${onTable}`).catch((err) => ({ state: "error", error: String(err) }) as Record<string, unknown>);
-        if ((again as { state?: string }).state !== "error") return again;
+        if ((again as { state?: string }).state !== "error") return withDish(again);
         return { state: "not_done", say: "say in one sentence that the menu isn't drafted yet and you will try again if they say so; never name a part of the system" };
       },
       toModelOutput: ({ output }) => ({ type: "text", value: compact(output) }),
@@ -521,14 +560,14 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
           type: "records",
           cardId: cardId("records", run.turnId),
           question: words.slice(0, 200),
-          rows: rows.map((o) => ({ kind: "order", label: o.lines.map((l) => `${l.quantity} × ${l.name}`).join(", "), totalCents: o.totalCents, date: o.deliveryDate, ref: o.requestId ?? o.orderId, detail: o.status })),
+          rows: rows.map((o) => ({ kind: "order", label: o.lines.map((l) => `${String(l.quantity).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} × ${l.name}`).join(", "), totalCents: o.totalCents, date: o.deliveryDate, ref: o.requestId ?? o.orderId, detail: o.status })),
           ...(rows[0]?.requestId ? { repeat: { ref: rows[0].requestId, label: rows[0].lines[0]?.name ?? "" } } : {}),
           repeatable: true,
         };
         run.store.card(run.thread, run.turnId, card);
         run.facts.push(card);
         record(run, "memory_read", `Order history read for ${from}..${to}${family ? ` (${family})` : ""}: ${rows.length} orders.`, { from, to, family, orders: rows.map((r) => r.orderId) });
-        return { orders: rows.map((o) => ({ delivered: o.deliveryDate, status: o.status, totalEur: (o.totalCents / 100).toFixed(2), lines: o.lines.map((l) => `${l.quantity} × ${l.name}`) })) };
+        return { orders: rows.map((o) => ({ delivered: o.deliveryDate, status: o.status, totalEur: (o.totalCents / 100).toFixed(2), lines: o.lines.map((l) => `${String(l.quantity).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} × ${l.name}`) })) };
       },
       toModelOutput: ({ output }) => ({ type: "text", value: compact(output) }),
     }),

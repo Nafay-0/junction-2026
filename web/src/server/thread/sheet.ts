@@ -1,3 +1,4 @@
+import { onStep } from "@/core/quote";
 import { DockError } from "@/core/errors";
 import { addDaysIso, isoWeekday, localNow } from "@/core/kitchen";
 import type { LiveOffer, Product } from "@/core/catalog";
@@ -274,7 +275,10 @@ export async function editSheet(run: TurnRun, sheetId: string, version: number |
   s.removed = undefined;
   switch (edit.kind) {
     case "packs": {
-      if (!Number.isInteger(edit.packs) || edit.packs < 1 || edit.packs > 9999) throw new DockError(400, "sheet_packs", "Whole packs, at least one.");
+      // A product sold in a real fractional lot (0,7 kg of a churned butter) is edited in its own steps; else whole packs.
+      const [product] = await run.rt.catalog.searchProducts({ ids: [line(s, edit.lineId).productId], limit: 1 }).catch(() => []);
+      const lot = product?.lotSize && product.lotSize > 0.01 ? product.lotSize : 1;
+      if (!onStep(edit.packs, lot) || edit.packs > 9999) throw new DockError(400, "sheet_packs", lot === 1 ? "Whole packs, at least one." : `In steps of ${lot}.`);
       line(s, edit.lineId).packs = edit.packs;
       changed.push("amount");
       break;
@@ -375,7 +379,11 @@ export async function placeSheet(run: TurnRun, sheetId: string, version: number)
   if (g.outcome === "refused") {
     const { worded } = await import("./pipeline");
     const { refusalOfRule } = await import("./refusal");
-    const what = order.lines.length === 1 ? order.lines[0].name : run.lang === "fi" ? "tilaus" : "this order";
+    // The products the gate's finding names, by their short names: never "one of the products".
+    const { shortName } = await import("./watch");
+    const named = [...new Set(order.lines.filter((l) => g.reasons.some((r) => r.includes(l.productId))).map((l) => shortName(l.name.replace(/[®™]/g, ""))))];
+    const and = run.lang === "fi" ? " ja " : run.lang === "sv" ? " och " : " and ";
+    const what = named.length ? (named.length === 1 ? named[0] : `${named.slice(0, -1).join(", ")}${and}${named.at(-1)}`) : order.lines.length === 1 ? order.lines[0].name : run.lang === "fi" ? "tilaus" : "this order";
     run.store.card(run.thread, run.turnId, { ...g, said: worded((l) => refusalOfRule(run, g.rule, what, g.rules?.find((x) => x.rule === g.rule)?.details, l)).said });
   } else run.store.card(run.thread, run.turnId, g);
   run.store.card(run.thread, run.turnId, orderCard(order));
