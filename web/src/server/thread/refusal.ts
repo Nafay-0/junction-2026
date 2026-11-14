@@ -265,7 +265,7 @@ export function readable(text: string, lang: Lang): string {
 }
 
 const TELL = /\b(send|type|write|re-?send|give me|tell me)\b[^.?!]{0,60}\b(product name|the name and|with the amount|order with|the exact|again as|as its own message|request again)\b|\b(kirjoita|lähetä)\b[^.?!]{0,40}\b(tuotteen nimi|määrä)/i;
-const INSIDE = /\b(the store treated|treated your message|neither result|the results? (gave|give|show|showed|didn't|don't|did not|do not)|the store's results|tool results?|my tools|the engine|the reader|the intake|routing)\b/i;
+const INSIDE = /\b(the store treated|treated your message|neither result|the results? (gave|give|show|showed|didn't|don't|did not|do not)|the store's results|tool results?|my tools|none of my tools|the engine|the reader|the intake|routing|(the )?menu planner|the planner|a step did not finish|didn't (connect|link)|did not (connect|link)|the (system|backend|server|database)|ruokalistasuunnittelija|suunnittelija ei)\b/i;
 
 /** A sentence that tells the buyer what to type, or says how the system works inside: never shown. */
 export function insideOrTell(sentence: string): boolean {

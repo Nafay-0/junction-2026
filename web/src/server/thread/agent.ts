@@ -59,7 +59,8 @@ Your reply (the store shows it under the buyer's words, with your work folded aw
 - Never tell the buyer what to type or say (no "say ...", no "send the product name with the amount"): ask a question a plain yes or a few words answer. If you asked something last turn and the answer did not settle it, do not ask it again in other words: offer your best reading from what is on the table ("12 litres of the cream for the sauce?").
 - Name the options in their order (n = 1 first, as the store lists them), so "the first one" is the one you named first. One product per option, each with its own price: never two options in one phrase ("Oatly Semi or Whole, 16,80 €"). When the buyer counts in another unit than the product (cartons, packs, boxes), say the amount in theirs too ("12 cartons of 1 L"). When the usual product cannot be had, say what changes for them: how it comes now (1 000 one-litre cartons instead of 100 boxes of 10 L) and the price difference when a result gives it.
 - Exceptions come first, one clear sentence each: nothing can arrive in time (and the earliest day that can), the kind asked for cannot be had (and what stands in, and what differs), an amount looks unusual, it needs a person's OK (whose). Then the question that moves it on. Which products and order times stay in the steps.
-- Never describe how you work inside ("the store treated your message", "the results", "my tools"): say what you found, what you did and what you need, as a person would.
+- Never describe how you work inside ("the store treated your message", "the results", "my tools", "the menu planner", "a step did not finish"): if something did not get done, say what is not done in the buyer's terms and what happens next.
+- Never describe how you work inside, in other words either: say what you found, what you did and what you need, as a person would.
 - In Finnish, packs are said with their size: "1 000 yhden litran tölkkiä" (never "1 000 litran tölkkeinä"), "10 litran laatikko"; in English "10 l box", never "novobox".
 - Every item the buyer asked for is on the order or named as left out, with why, in one sentence (notOnTheOrder). Never drop one without a word.
 - Never offer to ask someone, send a request or change something unless a result offers it ("draft" in a refusal, a ref under OPEN DECISIONS): a promise you cannot keep is worse than none. When a refusal names who can change the rules, say that and stop.
@@ -490,7 +491,14 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
         // A follow-up about the menu on the table keeps what the conversation already said: its covers and its day.
         const onTable = subj?.kind === "menu" && subj.covers && !/\d/.test(said) ? ` (for ${subj.covers} covers${subj.day ? ` on ${subj.day}` : ""})` : "";
         const { menuFromWords } = await import("./menu");
-        return menuFromWords(run, `${said}${onTable}`);
+        // A step that fails is tried once more before anything is said; then it is said in the buyer's terms
+        // (what is not done, and what happens next), never as a part of the system.
+        const first = await menuFromWords(run, `${said}${onTable}`).catch((err) => ({ state: "error", error: String(err) }) as Record<string, unknown>);
+        if ((first as { state?: string }).state !== "error") return first;
+        record(run, "menu_retry", "The menu could not be drafted: tried once more.", {});
+        const again = await menuFromWords(run, `${said}${onTable}`).catch((err) => ({ state: "error", error: String(err) }) as Record<string, unknown>);
+        if ((again as { state?: string }).state !== "error") return again;
+        return { state: "not_done", say: "say in one sentence that the menu isn't drafted yet and you will try again if they say so; never name a part of the system" };
       },
       toModelOutput: ({ output }) => ({ type: "text", value: compact(output) }),
     }),

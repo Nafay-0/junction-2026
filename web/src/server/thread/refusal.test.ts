@@ -70,6 +70,8 @@ describe("insideOrTell", () => {
     const { insideOrTell } = await import("./refusal");
     expect(insideOrTell("I'll try again when you send the order with the product name and amount.")).toBe(true);
     expect(insideOrTell("The store treated your message as a change to your two recurring orders, and neither result gave a day or a price.")).toBe(true);
+    expect(insideOrTell("I couldn't change the chocolate cake to lactose-free: the menu planner didn't connect your request to it.")).toBe(true);
+    expect(insideOrTell("A step did not finish, so nothing is ordered.")).toBe(true);
     expect(insideOrTell("Shall I order 12 L of the Fazer barista for Tuesday 17 Nov?")).toBe(false);
   });
 });
