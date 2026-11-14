@@ -18,6 +18,7 @@ import { byLine, checkOpen, read, record, runAction, step, type ItemOutcome, typ
 import { earlierFor } from "./earlier";
 import { ThreadStore, type StoredThread } from "./store";
 import { subjectOf } from "./subject";
+import { optionsSaid } from "./options-said";
 import { runWidget } from "./widgets";
 import { speakFacts } from "./speak";
 import { codeLeaks, englishDays, insideOrTell, readable } from "./refusal";
@@ -1034,7 +1035,7 @@ async function tellRequestDifferences(run: TurnRun): Promise<void> {
       const pack = one?.packSize && one.unit && one.packSize !== 1 ? { count: one.quantity, size: one.packSize, unit: one.unit } : undefined;
       // A stand-in by its short name, and not again when the reply already names it.
       const subName = sub ? readable(shortName(o.title.replace(/[®™]/g, "").replace(/^(Valio )?Hyvä suomalainen /i, "$1").replace(/\s*\(.*\)$/, "")), lang) : "";
-      const named = !!subName && (fold(line).includes(fold(subName.split(/\s+/).slice(0, 2).join(" "))) || /\b(instead|in place of|tilalla|tilalle|i stället)\b/i.test(line) || /\b(usual|tavallinen|tavallista|vanliga)\b[^.?!]*\b(can't|cannot|won't|ei ehdi|ei tule|hinner inte|kan inte)\b|\b(can't|cannot|won't)\b[^.?!]*\busual\b/i.test(line));
+      const named = !!subName && (fold(line).includes(fold(subName.split(/\s+/).slice(0, 2).join(" "))) || /\b(instead|in place of|tilalla|tilalle|i stället)\b/i.test(line) || /\b(usual|tavallinen|tavallista|vanliga)\b[^.?!]*\b(can't|cannot|won't|ei ehdi|ei tule|hinner inte|kan inte)\b|\b(can't|cannot|won't|couldn't|could not)\b[^.?!]*\busual\b/i.test(line));
       const diffs = optionDifferences({ key: u.requestId!, name: u.item, ...(u.amount ? { amount: u.amount } : {}), ...(day ? { day } : {}), exact: !!u.deliverOn }, { delivered: o.delivered, deliveryDate: sheet?.type === "sheet" ? sheet.deliveryDate : o.deliveryDate, ...(sub && !named ? { substituteFor: sub.substituteFor, title: subName } : {}), ...(pack ? { pack } : {}) });
       fresh.push(...diffs.filter((d) => !told[keyOf(d)]));
     } else if (understood.length > 1 && notice?.type === "notice" && (notice.kind === "refused" || notice.kind === "not_found" || notice.kind === "unavailable")) {
@@ -1224,6 +1225,25 @@ function turnFailed(run: TurnRun, code: TurnFailure): void {
 }
 
 /**
+ * Ranked options shown in this turn are said in words, the same every time (good, better, best: the voice door reads
+ * only the sentence): the agent's sentences without prices stay (the exception first: "your usual boxes can't make
+ * Monday"); its price sentences give way to the plain-code one (options-said.ts: the first option, its total and why it
+ * is first, what the others trade off); the closing question stays.
+ */
+function sayOptionsInWords(run: TurnRun): void {
+  const here = run.store.agentTurn(run.thread, run.turnId);
+  const card = here?.cards.find((c) => c.type === "options" && !c.chosen && !c.adjusted);
+  if (card?.type !== "options" || !here) return;
+  const said = optionsSaid(card.options, run.lang ?? "en");
+  if (!said) return;
+  const line = here.line ?? "";
+  const parts = line.split(/(?<=[.!?])\s+/).filter(Boolean);
+  const ask = parts.length && /\?\s*$/.test(parts.at(-1)!) ? parts.pop()! : { en: "Shall I order it, or another one?", fi: "Tilaanko sen, vai jonkin muun?", sv: "Ska jag beställa den, eller en annan?" }[run.lang ?? "en"];
+  const kept = parts.filter((x) => !/\d[\d\s]*,\d{2}\s?€/.test(x));
+  run.store.line(run.thread, run.turnId, [...kept, said, ask].join(" ").replace(/\s+/g, " ").trim());
+}
+
+/**
  * One truth per reply: a total the sentence states for what would be ordered ("New total …", "(… for those)") is the
  * figure the dishes card shows beside it, never another computation of the plan. Recorded when it had to be set right.
  */
@@ -1252,6 +1272,7 @@ async function finishTurn(run: TurnRun): Promise<void> {
   await tellDifferences(run).catch((err) => console.error("[thread] differences", err));
   sameFigures(run);
   await tellRequestDifferences(run).catch((err) => console.error("[thread] request differences", err));
+  sayOptionsInWords(run);
   sayLeftOffAfterOrder(run);
   const a = store.agentTurn(thread, run.turnId)!;
   const waitingApprover = a.cards.some((c) => c.type === "gate" && c.outcome === "waiting");

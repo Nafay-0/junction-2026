@@ -109,7 +109,8 @@ describe("the agent thread", () => {
     expect(types).toContain("understood");
     expect(types).toContain("options");
     expect(first.status).toBe("waiting_buyer");
-    expect(first.line).toBe("Three options below, all lactose-free.");
+    // The agent's words, then the ranked options said in words (options-said.ts): the first, its total, why it is first.
+    expect(first.line).toMatch(/^Three options below, all lactose-free\. The .+ is first at \*\*[\d ,]+ €\*\*: the cheapest that can arrive /);
     // The first visible sign of work is a step, before any model call.
     const firstStep = first.events.find((e) => e.type === "step");
     expect(firstStep).toBeTruthy();
@@ -163,7 +164,9 @@ describe("the agent thread", () => {
     setInterpretModelForTests(reader(20));
     setAgentModelForTests(agentScript([{ calls: [{ name: "order", args: { words: "20 litres of lactose-free milk for Monday" } }] }, { text: "The cheapest is €3.99 a litre." }]));
     const r = await turn("laakso", { door: "typed", via: "typed", text: "20 litres of lactose-free milk for Monday" });
-    expect(r.line).toBeUndefined();
+    // The unbacked sentence is not shown; what is said instead comes from the options card itself.
+    expect(r.line ?? "").not.toMatch(/3[.,]99/);
+    expect(r.line).toMatch(/is first at \*\*/);
     const rt = await getRuntime();
     expect(rt.dock.ledger.entries().some((e) => e.type === "agent" && (e.data as { event?: string }).event === "grounding_refusal")).toBe(true);
   });
