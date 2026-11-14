@@ -30,6 +30,7 @@ const REQUESTS: Record<string, { text: string; lang: "en" | "fi" }[]> = {
     // The tester's own words: the watch answers both.
     { text: "is anything we order every week going to be missing?", lang: "en" },
     { text: "switch auto-renew on for the weekly milk order", lang: "en" },
+    { text: "is the weekly milk order going to renew by itself this week?", lang: "en" },
     // Five items: each on the order or named as left out with why.
     { text: "for tuesday: 200 l lactose free milk, 10 kg butter, 20 l whipping cream, 30 kg natural yoghurt and 5 kg grated cheese", lang: "en" },
   ],
