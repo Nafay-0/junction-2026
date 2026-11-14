@@ -318,7 +318,7 @@ function collect(st: ThreadState, o: Outcome) {
       case "gate":
         if (c.outcome === "refused") o.refusals.push({ rule: c.rule, message: c.reasons.join(" ") });
         if ((c.outcome === "waiting" || c.outcome === "placed_alone") && c.orderId && !o.orders.some((x) => x.orderId === c.orderId))
-          o.orders.push({ orderId: c.orderId, status: c.outcome === "waiting" ? "pending_approval" : "committed", approver: c.approver?.name, rules: c.rule ? [{ rule: c.rule, outcome: "escalate" }] : [], reasons: c.reasons, totalCents: 0, lines: [] });
+          o.orders.push({ orderId: c.orderId, status: c.outcome === "waiting" ? "pending_approval" : "committed", approver: c.approver?.name, rules: c.rule ? [{ rule: c.rule, outcome: "escalate" }] : [], reasons: c.reasons, totalCents: 0, lines: [], ...((c.rules ?? []).some((r) => r.rule === "substitution_rule" && (r.details as { confirmedBy?: string } | undefined)?.confirmedBy) ? { confirmedBy: String((c.rules!.find((r) => r.rule === "substitution_rule")!.details as { confirmedBy: string }).confirmedBy) } : {}) } as any);
         for (const r of c.reasons) if (!o.notes.includes(r)) o.notes.push(r);
         break;
       case "order": {
