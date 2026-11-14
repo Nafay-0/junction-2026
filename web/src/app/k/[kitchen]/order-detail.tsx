@@ -16,6 +16,7 @@ import { Gate } from "./stages";
 import { Timeline } from "./timeline";
 import { Button, ErrorPlate, Field, Paper } from "./ui";
 import type { LedgerReply, Order } from "./types";
+import { useProductName } from "./names";
 
 /**
  * One order: what was asked, what was ordered at what fixed price, who let it through and how, the timeline of
@@ -25,6 +26,7 @@ import type { LedgerReply, Order } from "./types";
 type Detail = { order: Order; entries: LedgerReply["entries"] };
 
 export function OrderDetail({ orderId }: { orderId: string }) {
+  const pn = useProductName();
   const { call, kitchen, overview, base } = usePortal();
   const tx = useText(ORDER_DETAIL_TEXT);
   const f = useFormat();
@@ -61,7 +63,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
           <p className="text-ink-soft">
             {tx.at(statusWord, f.day(helsinkiToday(new Date(o.createdAt))), clock(o.createdAt))}
           </p>
-          <h1 className="display text-[2.2rem]">{o.lines.map((l) => `${l.quantity} × ${shortProduct(l.name)}`).join(" + ")}</h1>
+          <h1 className="display text-[2.2rem]">{o.lines.map((l) => `${l.quantity} × ${shortProduct(pn(l.productId, l.name))}`).join(" + ")}</h1>
           {asked && <p className="mt-1 text-[1.05rem]">{asked.startsWith("Basket") ? askedText(asked, f.lang) : tx.asked(asked)}</p>}
         </div>
         <p className="display text-[2.8rem] tabular">{money(o.totalCents)}</p>
@@ -89,7 +91,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
                     <tr key={l.productId}>
                       <td className="py-1.5 pr-2">
                         <Link href={`${base}/catalogue/${encodeURIComponent(l.productId)}`} className="hover:underline">
-                          {shortProduct(l.name)}
+                          {shortProduct(pn(l.productId, l.name))}
                         </Link>
                         {l.substituteFor && <span className="block text-[0.85rem] text-ink-soft">{tx.swapFor(shortProduct(l.substituteFor.name))}</span>}
                       </td>

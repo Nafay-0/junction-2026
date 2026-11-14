@@ -1,6 +1,6 @@
 {
   "budgetUsd": 6,
-  "totalUsd": 2.1493,
+  "totalUsd": 3.9774,
   "entries": [
     {
       "key": "dept-10",
@@ -1210,6 +1210,886 @@
         "total_tokens": 1420
       },
       "costUsd": 0.0302,
+      "estimated": false
+    },
+    {
+      "key": "tile-milk-1l-red",
+      "at": "2026-11-14T01:04:44.408Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 483,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 483
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1932
+      },
+      "costUsd": 0.0459,
+      "estimated": false
+    },
+    {
+      "key": "tile-milk-case-blue",
+      "at": "2026-11-14T01:04:44.505Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 513,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 513
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1962
+      },
+      "costUsd": 0.046,
+      "estimated": false
+    },
+    {
+      "key": "tile-milk-bib-light",
+      "at": "2026-11-14T01:04:45.463Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 468,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 468
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1917
+      },
+      "costUsd": 0.0458,
+      "estimated": false
+    },
+    {
+      "key": "tile-milk-1l-blue",
+      "at": "2026-11-14T01:04:56.550Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 481,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 481
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1930
+      },
+      "costUsd": 0.0459,
+      "estimated": false
+    },
+    {
+      "key": "tile-milk-case-red",
+      "at": "2026-11-14T01:04:57.567Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 515,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 515
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1964
+      },
+      "costUsd": 0.046,
+      "estimated": false
+    },
+    {
+      "key": "tile-milk-bib-red",
+      "at": "2026-11-14T01:04:58.875Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 469,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 469
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1918
+      },
+      "costUsd": 0.0458,
+      "estimated": false
+    },
+    {
+      "key": "tile-milk-bib-blue",
+      "at": "2026-11-14T01:05:03.844Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 468,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 468
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1917
+      },
+      "costUsd": 0.0458,
+      "estimated": false
+    },
+    {
+      "key": "tile-milk-1l-light",
+      "at": "2026-11-14T01:05:03.864Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 481,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 481
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1930
+      },
+      "costUsd": 0.0459,
+      "estimated": false
+    },
+    {
+      "key": "tile-milk-case-light",
+      "at": "2026-11-14T01:05:04.924Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 513,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 513
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1962
+      },
+      "costUsd": 0.046,
+      "estimated": false
+    },
+    {
+      "key": "tile-milk-fermented",
+      "at": "2026-11-14T01:05:08.879Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 435,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 435
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1884
+      },
+      "costUsd": 0.0456,
+      "estimated": false
+    },
+    {
+      "key": "tile-plant-drink",
+      "at": "2026-11-14T01:05:10.062Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 428,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 428
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1877
+      },
+      "costUsd": 0.0456,
+      "estimated": false
+    },
+    {
+      "key": "tile-coffee-dairy",
+      "at": "2026-11-14T01:05:10.982Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 437,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 437
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1886
+      },
+      "costUsd": 0.0457,
+      "estimated": false
+    },
+    {
+      "key": "tile-cream-whipping",
+      "at": "2026-11-14T01:05:16.327Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 440,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 440
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1889
+      },
+      "costUsd": 0.0457,
+      "estimated": false
+    },
+    {
+      "key": "tile-cream-cooking",
+      "at": "2026-11-14T01:05:16.460Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 439,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 439
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1888
+      },
+      "costUsd": 0.0457,
+      "estimated": false
+    },
+    {
+      "key": "tile-cream-small",
+      "at": "2026-11-14T01:05:20.236Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 434,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 434
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1883
+      },
+      "costUsd": 0.0456,
+      "estimated": false
+    },
+    {
+      "key": "tile-yoghurt-cups",
+      "at": "2026-11-14T01:05:24.019Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 433,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 433
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1882
+      },
+      "costUsd": 0.0456,
+      "estimated": false
+    },
+    {
+      "key": "tile-yoghurt-bucket",
+      "at": "2026-11-14T01:05:24.420Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 436,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 436
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1885
+      },
+      "costUsd": 0.0457,
+      "estimated": false
+    },
+    {
+      "key": "tile-cheese-sliced",
+      "at": "2026-11-14T01:05:25.182Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 431,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 431
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1880
+      },
+      "costUsd": 0.0456,
+      "estimated": false
+    },
+    {
+      "key": "tile-cheese-grated",
+      "at": "2026-11-14T01:05:30.274Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 434,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 434
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1883
+      },
+      "costUsd": 0.0456,
+      "estimated": false
+    },
+    {
+      "key": "tile-cheese-soft",
+      "at": "2026-11-14T01:05:31.027Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 431,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 431
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1880
+      },
+      "costUsd": 0.0456,
+      "estimated": false
+    },
+    {
+      "key": "tile-cheese-feta",
+      "at": "2026-11-14T01:05:31.366Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 431,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 431
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1880
+      },
+      "costUsd": 0.0456,
+      "estimated": false
+    },
+    {
+      "key": "tile-spread-tub",
+      "at": "2026-11-14T01:05:37.799Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 436,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 436
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1885
+      },
+      "costUsd": 0.0457,
+      "estimated": false
+    },
+    {
+      "key": "tile-cheese-specialty",
+      "at": "2026-11-14T01:05:38.384Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 430,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 430
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1879
+      },
+      "costUsd": 0.0456,
+      "estimated": false
+    },
+    {
+      "key": "tile-frozen-cake",
+      "at": "2026-11-14T01:05:38.396Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 438,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 438
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1887
+      },
+      "costUsd": 0.0457,
+      "estimated": false
+    },
+    {
+      "key": "tile-frozen-chicken",
+      "at": "2026-11-14T01:05:43.999Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 438,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 438
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1887
+      },
+      "costUsd": 0.0457,
+      "estimated": false
+    },
+    {
+      "key": "tile-frozen-meatballs",
+      "at": "2026-11-14T01:05:45.415Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 441,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 441
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1890
+      },
+      "costUsd": 0.0457,
+      "estimated": false
+    },
+    {
+      "key": "tile-frozen-buns",
+      "at": "2026-11-14T01:05:45.808Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 444,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 444
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1893
+      },
+      "costUsd": 0.0457,
+      "estimated": false
+    },
+    {
+      "key": "tile-frozen-fish",
+      "at": "2026-11-14T01:05:50.941Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 442,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 442
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1891
+      },
+      "costUsd": 0.0457,
+      "estimated": false
+    },
+    {
+      "key": "tile-frozen-shrimp",
+      "at": "2026-11-14T01:05:52.296Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 436,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 436
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1885
+      },
+      "costUsd": 0.0457,
+      "estimated": false
+    },
+    {
+      "key": "tile-frozen-fries",
+      "at": "2026-11-14T01:05:52.950Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 447,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 447
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1896
+      },
+      "costUsd": 0.0457,
+      "estimated": false
+    },
+    {
+      "key": "tile-drink-cans",
+      "at": "2026-11-14T01:05:58.005Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 429,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 429
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1878
+      },
+      "costUsd": 0.0456,
+      "estimated": false
+    },
+    {
+      "key": "tile-cutlery",
+      "at": "2026-11-14T01:05:58.557Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 427,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 427
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1876
+      },
+      "costUsd": 0.0456,
+      "estimated": false
+    },
+    {
+      "key": "tile-napkins",
+      "at": "2026-11-14T01:05:58.673Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 425,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 425
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1874
+      },
+      "costUsd": 0.0456,
+      "estimated": false
+    },
+    {
+      "key": "tile-detergent",
+      "at": "2026-11-14T01:06:03.295Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 434,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 434
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1883
+      },
+      "costUsd": 0.0456,
+      "estimated": false
+    },
+    {
+      "key": "tile-sauce-bottle",
+      "at": "2026-11-14T01:06:04.489Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 429,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 429
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1878
+      },
+      "costUsd": 0.0456,
+      "estimated": false
+    },
+    {
+      "key": "tile-brushes",
+      "at": "2026-11-14T01:06:05.134Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 428,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 428
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1877
+      },
+      "costUsd": 0.0456,
+      "estimated": false
+    },
+    {
+      "key": "tile-bouillon",
+      "at": "2026-11-14T01:06:10.037Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 435,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 435
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1884
+      },
+      "costUsd": 0.0456,
+      "estimated": false
+    },
+    {
+      "key": "tile-sugar",
+      "at": "2026-11-14T01:06:10.480Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 435,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 435
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1884
+      },
+      "costUsd": 0.0456,
+      "estimated": false
+    },
+    {
+      "key": "tile-cheese-pieces",
+      "at": "2026-11-14T01:19:13.510Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 438,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 438
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1887
+      },
+      "costUsd": 0.0457,
+      "estimated": false
+    },
+    {
+      "key": "tile-cheese-wheel",
+      "at": "2026-11-14T01:19:13.513Z",
+      "model": "gpt-image-2.6-flare",
+      "size": "1024x1024",
+      "quality": "medium",
+      "usage": {
+        "input_tokens": 450,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 450
+        },
+        "output_tokens": 1449,
+        "output_tokens_details": {
+          "image_tokens": 1449,
+          "text_tokens": 0
+        },
+        "total_tokens": 1899
+      },
+      "costUsd": 0.0457,
       "estimated": false
     }
   ]
