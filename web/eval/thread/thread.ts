@@ -341,6 +341,10 @@ function collect(st: ThreadState, o: Outcome) {
         o.plan = { lines: ls.filter((l) => l.product && l.status !== "have" && l.status !== "left_out").length, struck: ls.filter((l) => l.status === "have" || l.status === "left_out").length, doubts: ls.filter((l) => l.conflicts.length).length, unsourced: ls.filter((l) => !l.product && l.status !== "have").map((l) => l.ingredient) };
         break;
       }
+      case "watch":
+        // The watch's moment, said in the conversation (the card holds its words in each language).
+        o.answers.push({ text: `${c.text.en.say} ${c.text.en.ask ?? ""} ${c.text.fi.say} ${c.text.fi.ask ?? ""}`, kind: "line", citations: [] });
+        break;
       case "offer":
         // The wholesaler's offer, said in the conversation (the card holds its words in each language).
         o.answers.push({ text: `${c.text.en.say} ${c.text.en.ask} ${c.text.fi.say} ${c.text.fi.ask}`, kind: "line", citations: [] });

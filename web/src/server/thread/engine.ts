@@ -98,6 +98,7 @@ const ActionSchema: z.ZodType<ThreadAction> = z.discriminatedUnion("type", [
   z.object({ type: z.literal("menu_line_have"), planId: z.string().min(1).max(80), lineId: z.string().min(1).max(80), have: z.boolean() }),
   z.object({ type: z.literal("menu_line_per_cover"), planId: z.string().min(1).max(80), lineId: z.string().min(1).max(80), dishId: z.string().min(1).max(80), amount: z.number().positive().max(100000) }),
   z.object({ type: z.literal("menu_accept"), planId: z.string().min(1).max(80), doubtId: z.string().min(1).max(80) }),
+  z.object({ type: z.literal("watch_answer"), momentId: z.string().min(1).max(80), answer: z.string().min(1).max(80) }),
   z.object({ type: z.literal("offer_answer"), offerId: z.string().min(1).max(80), answer: z.enum(["yes", "no", "mute", "off"]) }),
   z.object({ type: z.literal("menu_to_sheet"), planId: z.string().min(1).max(80) }),
   z.object({ type: z.literal("remember_this"), text: z.string().trim().min(2).max(500) }),
@@ -324,6 +325,14 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
 
   // The wholesaler's offer the buyer asked for: its own words (plain code, from the signed offer) are the reply.
   const lang = body.lang ?? "en";
+  if (run.watchAsked) {
+    const c = store.cards(thread).map((x) => x.card).find((x) => x.type === "watch" && x.momentId === run.watchAsked);
+    if (c?.type === "watch") {
+      store.line(thread, run.turnId, `${c.text[lang].say}${c.text[lang].ask ? ` ${c.text[lang].ask}` : ""}`);
+      store.mark(thread, run.turnId, "line", Date.now() - run.t0);
+      line = "";
+    }
+  }
   if (run.offerAsked) {
     const c = store.cards(thread).map((x) => x.card).find((x) => x.type === "offer" && x.offerId === run.offerAsked);
     if (c?.type === "offer") {

@@ -71,6 +71,8 @@ export type ThreadAction =
   | { type: "menu_line_per_cover"; planId: string; lineId: string; dishId: string; amount: number }
   /** Menu builder: accept a doubt the planner raised on a line ("a different form than the recipe asks"). */
   | { type: "menu_accept"; planId: string; doubtId: string }
+  /** The buyer's answer to the watch's moment (server/watch/thread.ts): switch, switch:<id>, keep, renew_new, usual, skip. */
+  | { type: "watch_answer"; momentId: string; answer: string }
   /** The buyer's answer to the wholesaler's offer the agent said (server/offers/thread.ts). */
   | { type: "offer_answer"; offerId: string; answer: "yes" | "no" | "mute" | "off" }
   /** Menu builder: put every bought line on an order sheet, one order. */
@@ -616,7 +618,29 @@ export type OfferCard = CardBase & {
   requestId?: string;
 };
 
-export type Card = OfferCard | UnderstoodCard | AnomalyCard | QuestionCard | OptionsCard | PriceCard | GateCard | OrderCard | MemoryCard | RecordsCard | NoticeCard | SheetCard | AlternativesCard | MenuCard | TodayCard | ProductsCard | ProductCard | StandingCard | DeliveriesCard | MemoryListCard | RulesCard;
+/**
+ * The wholesaler's watch over the kitchen's key products, said in the conversation (server/watch): a stock-out with its
+ * closest substitute, a standing order held because it drifted, or what was renewed. Its words in each language (the
+ * kitchen's short names), the steps and proof for the closed view, the answers it takes, and the answer given.
+ */
+export type WatchCard = CardBase & {
+  type: "watch";
+  momentId: string;
+  kind: "stock_out" | "renewal_held" | "renewal_placed" | "substitute_placed";
+  text: Record<"en" | "fi" | "sv", { say: string; ask?: string }>;
+  steps: string[];
+  proof?: { token: string; keysUrl: string; simulated: boolean };
+  answers: string[];
+  /** The other ranked substitutes, short names (behind Show the list). */
+  others?: string[];
+  /** The product family it is about (the day's opening drops its own drift line for it). */
+  family?: string;
+  staged: boolean;
+  state: "open" | "answered" | "reported";
+  reply?: string;
+};
+
+export type Card = WatchCard | OfferCard | UnderstoodCard | AnomalyCard | QuestionCard | OptionsCard | PriceCard | GateCard | OrderCard | MemoryCard | RecordsCard | NoticeCard | SheetCard | AlternativesCard | MenuCard | TodayCard | ProductsCard | ProductCard | StandingCard | DeliveriesCard | MemoryListCard | RulesCard;
 // ---------- the kitchen's rules (docs/agent-thread.md "Widgets": rules) ----------
 
 /** The mandate as the rules card shows it: plain values. `groups` only where the kitchen has terms (an account). */

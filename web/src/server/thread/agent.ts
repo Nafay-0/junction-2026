@@ -46,6 +46,7 @@ How to work each turn:
 - A dish or a menu for a number of covers ("lunch for 10 tomorrow", "salmon soup for 300 on Friday", "chocolate cake"): plan_menu with their words. Open words get up to three menus to pick from.
 - Every message is read in the light of the conversation so far (TALKING ABOUT NOW). A short follow-up fills in or changes that thing: "10 portions" after a dish sets its covers; "200 litres", "for Friday", "no, 200", "make it 40", "the organic one" complete or change the request on the table (call order with their words, code applies them); "and oat drink too" adds to the same order (order). Do it; do not ask them to confirm a change they just said. A new subject starts only when they clearly name a new thing. Never ask for what they already said in this conversation.
 - Past orders: order_history. Rules, limits, who gives the OK, or a change to them ("never nuts", "raise the limit to 800"): rules, with the change when they ask for one; the buyer then confirms it with a yes, through buyer_reply. Say "confirm", never "sign" or "mandate". An order's status: get_order or explain.
+- "Anything I should know about this week's orders?", "is this week's milk sorted?", "what's coming this week?": this_week. After the store said a watch moment (a product that cannot come, a held renewal), "yes", "switch", "the second one", "keep it", "the usual", "the new amount", "skip it" are buyer_reply with its watch: ref.
 - "Anything new or worth trying?", "what's in season?": wholesaler_offer. After the store said an offer, the buyer's yes, no, "don't suggest this kind again" or "no offers at all" is buyer_reply (offer:yes, offer:no, offer:mute, offer:off); a no or a mute is acknowledged in one short sentence and never raised again.
 - Anything else (a greeting, small talk, something outside buying food): one short sentence, no tool.
 
@@ -175,6 +176,17 @@ export async function openRefs(run: TurnRun): Promise<OpenRef[]> {
   }
   // The order sheet open now (several items, the usual, a menu or an option changed): ordered, or changed, in words.
   const { currentSheet } = await import("./sheet");
+  // The watch's moment (a stock-out, a held renewal) said last turn or on the opening: answered in words.
+  const { openWatch } = await import("./watch");
+  const wc = openWatch(run);
+  if (wc) {
+    const holder = run.thread.turns.find((x) => x.role === "agent" && x.cards.some((c) => c.cardId === wc.cardId));
+    const after = holder ? run.thread.turns.slice(run.thread.turns.indexOf(holder) + 1).filter((x) => x.role === "agent" && x.turnId !== run.turnId) : [];
+    if (holder && after.length === 0) {
+      const label: Record<string, string> = { switch: "yes, switch to the closest substitute", keep: "no, keep it as it is", renew_new: "renew at the new amount", usual: "renew at the usual amount", skip: "skip this week" };
+      for (const a of wc.answers) refs.push({ ref: `watch:${a.startsWith("switch:") ? `alt${wc.answers.filter((x) => x.startsWith("switch:")).indexOf(a) + 2}` : a}`, label: a.startsWith("switch:") ? `switch to substitute ${wc.answers.filter((x) => x.startsWith("switch:")).indexOf(a) + 2} instead` : (label[a] ?? a), action: { type: "watch_answer", momentId: wc.momentId, answer: a }, ...(a === "switch" || a === "renew_new" || a === "usual" ? { confirm: a === "switch" } : {}) });
+    }
+  }
   // The wholesaler's offer said last turn (or on the opening): answered in words.
   const { openOffer } = await import("./offer");
   const offer = openOffer(run);
@@ -367,6 +379,11 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
         // A widget's action (a menu picked, the order sheet changed or ordered, the rules confirmed): the same handler as a tap.
         const { runWidget } = await import("./widgets");
         if (await runWidget(run, r.action, words)) {
+          if (r.action.type === "watch_answer") {
+            const id = r.action.momentId;
+            const c = run.store.cards(run.thread).map((x) => x.card).find((x) => x.type === "watch" && x.momentId === id);
+            return { ok: true, done: "answered", say: c?.type === "watch" ? c.reply : undefined, ...([...run.orders.values()].at(-1) ? { order: { status: [...run.orders.values()].at(-1)!.status, totalEur: ([...run.orders.values()].at(-1)!.totalCents / 100).toFixed(2) } } : {}) };
+          }
           if (r.action.type === "offer_answer") {
             const offerId = r.action.offerId;
             const c = run.store.cards(run.thread).map((x) => x.card).find((x) => x.type === "offer" && x.offerId === offerId);
@@ -412,6 +429,18 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
         }
         const { menuFromWords } = await import("./menu");
         return menuFromWords(run, said);
+      },
+      toModelOutput: ({ output }) => ({ type: "text", value: compact(output) }),
+    }),
+    this_week: tool({
+      description: "The buyer asks about this week's orders or deliveries, whether something is sorted, or what they should know ('anything I should know about this week's orders?', 'is the milk sorted?'): the wholesaler's watch over the kitchen's key products (a product that cannot come and its closest substitute, a standing order held because it drifted, what was renewed). The store says the watch's own words; nothing is ordered.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const { sayWatch } = await import("./watch");
+        const c = await sayWatch(run, { asked: true });
+        if (!c) return { watch: "nothing: every key product this week can come as ordered. Say so in one sentence, or look at the orders with order_history." };
+        run.watchAsked = c.momentId;
+        return { watch: c.kind, said: "the store shows the watch's own sentence and question as your reply; write one short sentence only" };
       },
       toModelOutput: ({ output }) => ({ type: "text", value: compact(output) }),
     }),
@@ -554,7 +583,7 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
       { role: "system", content: context },
     ],
     tools,
-    activeTools: [...PUBLISHED_FOR_MODEL, "order", "plan_menu", "buyer_reply", "order_history", "find_products", "product_facts", "show_home", "rules", "await_sign_off", "wholesaler_offer"],
+    activeTools: [...PUBLISHED_FOR_MODEL, "order", "plan_menu", "buyer_reply", "order_history", "find_products", "product_facts", "show_home", "rules", "await_sign_off", "wholesaler_offer", "this_week"],
     toolApproval: {
       ...Object.fromEntries(BUYERS_OR_ENGINES.map((n) => [n, deny(`${n} is the buyer's decision or the engine's step in the store: use buyer_reply or order.`)])),
       // The pause for a person's sign-off. Only the server answers it, when the passkey sign-off is recorded.
@@ -578,7 +607,7 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
 
   const result = await agent.stream({ messages, timeout: { totalMs: 90_000, toolMs: 60_000 } });
   for await (const part of result.fullStream) {
-    if (part.type === "tool-call" && !["order", "plan_menu", "buyer_reply", "order_history", "find_products", "product_facts", "show_home", "await_sign_off", "wholesaler_offer"].includes(part.toolName)) {
+    if (part.type === "tool-call" && !["order", "plan_menu", "buyer_reply", "order_history", "find_products", "product_facts", "show_home", "await_sign_off", "wholesaler_offer", "this_week"].includes(part.toolName)) {
       const st = step(run, `tool:${part.toolName}`, LABELS[part.toolName] ?? `Looking up ${part.toolName.replace(/_/g, " ")}`);
       void result.steps.then(() => st.done(), () => st.fail());
     }

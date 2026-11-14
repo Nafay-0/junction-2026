@@ -69,6 +69,7 @@ export const THREAD_LINE_TEXT = defineText({
       allBy: (day: string) => `All can arrive ${day}.`,
       insideRules: "Inside your rules: I may order it alone.",
       offer: "Asked the wholesaler's selling agent",
+      watch: "Checked the week's key products",
     },
     fallback: {
       options: (n: number) => `${n} option${n === 1 ? "" : "s"}. Which one?`,
@@ -144,6 +145,7 @@ export const THREAD_LINE_TEXT = defineText({
       allBy: (day: string) => `Kaikki ehtivät ${day}.`,
       insideRules: "Sääntöjesi sisällä: voin tilata yksin.",
       offer: "Kysyin tukun myyntiagentilta",
+      watch: "Tarkistin viikon tärkeät tuotteet",
     },
     fallback: {
       options: (n: number) => `${n} vaihtoehtoa. Mikä niistä?`,
@@ -219,6 +221,7 @@ export const THREAD_LINE_TEXT = defineText({
       allBy: (day: string) => `Alla hinner fram ${day}.`,
       insideRules: "Inom dina regler: jag får beställa själv.",
       offer: "Frågade grossistens säljagent",
+      watch: "Kollade veckans viktiga produkter",
     },
     fallback: {
       options: (n: number) => `${n} alternativ. Vilket?`,
