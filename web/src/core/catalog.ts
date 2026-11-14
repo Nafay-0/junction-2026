@@ -88,13 +88,15 @@ export type LiveOffer = {
   requestedDate?: string;
   /** True when the earliest delivery is after the requested date. */
   laterThanRequested?: boolean;
-  /** False when the wholesaler does not know the stock (Terminal products report 999999): availablePacks is not a real figure. */
+  /** False when the wholesaler does not know the stock (an amount of 999999 or more): availablePacks is not a real figure, and any quantity may be ordered. */
   stockKnown?: boolean;
   /** "Stock" (wholesaler holds it) or "Terminal" (shipped from the supplier's warehouse). */
   logisticModel?: string;
   salesUnit?: string;
-  /** Order cut-off as the partner states it: order by then to get `deliveryDate`. */
+  /** Order cut-off as the partner states it (`closingTime`): order by then to get delivery on `orderByFor`. */
   orderBy?: string;
+  /** The day the cut-off is for: the answer row's availableDate (the delivery date may later be moved to a day asked). */
+  orderByFor?: string;
   /** True when the cut-off has passed at lookup time (the date may then slip). */
   cutoffPassed?: boolean;
   priceValidFrom?: string;
@@ -121,7 +123,7 @@ export type LiveProblem =
   | "sales_block" // cannot be ordered right now
   | "not_deliverable" // no schedule line: cannot be delivered on any date
   | "out_of_stock" // a real stock figure of 0
-  | "stock_unknown" // Terminal product: the quantity is not known
+  | "stock_unknown" // an amount of 999999 or more: the quantity is not known and the wholesaler takes any quantity (never blocking)
   | "later_than_requested" // earliest delivery after the requested date
   | "cutoff_passed" // the order cut-off for that date has passed
   | "unit_mismatch"; // availability given in another unit than the product's sales unit

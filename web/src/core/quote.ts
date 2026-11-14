@@ -207,7 +207,8 @@ export function buildQuote(input: QuoteInput): Quote {
     if (!onStep(req.quantity, lot))
       throw new QuoteError("quote_invalid_line", lot === 1 ? `Quantity for ${req.productId} must be a whole number of packs; got ${req.quantity}.` : `Quantity for ${req.productId} must be a multiple of its order step ${lot} ${p.salesUnit ?? "units"}; got ${req.quantity}.`, { productId: req.productId, requested: req.quantity, step: lot });
     const o = offer(req.productId);
-    if (req.quantity > o.availablePacks) {
+    // An unknown stock (999999 or more) takes any quantity: only a real figure can be short.
+    if (o.stockKnown !== false && req.quantity > o.availablePacks) {
       throw new QuoteError(
         "quote_insufficient_stock",
         `Only ${o.availablePacks} packs of ${p.id} available; ${req.quantity} requested.`,

@@ -107,16 +107,18 @@ describe("ValioCatalog: live price and availability", () => {
     expect(by["900002"]).toMatchObject({ orderable: false, problems: ["no_price"] });
     expect(by["900002"].offer).toBeUndefined();
     expect(by["900005"]).toMatchObject({ orderable: false, problems: ["sales_block"] });
-    expect(by["900006"]).toMatchObject({ orderable: false, problems: ["not_deliverable"] });
+    // "Empty = not available": no schedule rows is out of stock for the day asked.
+    expect(by["900006"]).toMatchObject({ orderable: false, problems: ["out_of_stock"] });
+    expect(by["900006"].offer).toBeUndefined();
     expect(by["900007"]).toMatchObject({ orderable: false, problems: ["out_of_stock"], offer: { availablePacks: 0 } });
     expect(by["900010"]).toMatchObject({ orderable: false, problems: ["unit_mismatch"] });
     expect(by["900008"]).toMatchObject({ orderable: false, problems: ["price_not_valid"] });
     expect(by["900009"]).toMatchObject({ orderable: false, problems: ["not_deliverable"] });
     expect(by["900016"]).toMatchObject({ orderable: false, problems: ["cutoff_passed"], offer: { cutoffPassed: true } });
     expect(by["900023"]).toMatchObject({ orderable: false, problems: ["stock_unknown", "cutoff_passed"], offer: { deliveryDate: "2026-11-16", cutoffPassed: true, stockKnown: false } });
-    expect(by["900023"].message).toMatch(/cannot be ordered for 2026-11-16 any more/);
+    expect(by["900023"].message).toMatch(/for delivery 2026-11-16 has passed: it cannot be ordered for 2026-11-16 any more/);
     expect(by["900011"]).toMatchObject({ orderable: true, problems: ["stock_unknown"], offer: { stockKnown: false, logisticModel: "Stock" } });
-    expect(by["900011"].message).toMatch(/9999999999 is a placeholder/);
+    expect(by["900011"].message).toMatch(/stock isn't reported for this one; the wholesaler takes the order/);
     expect(by["123456"]).toMatchObject({ orderable: false, problems: ["unknown_product"] });
     for (const s of statuses) expect(s.message.length).toBeGreaterThan(5);
     // The unknown id was never sent to the partner.

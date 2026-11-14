@@ -38,8 +38,12 @@ export type ValioAvailability = {
   closingTime?: string;
   salesBlock: boolean;
   logisticModel?: string;
-  /** The single schedule line, or undefined when there is none (cannot be delivered on any date). */
+  /** The first schedule line (the earliest date), or undefined when there is none: not available. */
   line?: { availableAmount: number; availableDate: string; salesUnit?: string; salesBlock: boolean };
+  /** Every schedule line, earliest date first (the documented answer has at most one; more are read, not dropped). */
+  lines?: { availableAmount: number; availableDate: string; salesUnit?: string; salesBlock: boolean }[];
+  /** True when the answer had rows but none with an amount: "empty" means not available, like no rows at all. */
+  emptyAmount?: boolean;
 };
 
 export type ValioLiveResult = {
@@ -300,16 +304,20 @@ export class ValioLiveClient {
       const it = item.data;
       const id = it.productId !== undefined ? String(it.productId) : ids[i];
       if (!id || !ids.includes(id)) return;
-      const lines = (it.scheduleLines ?? []).map((l) => ScheduleLine.safeParse(l)).filter((r) => r.success).map((r) => r.data);
-      const first = lines[0];
+      const rows = it.scheduleLines ?? [];
+      const lines = rows
+        .map((l) => ScheduleLine.safeParse(l))
+        .filter((r) => r.success)
+        .map((r) => ({ availableAmount: r.data.availableAmount, availableDate: r.data.availableDate.slice(0, 10), salesUnit: r.data.salesUnit, salesBlock: r.data.salesBlock === true }))
+        .sort((a, b) => a.availableDate.localeCompare(b.availableDate));
       out.set(id, {
         timeNow: parsed.data.timeNow,
         closingTime: it.closingTime,
         salesBlock: it.salesBlock === true,
         logisticModel: it.logisticModel,
-        line: first
-          ? { availableAmount: first.availableAmount, availableDate: first.availableDate.slice(0, 10), salesUnit: first.salesUnit, salesBlock: first.salesBlock === true }
-          : undefined,
+        line: lines[0],
+        ...(lines.length > 1 ? { lines } : {}),
+        ...(rows.length > 0 && lines.length === 0 ? { emptyAmount: true } : {}),
       });
     });
     return out;
