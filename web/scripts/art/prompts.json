@@ -272,6 +272,206 @@
       "kind": "department",
       "accent": "cloth",
       "subject": "Office and packaging supplies: a stack of plain unprinted kraft-brown cardboard boxes, a roll of plain brown packing tape, a ream of plain white paper, and a coil of plain twine."
+    },
+    "tile-milk-1l-red": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "Exactly one a plain white 1 litre gable-top carton whose top third (the gable and a broad band below it) is solid deep signal red (around #D52B1E), with a matching deep signal red (around #D52B1E) screw cap; the rest of the carton is blank white, with no print of any kind, standing upright alone in the centre."
+    },
+    "tile-milk-case-red": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "A low plain brown cardboard tray, shrink-wrapped in clear film, holding six identical cartons in two rows of three; each is a plain white 1 litre gable-top carton whose top third (the gable and a broad band below it) is solid deep signal red (around #D52B1E), with a matching deep signal red (around #D52B1E) screw cap; the rest of the carton is blank white, with no print of any kind. Seen from a three-quarter angle so the coloured tops read as a row."
+    },
+    "tile-milk-bib-red": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "A plain kraft-brown corrugated 10 litre bag-in-box carton standing upright, with a small white plastic dispensing tap near the bottom of the front face, and one solid deep signal red (around #D52B1E) horizontal stripe across the top edge of the front face; no print, no label, no text."
+    },
+    "tile-milk-1l-blue": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "Exactly one a plain white 1 litre gable-top carton whose top third (the gable and a broad band below it) is solid medium blue (around #1F5FBF), with a matching medium blue (around #1F5FBF) screw cap; the rest of the carton is blank white, with no print of any kind, standing upright alone in the centre."
+    },
+    "tile-milk-case-blue": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "A low plain brown cardboard tray, shrink-wrapped in clear film, holding six identical cartons in two rows of three; each is a plain white 1 litre gable-top carton whose top third (the gable and a broad band below it) is solid medium blue (around #1F5FBF), with a matching medium blue (around #1F5FBF) screw cap; the rest of the carton is blank white, with no print of any kind. Seen from a three-quarter angle so the coloured tops read as a row."
+    },
+    "tile-milk-bib-blue": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "A plain kraft-brown corrugated 10 litre bag-in-box carton standing upright, with a small white plastic dispensing tap near the bottom of the front face, and one solid medium blue (around #1F5FBF) horizontal stripe across the top edge of the front face; no print, no label, no text."
+    },
+    "tile-milk-1l-light": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "Exactly one a plain white 1 litre gable-top carton whose top third (the gable and a broad band below it) is solid light sky blue (around #8EC5EA), with a matching light sky blue (around #8EC5EA) screw cap; the rest of the carton is blank white, with no print of any kind, standing upright alone in the centre."
+    },
+    "tile-milk-case-light": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "A low plain brown cardboard tray, shrink-wrapped in clear film, holding six identical cartons in two rows of three; each is a plain white 1 litre gable-top carton whose top third (the gable and a broad band below it) is solid light sky blue (around #8EC5EA), with a matching light sky blue (around #8EC5EA) screw cap; the rest of the carton is blank white, with no print of any kind. Seen from a three-quarter angle so the coloured tops read as a row."
+    },
+    "tile-milk-bib-light": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "A plain kraft-brown corrugated 10 litre bag-in-box carton standing upright, with a small white plastic dispensing tap near the bottom of the front face, and one solid light sky blue (around #8EC5EA) horizontal stripe across the top edge of the front face; no print, no label, no text."
+    },
+    "tile-milk-fermented": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "Exactly one plain blank white 1 litre gable-top carton with no colour band, beside a short clear glass filled with thick, slightly bubbly cultured buttermilk."
+    },
+    "tile-coffee-dairy": {
+      "kind": "tile",
+      "accent": "mint",
+      "subject": "One small plain blank white 2 dl gable-top carton with a pale caramel-brown upper band and no print, beside a white cup of coffee with milk on a saucer."
+    },
+    "tile-plant-drink": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "Exactly one plain 1 litre carton in a warm oat-beige colour with no print, beside a small bowl of rolled oats."
+    },
+    "tile-cream-whipping": {
+      "kind": "tile",
+      "accent": "mint",
+      "subject": "Exactly one plain white 1 litre gable-top carton with a pale butter-yellow upper band and no print, beside a steel bowl of softly whipped cream in glossy peaks with a whisk resting in it."
+    },
+    "tile-cream-cooking": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "Exactly one plain white 1 litre gable-top carton with a pale butter-yellow upper band and no print, beside a small steel sauté pan with a creamy pale sauce gently simmering."
+    },
+    "tile-cream-small": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "A low plain cardboard tray holding ten small plain white 2 dl cartons, each with a pale butter-yellow top and no print, standing in two neat rows."
+    },
+    "tile-yoghurt-bucket": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "One large plain white 5 kilogram plastic bucket with a lid and a thin metal carry handle, blank surfaces with no print, beside a small bowl of thick natural yoghurt."
+    },
+    "tile-yoghurt-cups": {
+      "kind": "tile",
+      "accent": "mint",
+      "subject": "A neat row of six small plain white single-serve yoghurt cups with plain white foil lids and no print, one cup open showing smooth yoghurt with a few berries."
+    },
+    "tile-cheese-sliced": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "A neat fanned stack of thin square slices of mild yellow cheese, interleaved with plain white paper sheets, on a pale wooden board."
+    },
+    "tile-cheese-grated": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "A generous heap of grated yellow cheese in a plain steel bowl, with a plain clear food-service bag of grated cheese behind it, no print on the bag."
+    },
+    "tile-cheese-feta": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "White cubes of brined feta-style cheese in a plain clear tub with a little brine, a few cubes on a small plate beside it."
+    },
+    "tile-cheese-soft": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "One plain white tub of soft fresh cream cheese with the lid off, a smooth swirl on top made with a small spatula lying beside it."
+    },
+    "tile-cheese-specialty": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "A wedge of white-rind soft cheese and a wedge of blue-veined cheese on a pale wooden board, cut faces towards the camera."
+    },
+    "tile-spread-tub": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "One plain white 1 kilogram tub of margarine spread with the lid off, the smooth pale-yellow surface marked by a single knife swirl, a butter knife beside it."
+    },
+    "tile-frozen-cake": {
+      "kind": "tile",
+      "accent": "mint",
+      "subject": "A whole round layered berry cream cake on a plain white cake board, Lightly frosted: fine white frost crystals on the surfaces, the cold look of a freezer, still appetising."
+    },
+    "tile-frozen-buns": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "Rows of raw, unbaked bread rolls and buns on a plain steel baking tray, Lightly frosted: fine white frost crystals on the surfaces, the cold look of a freezer, still appetising."
+    },
+    "tile-frozen-meatballs": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "A plain steel gastronorm tray heaped with small round cooked meatballs, Lightly frosted: fine white frost crystals on the surfaces, the cold look of a freezer, still appetising."
+    },
+    "tile-frozen-chicken": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "Raw chicken breast fillets laid in a plain steel tray, Lightly frosted: fine white frost crystals on the surfaces, the cold look of a freezer, still appetising."
+    },
+    "tile-frozen-fish": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "Skinless white fish fillets laid in neat rows on a plain steel tray, Lightly frosted: fine white frost crystals on the surfaces, the cold look of a freezer, still appetising."
+    },
+    "tile-frozen-fries": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "A heap of pale raw-frozen straight-cut french fries spilling from a plain clear bag with no print, Lightly frosted: fine white frost crystals on the surfaces, the cold look of a freezer, still appetising."
+    },
+    "tile-frozen-shrimp": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "A plain steel bowl of cooked peeled pink shrimp, Lightly frosted: fine white frost crystals on the surfaces, the cold look of a freezer, still appetising."
+    },
+    "tile-drink-cans": {
+      "kind": "tile",
+      "accent": "mint",
+      "subject": "Three plain brushed-aluminium drink cans standing together, completely blank metal with no print, no colour and no label, beads of condensation on them."
+    },
+    "tile-napkins": {
+      "kind": "tile",
+      "accent": "cloth",
+      "subject": "A tall neat stack of plain white folded paper napkins beside a smaller stack of plain kraft-brown napkins."
+    },
+    "tile-cutlery": {
+      "kind": "tile",
+      "accent": "cloth",
+      "subject": "Plain disposable wooden forks, knives and spoons fanned out neatly beside a plain kraft paper cutlery pouch with no print."
+    },
+    "tile-detergent": {
+      "kind": "tile",
+      "accent": "cloth",
+      "subject": "One plain blank white 5 litre plastic canister with a handle and a white screw cap, no label and no print, beside a plain steel dish rack."
+    },
+    "tile-brushes": {
+      "kind": "tile",
+      "accent": "cloth",
+      "subject": "A plain wooden-handled scrubbing brush, a plain grey dish brush and a folded grey microfibre cloth laid neatly together."
+    },
+    "tile-sauce-bottle": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "One plain blank white plastic squeeze bottle with a white cap and no label, beside a small white ramekin of a glossy dark sauce."
+    },
+    "tile-bouillon": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "One plain blank white plastic tub with the lid off showing a dark brown bouillon paste, a small steel spoon beside it, a cup of clear golden broth behind."
+    },
+    "tile-sugar": {
+      "kind": "tile",
+      "accent": "mint",
+      "subject": "A plain kraft paper 2 kilogram sugar bag with no print, folded open at the top, beside a small steel bowl of white granulated sugar and a few sugar cubes."
+    },
+    "tile-cheese-wheel": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "One whole round wheel of semi-hard yellow cheese with a smooth natural rind, about 4 kilograms, standing on a pale wooden board with one wedge cut out and lying in front of it. No wax print, no label, no stamp."
+    },
+    "tile-cheese-pieces": {
+      "kind": "tile",
+      "accent": "dill",
+      "subject": "A low plain cardboard tray holding a neat row of eight small rectangular pieces of yellow cheese, each about 350 grams, each sealed in plain clear film with no label or print."
     }
   }
 }

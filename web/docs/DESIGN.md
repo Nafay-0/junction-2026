@@ -181,20 +181,33 @@ on the main surface; put them behind "Show details".
 
 **The pictures are generated, not photographs of the products.** The partner's data has no product photographs, so a
 small set of original images was made with OpenAI's image model (`gpt-image-2.6-flare`, medium quality, November
-2026; 55 generations, $2.15 in all, logged in `scripts/art/spend.json`):
+2026; 95 generations, $3.98 in all, logged in `scripts/art/spend.json`):
 
 - `hero` (the kitchen picker) and `home` (the Home hero): 1536 x 864.
-- One header per catalogue department, `dept-<id>` (17; Household 30 and 32 share one): 1536 x 864, subject weighted
-  right so the department's name sits on the quiet left.
-- 31 tiles by kind of product, `tile-<kind>` (milk carton, cream carton, bag-in-box, yoghurt tub, cheese block,
-  butter, flour sack, grain and pasta, berry tray, vegetables, frozen vegetables, bread, pastry, meat, poultry, fish,
-  cold cuts, ready meal, sauce and stock, spices, oil, canned, chocolate, sweets, ice cream, coffee and tea, drinks,
-  eggs, disposables, cleaning, cookware): 1024 x 1024.
+- One header per catalogue department, `dept-<id>` (17; Household 30 and 32 share one): 1536 x 864. Shown in its own
+  cell beside the department's name and figures (a band above them on phones), never behind text: words always have
+  a solid ground.
+- 71 tiles by kind and variant of product, `tile-<kind>` (see "Variety" below): 1024 x 1024.
 
 **One art direction for all of them** (`scripts/art/prompts.json`, the shared `style` and `negative` clauses):
 calm still life on a deep petrol ground and backdrop, soft daylight from the upper left, one accent only (a sprig of
 dill; mint for sweet things; a small lime-green cloth for non-food), plain unprinted packaging, no text, no logos, no
 labels, no people. No real brand's packaging appears; every image was checked by eye for text and marks.
+
+**Variety that carries information.** A department page must not be a wall of identical pictures: the tile's picture
+differs where the products differ, driven by the product data (`artFor` in `_ui/art.tsx`), 71 tile pictures in all.
+
+- Milk: Finland's national colour convention (not a brand's) as the carton's top and cap, from the fat attribute:
+  red for whole (2.8 % and up), blue for semi-skimmed and 1 to 2.5 %, light blue for skimmed. And the pack format
+  from the sales unit: one carton, a shrink-wrapped case of cartons, or a 10 L+ bag-in-box (the same colour as a
+  stripe). Buttermilk, coffee milk and plant drinks have their own pictures.
+- Cream by use and pack: whipping (whipped peaks), cooking (a pan of sauce), coffee cream (a cup), a case of small
+  2 dl cartons, a bag-in-box. Yoghurt and quark by size: single cups, a tub, a 5 kg bucket.
+- Cheese by form: block, whole wheel (pieces of 2.5 kg and up), a case of small pieces, slices, grated, feta cubes,
+  soft cheese, white-rind and blue. Spreads in a tub, butter in paper.
+- Frozen by kind, each frosted: cakes, raw buns and dough, meatballs and patties, chicken, fish fillets, shrimp,
+  fries, vegetables, berries, ice cream. Drinks in cans or bottles; sauces in squeeze bottles, bouillon in tubs;
+  cleaning by job (spray, dishwasher detergent, brushes and cloths), disposables (napkins, cutlery, trays and cups).
 
 **Never implies it is the product.** A tile's picture is chosen by the kind of product (the partner's category code,
 `scripts/art/map-categories.ts` writes `src/app/_ui/art-map.json`; 16 625 of 17 546 products have one, a 10 L+ liquid
@@ -207,7 +220,7 @@ department's tiles) and any picture that fails to load show the drawn pack (`Dra
 glyphs in `_ui/glyphs.tsx`). Departments without a header keep the glyph watermark.
 
 **Delivery.** `scripts/art/compress.ts` writes AVIF and WebP at fixed widths into `public/art/` (tiles 240/480/720,
-headers and heroes 768/1152/1536; a 480 px tile is under 35 kB, a 1536 px header under 140 kB, 6.9 MB in all) and
+headers and heroes 768/1152/1536; a 480 px tile is under 35 kB, a 1536 px header under 140 kB, about 10 MB in all) and
 `src/app/_ui/art-manifest.json` (widths, aspect, average colour). `<Art>` in `_ui/art.tsx` renders a `<picture>` with
 `srcset`/`sizes`, the box sized by aspect so nothing shifts, the average colour as placeholder, `loading="lazy"`
 except the heroes and department headers (`priority`), and the fallback on error.
