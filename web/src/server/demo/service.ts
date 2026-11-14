@@ -92,7 +92,7 @@ async function recurring(rt: Runtime, orgId: string) {
 }
 
 /** A product with a poor delivery record the kitchen may buy: from its own history first, else master data in its groups. */
-export async function poorRecordProduct(rt: Runtime, a: Account): Promise<{ product: Product; words: string; packs: number } | undefined> {
+export async function poorRecordProduct(rt: Runtime, a: Account): Promise<{ product: Product; name: string; words: string; packs: number; amount: number; unit: string } | undefined> {
   const k = a.kitchen!;
   const { forbiddenBy } = await import("@/core/offers");
   const { warnLevel } = await import("../reliability/service");
@@ -101,21 +101,24 @@ export async function poorRecordProduct(rt: Runtime, a: Account): Promise<{ prod
   const own = [...new Set((profile?.history ?? []).flatMap((h) => h.lines.map((l) => l.productId)))].slice(0, 100);
   const mine = own.length ? await rt.catalog.searchProducts({ ids: own, limit: 100 }) : [];
   const ok = (p: Product) => !!deliveryRecordOf(p, warn)?.poor && !forbiddenBy(p, { mandate: k.mandate, profile }, new Date());
-  let p = mine.filter(ok).sort((x, y) => x.id.localeCompare(y.id))[0];
+  // A name a person would type: an English name in plain case, and none whose words read as a claim ("hand made").
+  const plain = (p: Product) => (p.names?.en ? 2 : 0) + (p.name === p.name.toUpperCase() ? 0 : 1) + (/hand ?made|käsin|artisan/i.test(p.names?.en ?? p.name) ? -3 : 0);
+  const best = (ps: Product[]) => ps.sort((x, y) => plain(y) - plain(x) || y.deliveryReliability - x.deliveryReliability || x.id.localeCompare(y.id))[0];
+  let p = best(mine.filter(ok));
   if (!p) {
     for (const family of k.mandate.allowedCategories.slice(0, 60)) {
       const found = (await rt.catalog.searchProducts({ category: family, limit: 100 }).catch(() => [] as Product[])).filter(ok);
-      if (found.length) {
-        p = found.sort((x, y) => y.deliveryReliability - x.deliveryReliability || x.id.localeCompare(y.id))[0];
-        break;
-      }
+      if (found.length && (p = best(found))) break;
     }
   }
   if (!p) return undefined;
-  return { product: p, words: deliveryRecordOf(p, warn)!.words, packs: Math.max(2, Math.min(10, Math.round(6 / Math.max(1, p.packSize)) || 2)) };
+  const usual = (profile?.history ?? []).filter((h) => h.lines.some((l) => l.productId === p!.id)).at(-1);
+  const packs = usual?.lines.find((l) => l.productId === p!.id)?.packs ?? Math.max(2, Math.min(10, Math.round(6 / Math.max(1, p.packSize)) || 2));
+  const name = p.names?.en ?? p.name;
+  return { product: p, name, words: deliveryRecordOf(p, warn)!.words, packs, amount: Math.round(packs * p.packSize * 100) / 100, unit: p.unit };
 }
 
-export type Staged = { kind: StageKind; summary: string; productId?: string; productName?: string; family?: string; until?: string; offerId?: string; words?: string; packs?: number; day?: string };
+export type Staged = { kind: StageKind; summary: string; productId?: string; productName?: string; family?: string; until?: string; offerId?: string; words?: string; packs?: number; amount?: number; unit?: string; day?: string };
 
 /** The next delivery day of the kitchen from tomorrow (for the words a judge types). */
 function nextDay(weekdays: number[], now: Date): string {
@@ -168,7 +171,7 @@ export async function stageForAccount(rt: Runtime, a: Account, kind: StageKind, 
     if (!found) throw new DockError(409, "no_poor_record", "No product this kitchen may buy has a poor delivery record in the wholesaler's file.", "account");
     const day = nextDay(await weekdaysOf(rt, k.orgId), now);
     ledger(rt, a, `STAGED for the demo by ${by(a)}: ${found.product.name} (${found.product.id}), which ${found.words} (the wholesaler's delivery file, unchanged), was picked for ${a.restaurant} to put on an order.`, { step: "staged", kind, staged: true, productId: found.product.id }, "watch");
-    out = { kind, summary: `${found.product.name} ${found.words}. Order it and the agent offers a backup.`, productId: found.product.id, productName: found.product.name, family: found.product.category, packs: found.packs, day };
+    out = { kind, summary: `${found.name} ${found.words}. Order it and the agent offers a backup.`, productId: found.product.id, productName: found.name, family: found.product.category, packs: found.packs, amount: found.amount, unit: found.unit, day };
   }
   await rt.accounts.store.put({ ...a, demo: { ...demo, staged: [...recent, { at: now.toISOString(), kind }].slice(-100) } });
   return out;
@@ -252,7 +255,7 @@ export type GuideFacts = {
   usual?: { amount: number; unit: string; name: string; family: string; tenTimes: number };
   weekly?: { family: string; name: string };
   creeping?: { family: string; name: string };
-  poor?: { name: string; words: string; packs: number };
+  poor?: { name: string; words: string; packs: number; amount: number; unit: string };
   day: string;
   sample: boolean;
   start?: "sample" | "empty";
@@ -300,7 +303,7 @@ export async function guideFor(rt: Runtime, a: Account, now = new Date()): Promi
     ...(milkish && usualSlot ? { usual: { amount: usualSlot.usualAmount, unit: milkish.unit, name: milkish.product.name, family: milkish.family, tenTimes: Math.round(usualSlot.usualAmount * 10) } } : {}),
     ...(milkish ? { weekly: { family: milkish.family, name: milkish.product.name } } : {}),
     ...(creepingP ? { creeping: { family: creepingP.family, name: creepingP.product.name } } : {}),
-    ...(poor ? { poor: { name: poor.product.name, words: poor.words, packs: poor.packs } } : {}),
+    ...(poor ? { poor: { name: poor.name, words: poor.words, packs: poor.packs, amount: poor.amount, unit: poor.unit } } : {}),
     day,
     sample: history.some((h) => h.sample || h.orderId.startsWith(SAMPLE_PREFIX)),
     ...(a.demo?.start ? { start: a.demo.start } : {}),
@@ -326,8 +329,15 @@ export async function guideFor(rt: Runtime, a: Account, now = new Date()): Promi
     { id: "mistake", ...at(has(es, (e, d) => (e.type === "agent" && d.event === "anomaly" && /quantity_|amount_above_usual|amount_below_usual/.test(JSON.stringify(d.codes ?? ""))) || (e.type === "intake" && /quantity_tenfold|quantity_unusual|amount_above_usual/.test(text(e))))), ...(milkish ? {} : { needs: "history" as const }) },
     { id: "refusal", ...at(has(es, (e, d) => e.type === "refusal" || (e.type === "decision" && /refus/i.test(String(d.outcome ?? d.decision ?? ""))) || (e.type === "agent" && ["pressured", "rules_refused", "dish_refused", "grounding_refusal"].includes(String(d.event))))) },
     { id: "widen", ...at(has(es, (e, d) => e.type === "agent" && d.event === "rules_signed" && (!!d.signOff || d.mechanism === "account_terms"))) },
-    { id: "learn", ...at(has(es, (e) => /standing rule/i.test(e.summary) && /confirm|kept|yes/i.test(e.summary))) },
-    { id: "menu", ...at(has(es, (e, d) => e.type === "agent" && ["menu_proposals", "menu_choose", "menu_to_sheet", "scenario_said", "menu_changed", "menu_edit"].includes(String(d.event)))) },
+    {
+      id: "learn",
+      ...(() => {
+        // A rule the agent proposed from what the kitchen ordered (memory/decide.ts proposeRule), confirmed by its person.
+        const m = (profile?.memory?.items ?? []).find((x) => x.strength === "rule" && x.status === "active" && x.confirmedBy && x.history.some((h) => h.change.startsWith("proposed as a standing rule")));
+        return m ? { done: true, at: m.confirmedBy!.at } : { done: false };
+      })(),
+    },
+    { id: "menu", ...at(has(es, (e, d) => e.type === "agent" && /^(menu_|dish_|scenario_)/.test(String(d.event)) && d.event !== "dish_refused" && d.event !== "dish_question")) },
     {
       id: "stockout",
       ...(() => {
@@ -342,7 +352,9 @@ export async function guideFor(rt: Runtime, a: Account, now = new Date()): Promi
       id: "drift",
       ...(() => {
         const r = w?.renewals.find((x) => x.state === "held" || x.state === "answered" || x.state === "skipped");
-        return r ? { done: true, at: r.at } : { done: false };
+        if (r) return { done: true, at: r.at };
+        // Or the agent told the kitchen about the drift, or auto-renew was switched on for a recurring order.
+        return at(has(es, (e, d) => (e.type === "agent" && ((d.event === "today" && JSON.stringify(d.items ?? "").includes("drift")) || (d.event === "watch_said" && d.kind === "renewal_held"))) || (e.type === "watch" && d.step === "auto_renew" && d.on === true)));
       })(),
       staged: stagedAny("drift"),
       setup: { action: "drift", ready: demo && fourOnADay, ...(!demo ? { why: "not_demo" as const } : fourOnADay ? {} : { why: "no_recurring" as const }) },

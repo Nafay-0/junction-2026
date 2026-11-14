@@ -235,7 +235,7 @@ async function main() {
   });
   await row("learn", async () => {
     const said: string[] = [];
-    for (let i = 0; i < 3; i++) said.push(...(await follow(await say(`Order 20 litres of lactose-free milk for ${day}.`))));
+    for (let i = 0; i < 3; i++) said.push(...(await follow(await say(`Order 5 litres of lactose-free cream for ${day}.`))));
     const t = await thread();
     const q = (t?.turns ?? []).flatMap((x) => (x.role === "agent" ? x.cards : [])).filter((c) => c.type === "memory").flatMap((c) => (c.type === "memory" ? c.proposals.map((p) => p.question) : []));
     said.push(...q);
@@ -261,8 +261,10 @@ async function main() {
   await row("drift", async () => {
     const s = await stage("drift");
     if (!s.ok) return { said: [s.body.error?.message ?? "staging failed"], partly: "could not stage" };
+    const look = await say("How are my weekly orders looking?");
     const r = await say(`Turn on auto-renew for the ${facts.creeping?.name ?? facts.weekly?.name ?? "milk"}.`);
-    const said = [s.body.staged!.summary, ...r.lines];
+    const said = [s.body.staged!.summary, ...look.lines, ...r.lines];
+    await signHere();
     if (asks(r)) said.push(...(await say("Renew it at the usual amount.")).lines);
     return { said };
   });
@@ -277,7 +279,8 @@ async function main() {
   await row("backup", async () => {
     const s = await stage("poor_record");
     if (!s.ok) return { said: [s.body.error?.message ?? "staging failed"], partly: "no poor-record product" };
-    const r = await say(`Order ${s.body.staged!.packs ?? 4} packs of ${s.body.staged!.productName} for ${day}.`);
+    const st = s.body.staged as { packs?: number; amount?: number; unit?: string; productName?: string };
+    const r = await say(`Order ${st.unit && st.unit !== "pcs" && st.amount ? `${st.amount} ${st.unit === "L" ? "litres" : st.unit}` : `${st.packs ?? 4} packs`} of ${st.productName} for ${day}.`);
     const said = [s.body.staged!.summary, ...(await follow(r))];
     said.push(...(await say("Yes, line it up.")).lines);
     return { said };
@@ -286,8 +289,8 @@ async function main() {
     await page.goto(`${base}/k/${username}/agent#mail`);
     const field = page.locator("#mail input[type=email]").first();
     await field.waitFor({ timeout: 15_000 });
-    await field.fill(`judge+${Date.now().toString(36)}@example.com`);
-    await page.locator("#mail").getByRole("button").filter({ hasText: /(Save|Send|Add|Confirm)/ }).first().click();
+    await field.fill("delivered@resend.dev");
+    await page.locator('#mail button[type="submit"]').first().click({ timeout: 10_000 });
     await page.waitForTimeout(2500);
     return { said: [((await page.locator("#mail").textContent()) ?? "").replace(/\s+/g, " ").slice(0, 400)] };
   });
