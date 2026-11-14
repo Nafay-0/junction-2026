@@ -2,12 +2,18 @@
 
 import * as React from "react";
 import type { ButlerMessage } from "@/lib/agent/tools";
+import { api } from "@/lib/auth/fetch";
+import { clientKind, type ClientKind } from "@/lib/client-kind";
 
 /**
- * Saved conversations. They live in the browser's IndexedDB: nothing is stored on a server,
- * so there is no account and no database to run. Two stores keep the sidebar fast: `meta`
- * holds one small record per conversation, `messages` holds the full message list (which can
- * be large: research reports, attached images).
+ * Saved conversations. They live in the account, on the server (Postgres, through
+ * /api/conversations), so they are there on every device the user signs in on. This file is the
+ * interface's side of that: a list that stays fresh in memory, and writes that go out one at a
+ * time. Nothing about a conversation is kept in the browser any more.
+ *
+ * A conversation belongs to the kind of client it was started in (`origin`): the web, or the
+ * desktop app. From the other kind it can be read, renamed and deleted, but not added to, and the
+ * server refuses a save (409).
  */
 
 export type ConversationMeta = {
@@ -17,76 +23,74 @@ export type ConversationMeta = {
   updatedAt: number;
   /** The model used for the latest answer, for display. */
   modelLabel?: string;
+  /** Where the conversation was started. It never changes. */
+  origin: ClientKind;
 };
 
-const DB_NAME = "hovi";
-const DB_VERSION = 1;
-const META = "meta";
-const MESSAGES = "messages";
 const EMPTY: ConversationMeta[] = [];
-
-let dbPromise: Promise<IDBDatabase> | null = null;
-
-function openDb(): Promise<IDBDatabase> {
-  if (!dbPromise) {
-    dbPromise = new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, DB_VERSION);
-      request.onupgradeneeded = () => {
-        const db = request.result;
-        if (!db.objectStoreNames.contains(META)) db.createObjectStore(META, { keyPath: "id" });
-        if (!db.objectStoreNames.contains(MESSAGES)) db.createObjectStore(MESSAGES);
-      };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-    // If opening fails (private mode, storage blocked), allow a later retry.
-    dbPromise.catch(() => {
-      dbPromise = null;
-    });
-  }
-  return dbPromise;
-}
-
-function done(tx: IDBTransaction): Promise<void> {
-  return new Promise((resolve, reject) => {
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error);
-  });
-}
-
-function get<T>(store: IDBObjectStore, key?: IDBValidKey): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const request = key === undefined ? store.getAll() : store.get(key);
-    request.onsuccess = () => resolve(request.result as T);
-    request.onerror = () => reject(request.error);
-  });
-}
+const path = (id: string) => `/api/conversations/${encodeURIComponent(id)}`;
 
 /* ───────── A tiny external store so React components re-render when the list changes ───────── */
 
 let snapshot: ConversationMeta[] = EMPTY;
 let loaded = false;
+let loading: Promise<void> | null = null;
+let refreshedAt = 0;
+let watching = false;
 const listeners = new Set<() => void>();
+/** Conversations deleted here while a save was still on its way: that save must not bring them back. */
+const deleted = new Set<string>();
+/** Names given here that the server does not have yet (the conversation had not been saved when it was renamed). */
+const renamed = new Map<string, string>();
 
 function publish(next: ConversationMeta[]) {
   snapshot = [...next].sort((a, b) => b.updatedAt - a.updatedAt);
-  loaded = true;
   listeners.forEach((l) => l());
 }
 
-async function refresh() {
-  try {
-    const db = await openDb();
-    publish(await get<ConversationMeta[]>(db.transaction(META).objectStore(META)));
-  } catch {
-    publish([]);
-  }
+/** Fetch the list from the server. What is being saved here right now is kept on top of it. */
+function refresh(): Promise<void> {
+  loading ??= (async () => {
+    try {
+      const response = await api("/api/conversations");
+      if (!response.ok) return;
+      const { conversations } = (await response.json()) as { conversations: ConversationMeta[] };
+      const merged = new Map(conversations.filter((c) => !deleted.has(c.id)).map((c) => [c.id, c]));
+      const now = Date.now();
+      for (const local of snapshot) {
+        const remote = merged.get(local.id);
+        if (remote) {
+          // Newer here: a save is on its way. A name the server has not heard of yet stays too.
+          merged.set(local.id, { ...remote, updatedAt: Math.max(remote.updatedAt, local.updatedAt), title: renamed.get(local.id) ?? remote.title });
+        } else if (sending.has(local.id) || waiting.has(local.id) || now - local.updatedAt < 120_000) {
+          // Not on the server yet: it was just started here. (One the server no longer has was deleted elsewhere.)
+          merged.set(local.id, local);
+        }
+      }
+      loaded = true;
+      refreshedAt = now;
+      publish([...merged.values()]);
+    } catch {
+      /* offline: the list stays as it is, and the next look tries again */
+    } finally {
+      loading = null;
+    }
+  })();
+  return loading;
 }
 
 function subscribe(onChange: () => void) {
   listeners.add(onChange);
   if (!loaded) void refresh();
+  // The same account may be at work on another device: look again when this window is returned to.
+  if (!watching && typeof window !== "undefined") {
+    watching = true;
+    const look = () => {
+      if (document.visibilityState === "visible" && loaded && Date.now() - refreshedAt > 30_000) void refresh();
+    };
+    window.addEventListener("focus", look);
+    document.addEventListener("visibilitychange", look);
+  }
   return () => {
     listeners.delete(onChange);
   };
@@ -101,79 +105,139 @@ export function useConversations(): ConversationMeta[] {
   );
 }
 
-/* ───────── Reads and writes ───────── */
+/* ───────── Reads ───────── */
 
-export async function loadMessages(id: string): Promise<ButlerMessage[] | null> {
+/** A conversation with its messages, or null when this account has no such conversation. */
+export async function loadConversation(id: string): Promise<{ meta: ConversationMeta; messages: ButlerMessage[] } | null> {
   try {
-    const db = await openDb();
-    const messages = await get<ButlerMessage[] | undefined>(db.transaction(MESSAGES).objectStore(MESSAGES), id);
-    return messages ? settle(messages) : null;
+    const response = await api(path(id));
+    if (!response.ok) return null;
+    const { meta, messages } = (await response.json()) as { meta: ConversationMeta; messages: ButlerMessage[] };
+    return { meta, messages: settle(messages) };
   } catch {
     return null;
   }
 }
 
-export async function saveConversation(meta: ConversationMeta, messages: ButlerMessage[]): Promise<void> {
+export async function loadMessages(id: string): Promise<ButlerMessage[] | null> {
+  return (await loadConversation(id))?.messages ?? null;
+}
+
+/* ───────── Writes ─────────
+ * The chat saves every few seconds while an answer is being written, with the whole message list
+ * each time. For one conversation only one save is on its way at a time; if more arrive while it
+ * is, only the newest waits and the ones in between are dropped. */
+
+type Write = { meta: ConversationMeta; messages: ButlerMessage[]; done: Array<() => void>; tries: number };
+const waiting = new Map<string, Write>();
+const sending = new Set<string>();
+/** Conversations the server said are read-only here: no point in sending them again. */
+const readOnly = new Set<string>();
+/** How long to wait before sending a failed save again: three more tries, then it is left to the next save. */
+const RETRY_MS = [2000, 6000, 15_000];
+const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** Send one write. True when there is nothing more to do for it (saved, or refused for good). */
+async function put(id: string, write: Write): Promise<boolean> {
+  if (deleted.has(id) || readOnly.has(id)) return true;
   try {
-    const db = await openDb();
-    const tx = db.transaction([META, MESSAGES], "readwrite");
-    tx.objectStore(META).put(meta);
-    tx.objectStore(MESSAGES).put(messages, meta.id);
-    await done(tx);
-    publish([meta, ...snapshot.filter((c) => c.id !== meta.id)]);
-  } catch (err) {
-    // Storage full or blocked: the conversation still works for this visit.
-    console.warn("[conversations] could not save", err);
+    const response = await api(path(id), { method: "PUT", json: { title: write.meta.title, modelLabel: write.meta.modelLabel, messages: write.messages } });
+    if (response.status === 409) readOnly.add(id);
+    if (response.ok) {
+      // A name given before the first save reached the server goes after it now.
+      const name = renamed.get(id);
+      if (name) {
+        renamed.delete(id);
+        void api(path(id), { method: "PATCH", json: { title: name } }).catch(() => {});
+      }
+    }
+    // Worth another try only when the server itself was in trouble; a refusal (4xx) will not change.
+    return response.status < 500;
+  } catch {
+    return false; // offline, or the server is away
   }
 }
 
-/** Save a conversation after activity, keeping its title (the user may have renamed it) and creation time. */
+async function send(id: string): Promise<void> {
+  if (sending.has(id)) return;
+  sending.add(id);
+  try {
+    for (let write = waiting.get(id); write; write = waiting.get(id)) {
+      waiting.delete(id);
+      const settled = await put(id, write);
+      if (!settled && write.tries < RETRY_MS.length) {
+        // Put it back unless something newer arrived meanwhile (which carries everything this one had).
+        const newer = waiting.get(id);
+        if (newer) newer.done.push(...write.done);
+        else waiting.set(id, { ...write, tries: write.tries + 1 });
+        await pause(RETRY_MS[write.tries]);
+        continue;
+      }
+      // A save that could not be sent is dropped quietly: the conversation still works for this visit, and the next save carries everything.
+      if (!settled) console.warn("[conversations] could not save this conversation; it will be tried again with the next change");
+      write.done.forEach((resolve) => resolve());
+    }
+  } finally {
+    sending.delete(id);
+  }
+}
+
+/** Save a conversation. Resolves when this write, or a newer one that replaced it, has been sent. Never rejects. */
+export function saveConversation(meta: ConversationMeta, messages: ButlerMessage[]): Promise<void> {
+  if (deleted.has(meta.id)) return Promise.resolve();
+  publish([meta, ...snapshot.filter((c) => c.id !== meta.id)]);
+  return new Promise((resolve) => {
+    const earlier = waiting.get(meta.id);
+    waiting.set(meta.id, { meta, messages, done: [...(earlier?.done ?? []), resolve], tries: 0 });
+    void send(meta.id);
+  });
+}
+
+/** Save a conversation after activity, keeping its title (the user may have renamed it), creation time and origin. */
 export function persistConversation(id: string, messages: ButlerMessage[], modelLabel?: string): Promise<void> {
   const existing = snapshot.find((c) => c.id === id);
   const now = Date.now();
-  return saveConversation({ id, title: existing?.title ?? titleFrom(messages), createdAt: existing?.createdAt ?? now, updatedAt: now, modelLabel }, messages);
+  return saveConversation(
+    { id, title: existing?.title ?? titleFrom(messages), createdAt: existing?.createdAt ?? now, updatedAt: now, modelLabel, origin: existing?.origin ?? clientKind() },
+    messages,
+  );
 }
 
 export async function renameConversation(id: string, title: string): Promise<void> {
   const current = snapshot.find((c) => c.id === id);
-  if (!current) return;
-  const next = { ...current, title: title.trim() || current.title };
-  // The list first: a save that lands while the database opens then keeps the new title.
-  publish(snapshot.map((c) => (c.id === id ? next : c)));
+  const next = title.trim();
+  if (!current || !next) return;
+  // The list first, so the new name shows at once.
+  publish(snapshot.map((c) => (c.id === id ? { ...c, title: next } : c)));
   try {
-    const db = await openDb();
-    const tx = db.transaction(META, "readwrite");
-    tx.objectStore(META).put(snapshot.find((c) => c.id === id) ?? next);
-    await done(tx);
+    const response = await api(path(id), { method: "PATCH", json: { title: next } });
+    // Not on the server yet (its first save is still on the way): the name follows that save.
+    if (response.status === 404) renamed.set(id, next);
   } catch {
-    /* keep the in-memory rename */
+    renamed.set(id, next);
   }
 }
 
 export async function deleteConversation(id: string): Promise<void> {
-  try {
-    const db = await openDb();
-    const tx = db.transaction([META, MESSAGES], "readwrite");
-    tx.objectStore(META).delete(id);
-    tx.objectStore(MESSAGES).delete(id);
-    await done(tx);
-  } catch {
-    /* still remove it from the list */
-  }
+  deleted.add(id);
+  waiting.delete(id);
   publish(snapshot.filter((c) => c.id !== id));
+  try {
+    await api(path(id), { method: "DELETE" });
+  } catch {
+    /* it is gone from the list; the server copy goes with the next successful delete */
+  }
 }
 
 export async function deleteAllConversations(): Promise<void> {
+  for (const c of snapshot) deleted.add(c.id);
+  waiting.clear();
+  publish([]);
   try {
-    const db = await openDb();
-    const tx = db.transaction([META, MESSAGES], "readwrite");
-    tx.objectStore(META).clear();
-    tx.objectStore(MESSAGES).clear();
-    await done(tx);
+    await api("/api/conversations", { method: "DELETE" });
   } catch {
     /* ignore */
   }
-  publish([]);
 }
 
 export function newConversationId(): string {

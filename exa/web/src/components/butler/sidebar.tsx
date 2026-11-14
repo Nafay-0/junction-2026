@@ -1,11 +1,15 @@
 "use client";
 
 import * as React from "react";
-import { MessageSquareDashed, MoreHorizontal, PanelLeftClose, Pencil, Plus, Trash2 } from "lucide-react";
+import { Globe, MessageSquareDashed, Monitor, MoreHorizontal, PanelLeftClose, Pencil, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { clientKind } from "@/lib/client-kind";
 import type { ConversationMeta } from "@/lib/conversations";
+import { readOnlyHint } from "@/lib/db/origin";
 import { useClientValue } from "@/lib/use-client";
+import { AccountMenu } from "@/components/account/account-menu";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const DAY = 86_400_000;
 
@@ -19,8 +23,11 @@ function groupOf(updatedAt: number, startOfToday: number): string {
 }
 
 /**
- * The list of saved conversations. On wide screens it is a column that slides shut; on narrow
- * screens it is a drawer over the chat. Conversations are saved in this browser only.
+ * The list of saved conversations, with the account at the bottom. On wide screens it is a column
+ * that slides shut; on narrow screens it is a drawer over the chat. Conversations are saved to the
+ * account, so the same list is there on every device. One started in the other kind of client
+ * (the desktop app, seen from the web, or the other way round) carries a small mark: it can be
+ * read here, but not continued.
  */
 export function Sidebar({
   open,
@@ -44,10 +51,11 @@ export function Sidebar({
   onDeleteAll: () => void;
 }) {
   const [editing, setEditing] = React.useState<string | null>(null);
-  const [confirmClear, setConfirmClear] = React.useState(false);
 
   // Midnight today, read in the browser (the server does not know the user's day).
   const today = useClientValue(startOfToday, 0);
+  // The web or the desktop app: only the browser knows.
+  const here = useClientValue(clientKind, "web");
   const groups = React.useMemo(() => {
     const out: Array<{ label: string; items: ConversationMeta[] }> = [];
     for (const c of conversations) {
@@ -114,7 +122,7 @@ export function Sidebar({
               <div className="flex flex-col items-center gap-2 px-4 pt-16 text-center">
                 <MessageSquareDashed className="size-6 text-subtle" />
                 <p className="text-[0.85rem] font-medium">No saved tasks yet</p>
-                <p className="text-[0.78rem] leading-snug text-muted-foreground">Everything you ask is saved here, in this browser, so you can come back to it.</p>
+                <p className="text-[0.78rem] leading-snug text-muted-foreground">Everything you ask is saved to your account, so you can come back to it on any device.</p>
               </div>
             ) : (
               groups.map((group) => (
@@ -125,6 +133,7 @@ export function Sidebar({
                       <li key={c.id}>
                         <Row
                           conversation={c}
+                          elsewhere={c.origin !== here}
                           active={c.id === activeId}
                           editing={editing === c.id}
                           onSelect={() => onSelect(c.id)}
@@ -143,31 +152,9 @@ export function Sidebar({
             )}
           </nav>
 
-          <div className="flex shrink-0 items-center justify-between gap-2 border-t border-sidebar-border px-3 py-2.5 text-[0.72rem] text-muted-foreground">
-            <span>Saved in this browser only</span>
-            {conversations.length > 0 ? (
-              confirmClear ? (
-                <span className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setConfirmClear(false);
-                      onDeleteAll();
-                    }}
-                    className="rounded-md px-1.5 py-0.5 font-medium text-destructive transition-colors hover:bg-destructive/10"
-                  >
-                    Delete all
-                  </button>
-                  <button type="button" onClick={() => setConfirmClear(false)} className="rounded-md px-1.5 py-0.5 transition-colors hover:bg-sidebar-accent">
-                    Keep
-                  </button>
-                </span>
-              ) : (
-                <button type="button" onClick={() => setConfirmClear(true)} className="rounded-md px-1.5 py-0.5 transition-colors hover:bg-sidebar-accent hover:text-foreground">
-                  Clear
-                </button>
-              )
-            ) : null}
+          {/* The account: who is signed in, the admin area for the admin, clearing the list, signing out. */}
+          <div className="safe-bottom shrink-0 border-t border-sidebar-border px-2 pt-2">
+            <AccountMenu conversationCount={conversations.length} onDeleteAll={onDeleteAll} />
           </div>
         </div>
       </aside>
@@ -177,6 +164,7 @@ export function Sidebar({
 
 function Row({
   conversation,
+  elsewhere,
   active,
   editing,
   onSelect,
@@ -185,6 +173,8 @@ function Row({
   onDelete,
 }: {
   conversation: ConversationMeta;
+  /** Started in the other kind of client: it can be read here, not continued. */
+  elsewhere: boolean;
   active: boolean;
   editing: boolean;
   onSelect: () => void;
@@ -230,6 +220,16 @@ function Row({
       <button type="button" onClick={onSelect} aria-current={active ? "page" : undefined} title={conversation.title} className="min-w-0 flex-1 truncate py-2 pr-1 pl-2.5 text-left text-[0.85rem] leading-5 outline-none focus-visible:underline">
         {conversation.title}
       </button>
+      {elsewhere ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span tabIndex={0} role="img" aria-label={readOnlyHint(conversation.origin)} className="flex size-6 shrink-0 items-center justify-center rounded-md text-subtle outline-none focus-visible:text-foreground">
+              {conversation.origin === "desktop" ? <Monitor className="size-3.5" /> : <Globe className="size-3.5" />}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="right">{readOnlyHint(conversation.origin)}</TooltipContent>
+        </Tooltip>
+      ) : null}
       <DropdownMenu
         onOpenChange={(next) => {
           if (next) setDraft(conversation.title);
