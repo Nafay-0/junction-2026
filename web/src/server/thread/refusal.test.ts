@@ -73,3 +73,13 @@ describe("insideOrTell", () => {
     expect(insideOrTell("Shall I order 12 L of the Fazer barista for Tuesday 17 Nov?")).toBe(false);
   });
 });
+
+describe("englishDays", () => {
+  it("keeps a sentence's full stop when the date's dot ended it", async () => {
+    const { englishDays } = await import("./refusal");
+    expect(englishDays("They arrive Monday 16.11.")).toBe("They arrive Monday 16 Nov.");
+    expect(englishDays("the earliest delivery is Mon 16.11. Plan it for Mon 16.11. instead?")).toBe("the earliest delivery is Mon 16 Nov. Plan it for Mon 16 Nov instead?");
+    expect(englishDays("It arrives {{Monday 16.11.}} Shall I order it?")).toBe("It arrives {{Monday 16 Nov}}. Shall I order it?");
+    expect(englishDays("on Tue 17.11., then")).toBe("on Tue 17 Nov, then");
+  });
+});

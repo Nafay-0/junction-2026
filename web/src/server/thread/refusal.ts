@@ -243,10 +243,7 @@ export function readable(text: string, lang: Lang): string {
     if (!parts.some((w) => w.length >= 5 && !KEEP.has(w))) return m;
     return parts.map((w, i) => (KEEP.has(w) || /^[A-ZÄÖÅ]{2}$/.test(w) ? w : i === 0 ? w.charAt(0) + w.slice(1).toLowerCase() : w.toLowerCase())).join("");
   });
-  if (lang === "en") {
-    const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    t = t.replace(/\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday) (\d{1,2})\.(\d{1,2})\.?/g, (m, w: string, d: string, mo: string) => (Number(mo) >= 1 && Number(mo) <= 12 ? `${w} ${Number(d)} ${MON[Number(mo) - 1]}` : m));
-  }
+  if (lang === "en") t = englishDays(t);
   return t.replace(/(\d{1,2}\.\d{1,2}\.)\./g, "$1").replace(/(\d{1,2}\.\d{1,2})\.(?=[?;:,!])/g, "$1");
 }
 
@@ -256,4 +253,20 @@ const INSIDE = /\b(the store treated|treated your message|neither result|the res
 /** A sentence that tells the buyer what to type, or says how the system works inside: never shown. */
 export function insideOrTell(sentence: string): boolean {
   return TELL.test(sentence) || INSIDE.test(sentence);
+}
+
+/**
+ * English days as people write them: "Tue 17.11." becomes "Tue 17 Nov". The date's own dot often also ends the
+ * sentence ("... arrives Monday 16.11." or "16.11. Shall I"): then the sentence keeps a full stop.
+ */
+export function englishDays(text: string): string {
+  const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return text.replace(/\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Mon|Tue|Wed|Thu|Fri|Sat|Sun)( |\u00a0)(\d{1,2})\.(\d{1,2})(\.?)/g, (m: string, w: string, sp: string, d: string, mo: string, dot: string, offset: number, all: string) => {
+    if (!(Number(mo) >= 1 && Number(mo) <= 12 && Number(d) <= 31)) return m;
+    const rest = all.slice(offset + m.length);
+    const mark = /^(\}\}|\*\*)/.exec(rest)?.[0] ?? "";
+    const after = rest.slice(mark.length);
+    const ends = dot === "." && (/^\s*$/.test(after) || /^\s+[\p{Lu}"“*{]/u.test(after));
+    return `${w}${sp}${Number(d)} ${MON[Number(mo) - 1]}${ends && !mark ? "." : ""}${ends && mark ? "" : ""}`;
+  }).replace(/(\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec))(\}\}|\*\*)(?=\s+[\p{Lu}"“*{]|\s*$)/gu, "$1$2.");
 }

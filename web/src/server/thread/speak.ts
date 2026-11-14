@@ -10,6 +10,17 @@ import type { Card, GatePreview } from "./types";
 
 const eur = (cents: number) => (cents / 100).toFixed(2);
 
+/** A catalogue name as people say it: the brand and the line, no marks, no pack size. */
+const short = (name: string) => {
+  const out: string[] = [];
+  for (const w of name.replace(/[®™©]/g, "").split(/\s+/).filter(Boolean)) {
+    if (/\d/.test(w) || /^(x|l|kg|g|ml|dl|cl)$/i.test(w) || out.length >= 4) break;
+    if (/^(hyvä|suomalainen)$/i.test(w)) continue;
+    out.push(w);
+  }
+  return out.join(" ") || name;
+};
+
 function gateWords(g: Partial<GatePreview> | undefined, totalCents?: number): Record<string, unknown> | undefined {
   if (!g?.outcome) return undefined;
   const rules = g.rules ?? [];
@@ -50,7 +61,8 @@ function cardFacts(c: Card): Record<string, unknown> | undefined {
           const usual = o.reasons.find((r) => r.code === "instead_of_usual");
           return {
             n: i + 1,
-            title: o.title,
+            title: o.lines.length > 1 ? o.lines.map((l) => short(l.name)).join(" + ") : o.title.replace(/\s*\(other product\)/gi, ""),
+            ...(o.lines.length > 1 ? { basket: "part of the amount from each product: say it as such, e.g. 'part Arla, part Valio Eila'" } : {}),
             packs: o.lines.map((l) => `${l.quantity} × ${l.packSize ?? 1} ${l.unit ?? ""}`.trim()).join(" + "),
             totalEur: eur(o.totalCents),
             delivery: o.deliveryDate,

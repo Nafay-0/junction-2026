@@ -19,7 +19,7 @@ import { earlierFor } from "./earlier";
 import { ThreadStore, type StoredThread } from "./store";
 import { runWidget } from "./widgets";
 import { speakFacts } from "./speak";
-import { codeLeaks, insideOrTell } from "./refusal";
+import { codeLeaks, englishDays, insideOrTell } from "./refusal";
 import { fixTypos } from "./pipeline";
 import { hasToday, helsinkiToday, postToday, todayCardId } from "./home";
 import { ensureTelemetry } from "./telemetry";
@@ -401,7 +401,8 @@ function plainLine(run: TurnRun, text: string): string {
   let t = text.replace(/(\d{1,2}\.\d{1,2}\.)(\}\}|\*\*)?\./g, "$1$2");
   if (lang === "en") {
     const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    t = t.replace(/\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Mon|Tue|Wed|Thu|Fri|Sat|Sun)( |\u00a0)(\d{1,2})\.(\d{1,2})\.?/g, (m, w: string, sp: string, d: string, mo: string) => (Number(mo) >= 1 && Number(mo) <= 12 && Number(d) <= 31 ? `${w}${sp}${Number(d)} ${MON[Number(mo) - 1]}` : m));
+    // The date's own dot also ended the sentence ("... Monday 16.11." or "16.11. Shall I"): the sentence keeps its full stop.
+    t = englishDays(t);
     t = t.replace(/\{\{(\d{1,2})\.(\d{1,2})\.?\}\}/g, (m, d: string, mo: string) => (Number(mo) >= 1 && Number(mo) <= 12 ? `{{${Number(d)} ${MON[Number(mo) - 1]}}}` : m));
   }
   // Catalogue jargon: a "novobox" is a 10 l box to a person.
@@ -724,7 +725,11 @@ async function resumeAfterSignOff(rt: Runtime, kitchen: string, t: StoredThread,
     try {
       const res = await runAgent(run, [...saved, response], { context: wait.context });
       t.messages = trim([...saved, response, ...res.messages]);
+      // The words said before the OK stay; what happened after it is said beneath them, never in their place.
+      const before = e.store.agentTurn(t, wait.turnId)?.line ?? "";
       if (res.text) await showLine(run, res.text);
+      const after = e.store.agentTurn(t, wait.turnId)?.line ?? "";
+      if (before && after && after !== before && !after.startsWith(before)) e.store.line(t, wait.turnId, `${before}\n${after}`);
     } catch {
       // the cards already show the outcome
     }
