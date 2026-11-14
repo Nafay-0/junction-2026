@@ -54,6 +54,12 @@ export type Account = {
    * cookie is its key; it expires after 24 hours without use unless kept (`kept`: a sign-in name and password set).
    */
   free?: { at: string; lastUsedAt: string; kept?: string };
+  /**
+   * The business email given at sign-up, kept only until the kitchen exists (accounts/email.ts); then it is the
+   * kitchen's pending notification contact in the mail module and is deleted here. Personal data: never shown but to
+   * the account itself.
+   */
+  mailPending?: { address: string; lang?: "en" | "fi" | "sv" };
   /** A sign-in name chosen when a fresh kitchen was kept (its username, the kitchen's address, stays as generated). */
   login?: string;
 };

@@ -186,8 +186,9 @@ async function Door({ lang, searchParams }: { lang: Lang; searchParams: PageProp
         </div>
         {!me && (
           <section aria-labelledby="signin" className="rounded-xl border border-line bg-paper/70 p-5 sm:p-6">
-            <h3 id="signin" className="text-[1.05rem] font-semibold">
-              {tx.signInQuiet} {tx.signInTitle}
+            <p className="text-[0.9rem] text-ink-soft">{tx.signInQuiet}</p>
+            <h3 id="signin" className="text-[1.15rem] font-semibold">
+              {tx.signInTitle}
             </h3>
             <div className="mt-4 max-w-[34rem]">
               <SignInForm prefill={prefill} />

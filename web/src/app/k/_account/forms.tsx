@@ -141,13 +141,15 @@ export function SignUpForm({ onDone }: { onDone: () => void }) {
   const [restaurant, setRestaurant] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("");
+  const { lang } = useLang();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(undefined);
-    const r = await api("POST", "/ui-api/account/signup", { restaurant, username, password });
+    const r = await api("POST", "/ui-api/account/signup", { restaurant, username, password, email, lang });
     setBusy(false);
     if (!r.ok) return setError(r.error.message);
     onDone();
@@ -155,6 +157,7 @@ export function SignUpForm({ onDone }: { onDone: () => void }) {
   return (
     <form onSubmit={(e) => void submit(e)} className="space-y-4" aria-label={tx.step1}>
       <TextField id="su-restaurant" name="restaurant" labelText={tx.restaurant} hintText={tx.restaurantHint} autoComplete="organization" value={restaurant} onChange={setRestaurant} minLength={2} maxLength={80} />
+      <TextField id="su-email" name="email" labelText={tx.email} hintText={tx.emailHint} type="email" autoComplete="email" value={email} onChange={setEmail} minLength={3} maxLength={254} />
       <TextField id="su-username" name="username" labelText={tx.username} hintText={tx.usernameHint} autoComplete="username" value={username} onChange={(v) => setUsername(v.toLowerCase())} minLength={3} maxLength={32} />
       <TextField id="su-password" name="password" labelText={tx.password} hintText={tx.passwordHint} type="password" autoComplete="new-password" value={password} onChange={setPassword} minLength={10} maxLength={200} />
       <p className="text-[0.86rem] leading-snug text-ink-soft">{tx.noEmail}</p>

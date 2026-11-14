@@ -77,6 +77,7 @@ async function signUp(page: Page, username: string, restaurant: string) {
   await page.waitForURL("**/k/signup");
   const form = page.getByRole("form", { name: "Your restaurant" });
   await form.getByLabel("Restaurant or buyer name").fill(restaurant);
+  await form.getByLabel("Business email", { exact: true }).fill("delivered@resend.dev");
   await form.getByLabel("Username", { exact: true }).fill(username);
   await form.getByLabel("Password", { exact: true }).fill(PASSWORD);
   await shot(page, "02-signup-step1");

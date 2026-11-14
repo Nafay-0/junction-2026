@@ -29,6 +29,9 @@ export function GuideLink() {
               <ListChecks aria-hidden size={16} />
               {fx.guide}
             </Link>
+            <Link href={`${base}/agent#mail`} className="inline-flex min-h-11 items-center text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol">
+              {fx.addEmail}
+            </Link>
             {!account.free.kept && (
               <Link href={`${base}/agent#fresh`} className="inline-flex min-h-11 items-center text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol">
                 {fx.keep}

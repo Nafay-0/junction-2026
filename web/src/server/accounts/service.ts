@@ -22,6 +22,7 @@ import type { MandateBook } from "../mandates";
 import { kitchenUnreadable } from "./sealed";
 import { TEST_ACCOUNTS, testAccountProducts, type TestAccountSeed } from "./test-accounts";
 import { demoAccountsOn } from "../demo/mark";
+import { businessEmail } from "./email";
 
 /**
  * Restaurant and buyer accounts. One account, one kitchen: a restaurant signs up with its name, a username and a
@@ -172,7 +173,12 @@ export class AccountService {
 
   // ---------- sign-up, sign-in, sessions ----------
 
-  async signUp(input: { restaurant?: unknown; username?: unknown; password?: unknown }, address: string): Promise<SignedIn> {
+  /**
+   * `email`: the business email for order confirmations, receipts and alerts (accounts/email.ts), required when
+   * `requireEmail` (the ordinary sign-up), optional otherwise (a fresh kitchen, a kept visitor kitchen). Checked here;
+   * kept on the account only until its kitchen exists.
+   */
+  async signUp(input: { restaurant?: unknown; username?: unknown; password?: unknown; email?: unknown; lang?: "en" | "fi" | "sv" }, address: string, opts: { requireEmail?: boolean } = {}): Promise<SignedIn> {
     const restaurant = cleanRestaurantName(input.restaurant);
     if (!restaurant) throw invalid("restaurant_invalid");
     const username = normaliseUsername(input.username);
@@ -180,6 +186,8 @@ export class AccountService {
     if (up) throw invalid(up);
     const pp = passwordProblem(input.password);
     if (pp) throw invalid(pp);
+    const email = businessEmail(input.email);
+    if (!email && opts.requireEmail) throw new DockError(400, "email_missing", "Give the business email for order confirmations and receipts.", "account");
     if (this.limiter.hit(SIGN_UPS_PER_ADDRESS, address, this.now().getTime()) !== null) {
       throw new DockError(429, "sign_up_limit", "Too many new accounts from this address in the last hour. Try again later, or use a test account.", "account");
     }
@@ -187,7 +195,7 @@ export class AccountService {
     if ((await this.deps.store.list()).filter((a) => a.kind === "own").length >= max) {
       throw new DockError(503, "accounts_full", "This demo server has as many accounts as it takes. Use a test account, or scan the QR code to try without one.", "account");
     }
-    const account: Account = { username, restaurant, kind: "own", passwordHash: await hashPassword(input.password as string), createdAt: this.now().toISOString(), ...(demoAccountsOn() ? { demo: { at: this.now().toISOString() } } : {}) };
+    const account: Account = { username, restaurant, kind: "own", passwordHash: await hashPassword(input.password as string), createdAt: this.now().toISOString(), ...(demoAccountsOn() ? { demo: { at: this.now().toISOString() } } : {}), ...(email ? { mailPending: { address: email, ...(input.lang ? { lang: input.lang } : {}) } } : {}) };
     if (!(await this.deps.store.create(account))) throw new DockError(409, "username_taken", "That username is taken. Choose another.", "account");
     return this.openSession(account);
   }

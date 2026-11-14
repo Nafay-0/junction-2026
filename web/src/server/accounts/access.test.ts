@@ -45,7 +45,7 @@ const cookieOf = (res: Response) => (res.headers.get("set-cookie") ?? "").split(
 
 /** Sign up and sign the default mandate (a €300 limit): returns the account's cookie. */
 async function openAccount(username: string, restaurant: string): Promise<string> {
-  const res = await signup.POST(post("/ui-api/account/signup", { restaurant, username, password: "a-long-password" }));
+  const res = await signup.POST(post("/ui-api/account/signup", { restaurant, username, password: "a-long-password", email: "delivered@resend.dev" }));
   expect(res.status).toBe(201);
   const cookie = cookieOf(res);
   expect((await mandate.POST(post("/ui-api/account/mandate", { terms: DEFAULT_TERMS }, cookie))).status).toBe(201);
@@ -213,7 +213,7 @@ describe("account changes need the account's own session, from this site", () =>
   });
 
   it("session cookies are HttpOnly, SameSite and Secure on https; no route returns the hash", async () => {
-    const res = await signup.POST(post("/ui-api/account/signup", { restaurant: "Cafe C", username: "cafe-c", password: "a-long-password" }));
+    const res = await signup.POST(post("/ui-api/account/signup", { restaurant: "Cafe C", username: "cafe-c", password: "a-long-password", email: "delivered@resend.dev" }));
     const set = res.headers.get("set-cookie")!;
     expect(set).toMatch(/^dock_account=[A-Za-z0-9_-]{43}; Path=\/; HttpOnly; SameSite=Lax; Max-Age=\d+; Secure$/);
     const body = JSON.stringify(await res.json());
