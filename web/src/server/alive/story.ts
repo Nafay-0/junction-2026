@@ -308,7 +308,7 @@ async function week(c: Ctx): Promise<void> {
   await beat(c, "rules: the partner agent suspended and released", agoAt(now, 1, 12, 0), async () => {
     const { suspensions } = await import("@/server/ops/suspensions");
     const reg = suspensions(c.rt.dock);
-    const s = reg.suspend({ scope: "agent", target: PARTNER_AGENT.agentId, label: PARTNER_AGENT.label, reason: "Sample: it keeps sending an oat drink with gluten; paused while Laakso checks its settings.", by: "Operations (sample)", orgId: "org_laakso_catering" });
+    const s = reg.suspend({ scope: "agent", target: PARTNER_AGENT.agentId, label: PARTNER_AGENT.label, reason: `Sample: it keeps sending ${c.cast.forbiddenForLaakso?.name ?? "a product"}, which Laakso's allergen rule forbids; paused while Laakso checks its settings.`, by: "Operations (sample)", orgId: "org_laakso_catering" });
     await later(c, agoAt(now, 1, 12, 0) - 40 * MIN, async () => reg.resume(s.suspensionId, { by: "Operations (sample)", note: "Laakso says the partner fixed its product list." }));
     return `${s.suspensionId} suspended and resumed after 40 min`;
   });

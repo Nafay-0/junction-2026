@@ -35,7 +35,7 @@ import { loadCatalogIndex, resolveCatalogIndex } from "./valio/index-store";
 import { ValioLiveClient } from "./valio/live-client";
 import { ValioCatalog } from "./valio/valio-catalog";
 import { attachMail } from "./notify/service";
-import { sampleNow } from "./alive/clock";
+import { playingNow, sampleNow } from "./alive/clock";
 import { SampleAwareLive, sampleLiveLabel } from "./alive/live";
 import { ledgerVisibility, orderVisibility, stampSample } from "./alive/marks";
 import { toDockProduct } from "@/core/catalog/product";
@@ -124,7 +124,7 @@ async function buildRuntime(): Promise<Runtime> {
   let ledgerRef: Ledger | undefined;
   const ledger = (ledgerRef = new Ledger(stores.ledgerStore, sampleNow, { stamp: stampSample, visible: ledgerVisibility(() => ledgerRef) }));
   const dock = createDock({
-    catalog: new MeteredCatalog(recall.catalog),
+    catalog: new MeteredCatalog(recall.catalog, undefined, () => !!playingNow()),
     holds: recall.holds,
     // ADMISSION (src/server/ops/onsite.ts): the core asks the operations layer on every authenticate, so a
     // suspended agent gets no session through any door.

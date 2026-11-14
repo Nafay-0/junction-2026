@@ -258,15 +258,16 @@ export async function kitchens(c: Ctx): Promise<void> {
 }
 
 /**
- * One slow turn (the scripted agent held for 21 s), so the Platform page shows what a breaching alert looks like for the
- * next 15 minutes. It runs on in the background: the seed does not wait for it.
+ * Slow turns (the scripted agent held for 21 s), so the Platform page shows what a breaching alert looks like for the
+ * next 15 minutes. They run on in the background: the seed does not wait for them.
  */
 async function slowTurnBeat(c: Ctx): Promise<void> {
-  await beat(c, "conversations: one slow turn (alert)", 0, async () => {
+  await beat(c, "conversations: two slow turns (alert)", 0, async () => {
     if (!c.slowTurnMs) return "skipped";
-    void converse("kahvila-sointu", { turns: [{ words: "Is the Friday delivery still on time?", line: "Yes: the cut-off for Friday is Thursday at 11:00, and nothing is late.", holdMs: c.slowTurnMs }] }).catch(() => undefined);
-    await new Promise((r) => setTimeout(r, 400));
-    return `started, held ${c.slowTurnMs} ms`;
+    // Two, in two kitchens at once: the alert reads the 90th percentile of the last 15 minutes' turns.
+    for (const slug of ["kahvila-sointu", "koulu-metsola"]) void converse(slug, { turns: [{ words: "Is the Friday delivery still on time?", line: "Yes: the cut-off for Friday is Thursday at 11:00, and nothing is late.", holdMs: c.slowTurnMs }] }).catch(() => undefined);
+    await new Promise((r) => setTimeout(r, 600));
+    return `started, held ${c.slowTurnMs} ms each`;
   });
 }
 

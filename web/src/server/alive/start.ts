@@ -84,7 +84,8 @@ export function startSampleActivity(rt: Runtime): void {
   if (setting === "once" && sampleSets(rt.dock.ledger).length) return log("sample activity already played once on this store; not again", { setting });
   if (setting === "on") {
     const since = new Date(Date.now() - DAY).toISOString();
-    const recent = all.filter((e) => e.at >= since && !setOfEntry(rt.dock.ledger, e));
+    // Activity: an agent asked for something, a conversation turn, an order. Not the server's own start-up entries.
+    const recent = all.filter((e) => e.at >= since && (e.type === "request" || e.type === "order" || (e.type === "agent" && e.data.event === "turn")) && !setOfEntry(rt.dock.ledger, e));
     if (recent.length) return log("live activity in the last day: no sample played", { setting, recent: recent.length });
     if (currentSet(rt) && Date.parse(currentSet(rt)!.lastAt) > Date.now() - DAY) return;
   }

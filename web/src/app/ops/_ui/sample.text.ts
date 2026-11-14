@@ -16,7 +16,7 @@ export const SAMPLE_BAR_TEXT = defineText({
     start: {
       timeline: ["An order's whole timeline", "From the head chef's words to the signed order: every check, the sign-off on the phone and the wholesaler's signature."],
       waiting: ["An order waiting for a person", "Over what the agent may spend alone: it waits for the named person's OK, and its fixed price holds for 30 minutes."],
-      refusal: ["A refusal and its rule", "An outside agent sent an oat drink with gluten; the kitchen's allergen rule refused it, and the reason is in words."],
+      refusal: ["A refusal and its rule", "An outside agent keeps sending a drink with an allergen the kitchen forbids; the allergen rule refused it, with the reason in words."],
       failing: ["The agent that is failing", "The scorecard: one agent keeps hitting the same rule, one escalates because its limit is too tight."],
       cannotCome: ["A product that cannot come", "The kitchen's agent saw the usual milk will not come (a staged stock-out) and ranked substitutes, good, better, best."],
     } as Record<string, [string, string]>,
@@ -35,7 +35,7 @@ export const SAMPLE_BAR_TEXT = defineText({
     start: {
       timeline: ["Tilauksen koko aikajana", "Keittiöpäällikön sanoista allekirjoitettuun tilaukseen: jokainen tarkistus, hyväksyntä puhelimella ja tukkurin allekirjoitus."],
       waiting: ["Tilaus, joka odottaa ihmistä", "Yli sen, mitä agentti saa käyttää yksin: se odottaa nimetyn henkilön hyväksyntää, ja kiinteä hinta pysyy 30 minuuttia."],
-      refusal: ["Hylkäys ja sen sääntö", "Ulkopuolinen agentti lähetti gluteenia sisältävän kaurajuoman; keittiön allergeenisääntö hylkäsi sen, ja syy on sanoin."],
+      refusal: ["Hylkäys ja sen sääntö", "Ulkopuolinen agentti lähettää yhä juomaa, jossa on keittiön kieltämä allergeeni; allergeenisääntö hylkäsi sen, ja syy on sanoin."],
       failing: ["Agentti, joka epäonnistuu", "Tuloskortti: yksi agentti törmää yhä samaan sääntöön, toinen eskaloi, koska sen raja on liian tiukka."],
       cannotCome: ["Tuote, joka ei voi tulla", "Keittiön agentti näki, ettei tavallinen maito tule (lavastettu loppuminen), ja asetti korvaavat järjestykseen: hyvä, parempi, paras."],
     } as Record<string, [string, string]>,
@@ -54,7 +54,7 @@ export const SAMPLE_BAR_TEXT = defineText({
     start: {
       timeline: ["En beställnings hela tidslinje", "Från köksmästarens ord till den signerade beställningen: varje kontroll, godkännandet i telefonen och grossistens signatur."],
       waiting: ["En beställning som väntar på en person", "Över vad agenten får spendera ensam: den väntar på den namngivna personens godkännande, och det fasta priset gäller i 30 minuter."],
-      refusal: ["Ett avslag och dess regel", "En utomstående agent skickade en havredryck med gluten; kökets allergenregel avslog den, och skälet står i ord."],
+      refusal: ["Ett avslag och dess regel", "En utomstående agent skickar hela tiden en dryck med ett allergen som köket förbjuder; allergenregeln avslog den, och skälet står i ord."],
       failing: ["Agenten som misslyckas", "Resultatkortet: en agent stöter hela tiden på samma regel, en annan eskalerar eftersom dess gräns är för snäv."],
       cannotCome: ["En produkt som inte kan komma", "Kökets agent såg att den vanliga mjölken inte kommer (ett iscensatt slut i lager) och rangordnade ersättare: bra, bättre, bäst."],
     } as Record<string, [string, string]>,
