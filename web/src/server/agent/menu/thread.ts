@@ -129,10 +129,10 @@ export async function eventForThread(slug: string, words: string, by: string, la
   // The same plan for the earliest day, worked out while the buyer reads "plan it for Monday instead?": a yes then
   // answers in seconds (no model call; the live prices and the ways out are already in).
   const ahead = planId && date ? early.get(`${planId}:${date}`) : undefined;
-  const r = (ahead ? await ahead.catch(() => undefined) : undefined) ?? (await scenarios.event(kitchen, words, by, { ...(date ? { date } : {}), ...(planId ? { planId } : {}) }));
+  const r = (ahead ? await ahead.catch(() => undefined) : undefined) ?? (await scenarios.event(kitchen, words, by, { swapDishes: true, ...(date ? { date } : {}), ...(planId ? { planId } : {}) }));
   if (r.allLate?.earliest && !date) {
     const key = `${r.planId}:${r.allLate.earliest}`;
-    const job = scenarios.event(kitchen, words, by, { planId: r.planId, date: r.allLate.earliest });
+    const job = scenarios.event(kitchen, words, by, { planId: r.planId, date: r.allLate.earliest, swapDishes: true });
     job.catch(() => undefined);
     early.set(key, job);
     if (early.size > 50) early.delete(early.keys().next().value!);

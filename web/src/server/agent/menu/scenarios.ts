@@ -557,11 +557,14 @@ export function createScenarios(deps: ScenarioDeps) {
       const gathered = await Promise.all(top.map((st) => gatherFor(k, p, st)));
       await priceMore(k, p, gathered.flatMap(idsOf));
       const results = await Promise.all(top.map((st, i) => optionsForStuck(k, p, view, st, gathered[i])));
+      let swapped = 0;
       for (const [i, st] of top.entries()) {
         const r = results[i];
         options[st.lineId] = r.options;
         unresolved[st.lineId] = r.unresolved;
-        if (!r.options.some((o) => o.kind !== "technique") && opts.swapDishes === true) {
+        // Nothing does the job of a main course's protein: another main that can be fully sourced (one, the slowest step).
+        const main = /main/.test(p.draft.dishes.find((d) => d.name === st.dish)?.course ?? "") && (st.role === "protein" || st.role === "body");
+        if (!r.options.some((o) => o.kind !== "technique") && opts.swapDishes === true && main && swapped++ === 0) {
           const swap = await dishSwap(k, p, st, by);
           if (swap) options[st.lineId] = [...r.options, swap].sort((a, b) => b.score - a.score).map((o, i) => ({ ...o, rank: (["best", "better", "good"] as const)[Math.min(i, 2)] }));
         }
