@@ -12,6 +12,7 @@ import { LangSwitch, useLang, useText } from "../../_i18n/provider";
 import { dayL, weekdaysL } from "../../_i18n/format";
 import type { Lang } from "../../_i18n/lang";
 import { PORTAL_TEXT } from "./portal.text";
+import { agentNameL, exampleL, placeNameL } from "../../_i18n/kitchen-words";
 import { Target } from "../../_ui/target";
 import { Wordmark } from "../../_ui/wordmark";
 import { RecallNotice } from "../../_radar/recall-notice";
@@ -251,7 +252,17 @@ export function Portal({ kitchen, kitchens, children }: { kitchen: KitchenInfo; 
     [draft, followUp, product, busy, pending, send, take, focus, panelOpen, turns],
   );
 
-  const value = useMemo<Ctx>(() => ({ kitchen, kitchens, base, call, ui, overview, lang, setLang, basket, live, agent, fieldRef: inputRef }), [kitchen, kitchens, base, call, ui, overview, lang, setLang, basket, live, agent]);
+  // The kitchen as the buyer reads it: its name, its agent's name and the example requests in the buyer's language.
+  // Display only; `by` (the ledger author) and everything sent to the server stay as the server wrote them.
+  const shown = useMemo<KitchenInfo>(
+    () => ({ ...kitchen, name: placeNameL(kitchen.name, lang), agentName: agentNameL(kitchen.agentName, lang), examples: kitchen.examples.map((e) => exampleL(e, lang)) }),
+    [kitchen, lang],
+  );
+  const shownKitchens = useMemo(() => kitchens.map((k) => ({ ...k, name: placeNameL(k.name, lang) })), [kitchens, lang]);
+  const value = useMemo<Ctx>(
+    () => ({ kitchen: shown, kitchens: shownKitchens, base, call, ui, overview, lang, setLang, basket, live, agent, fieldRef: inputRef }),
+    [shown, shownKitchens, base, call, ui, overview, lang, setLang, basket, live, agent],
+  );
 
   // ----- the keyboard: the agent from anywhere (Ctrl or Cmd + K), the catalogue search with "/" -----
   useEffect(() => {

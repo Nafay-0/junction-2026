@@ -19,6 +19,8 @@ import { Concerns, Gate, NoOptions, Options, Questions, Quote, SignOff, SignedOr
 import { Timeline } from "./timeline";
 import { Button, ErrorPlate, Lane, STATIONS, StationStrip, useFollowLane, type LaneStage, type Station, type StationState } from "./ui";
 import type { KitchenInfo, LedgerReply, Order, PortalRequest, Product, Step } from "./types";
+import { useProductName } from "./names";
+import { exampleToEnglish } from "../../_i18n/kitchen-words";
 
 type Busy = "interpret" | "open" | "concern" | "answer" | "choose" | "order";
 type Failure = { at: "understood" | "concerns" | "questions" | "options" | "quote"; title: string; message: string; retry?: () => void; offline?: () => void };
@@ -49,6 +51,7 @@ const fresh = (n: number): Run => ({ n, text: "", concernsSeen: [], asked: [], a
 type ReadContext = { earlier?: EarlierRequest[]; followUp?: PortalRequest; product?: Product; requests: PortalRequest[] };
 
 export function Console() {
+  const pn = useProductName();
   const { kitchen, call, agent, overview } = usePortal();
   const tx = useText(CONSOLE_TEXT);
   const ux = useText(UI_TEXT);
@@ -99,7 +102,7 @@ export function Console() {
   const read = useCallback(
     async (n: number, text: string, offline: boolean, ctx: ReadContext = { requests: [] }) => {
       update(n, (r) => ({ ...r, busy: "interpret", failure: undefined, incomplete: undefined }));
-      const out = offline ? offlineExample(text) : await interpretNeed(slug, text, ctx.earlier);
+      const out = offline ? offlineExample(exampleToEnglish(text)) : await interpretNeed(slug, text, ctx.earlier);
       if (out.kind === "ok") return openIntake(n, withContext(out.interp, ctx, tx, f.lang));
       if (out.kind === "incomplete") return update(n, (r) => ({ ...r, busy: undefined, incomplete: out }));
       const failure: Failure =
@@ -395,7 +398,7 @@ export function Console() {
       station: "Options",
       title: run.options.length === 1 ? tx.theOption : tx.nOptions(run.options.length),
       tone: state === "options_ready" ? (run.busy === "choose" ? "busy" : "active") : "done",
-      summary: picked ? tx.chosen(picked.rank, picked.lines.map((l) => `${l.packs} × ${shortProduct(l.name)}`).join(" + ")) : tx.from(money(cheapest)),
+      summary: picked ? tx.chosen(picked.rank, picked.lines.map((l) => `${l.packs} × ${shortProduct(pn(l.productId, l.name))}`).join(" + ")) : tx.from(money(cheapest)),
       body: (
         <>
           <Options step={s} options={run.options} onChoose={choose} onNarrow={(q, o, label) => answer(q, o, label, false)} busyKey={run.busy === "choose" || run.busy === "answer" ? run.busyKey : undefined} names={names} />

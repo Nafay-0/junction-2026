@@ -1,5 +1,6 @@
 "use client";
 
+import { useLang } from "../_i18n/provider";
 import { useCallback, useEffect, useState } from "react";
 import type { MenuKitchenInfo } from "@/server/agent/menu/kitchens";
 import type { PlanEdit } from "@/server/agent/menu/service";
@@ -10,6 +11,7 @@ import { Lines, NeedsYou, PlanHeader } from "./sheet";
 import { Btn, Sheet, Spinner } from "./ui";
 import { useText } from "../_i18n/provider";
 import { MENU_PLANNER_TEXT } from "./menu-planner.text";
+import { exampleL } from "../_i18n/kitchen-words";
 
 /**
  * Menu to order, as one self-contained component: the chef types a dish or a menu and a number of covers, and gets
@@ -39,6 +41,7 @@ export function MenuPlanner({ kitchen, base = "/ui-api/plan", initialText = "", 
   const [started, setStarted] = useState<number>();
   const [now, setNow] = useState(() => Date.now());
   const tx = useText(MENU_PLANNER_TEXT);
+  const { lang } = useLang();
   const k = encodeURIComponent(kitchen);
 
   useEffect(() => {
@@ -140,8 +143,9 @@ export function MenuPlanner({ kitchen, base = "/ui-api/plan", initialText = "", 
               {tx.planIt}
             </Btn>
             {info?.kitchen.examples.map((ex) => (
-              <button key={ex} type="button" onClick={() => setText(ex)} className="min-h-10 bg-mist px-3 py-1 text-left text-[0.92rem] hover:outline-2 hover:outline-petrol">
-                {ex}
+              // Shown in the buyer's language; without a model the recorded drafts answer only the original words.
+              <button key={ex} type="button" onClick={() => setText(info.mode === "recorded" ? ex : exampleL(ex, lang))} className="min-h-10 bg-mist px-3 py-1 text-left text-[0.92rem] hover:outline-2 hover:outline-petrol">
+                {exampleL(ex, lang)}
               </button>
             ))}
           </div>

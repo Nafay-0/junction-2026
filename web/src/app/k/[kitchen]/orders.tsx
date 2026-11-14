@@ -10,6 +10,7 @@ import { ORDERS_TEXT } from "./orders.text";
 import { usePortal } from "./portal";
 import { Button } from "./ui";
 import type { PortalOrder } from "./types";
+import { useProductName } from "./names";
 
 /** Orders: everything this kitchen ordered or tried to, by the agent, from the basket, or from its history. */
 const TABS: { id: string; test: (o: PortalOrder) => boolean }[] = [
@@ -23,6 +24,7 @@ const TABS: { id: string; test: (o: PortalOrder) => boolean }[] = [
 export function OrdersList() {
   const { overview, base, agent } = usePortal();
   const tx = useText(ORDERS_TEXT);
+  const pn = useProductName();
   const f = useFormat();
   const params = useSearchParams();
   const [tab, setTab] = useState(params.get("show") ?? "all");
@@ -80,10 +82,10 @@ export function OrdersList() {
                     <td className="whitespace-nowrap px-4 py-3 text-[0.92rem] tabular">{whenText(x.createdAt, f.lang)}</td>
                     <td className="px-2 py-3">
                       {x.status === "history" ? (
-                        <span className="font-semibold">{linesText(x, 3, f.lang)}</span>
+                        <span className="font-semibold">{linesText(x, 3, f.lang, pn)}</span>
                       ) : (
                         <Link href={`${base}/orders/${x.orderId}`} className="font-semibold underline decoration-1 underline-offset-4 hover:decoration-2">
-                          {linesText(x, 3, f.lang)}
+                          {linesText(x, 3, f.lang, pn)}
                         </Link>
                       )}
                       {asked && <span className="block text-[0.9rem] text-ink-soft">{asked.startsWith("Basket") ? tx.basket : tx.asked(asked.length > 80 ? `${asked.slice(0, 77)}…` : asked)}</span>}
