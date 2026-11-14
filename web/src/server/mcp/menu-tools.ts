@@ -32,6 +32,7 @@ export const SeasonalInput = z.object({
 export const EventInput = z.object({
   text: z.string().min(1).max(2000).describe("The booking, in the buyer's words."),
   deliverBy: z.iso.date().optional().describe("YYYY-MM-DD; default: the day the words name."),
+  full: z.boolean().optional().describe("Also plan a replacement dish where nothing replaces an ingredient (slower, over 60 s)."),
   by,
 });
 export const OrderMenuInput = z.object({
@@ -75,7 +76,7 @@ export const MENU_TOOLS = [
     output: z.object({ result, nextStep }),
     run: async (ctx, a) => {
       const { scenarios, k } = await kitchenOf(ctx);
-      const r = await scenarios.event(k, a.text, who(ctx, a.by), a.deliverBy ? { date: a.deliverBy } : {});
+      const r = await scenarios.event(k, a.text, who(ctx, a.by), { ...(a.deliverBy ? { date: a.deliverBy } : {}), ...(a.full ? { swapDishes: true } : { waitMs: 5_000 }) });
       return {
         result: r,
         nextStep: r.allLate

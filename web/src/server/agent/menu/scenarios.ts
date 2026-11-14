@@ -82,7 +82,11 @@ export type SeasonalResult = {
   gate: GatePreview | null;
   blockers: string[];
   notes: string[];
-};
+} & PlanChecks;
+
+/** The planner's own checks, as facts any door can say in a sentence (plan.ts PlanTotals). */
+export type PlanChecks = Pick<PlanView["totals"], "refusedDish" | "instead" | "ruleRefusals" | "day" | "coverage">;
+export const checksOf = (v: PlanView): PlanChecks => ({ refusedDish: v.totals.refusedDish, instead: v.totals.instead, ruleRefusals: v.totals.ruleRefusals, day: v.totals.day, coverage: v.totals.coverage });
 
 export type GatePreview = { outcome: Decision["outcome"]; reasons: string[]; approver: { name: string; role: string } | null };
 
@@ -121,7 +125,7 @@ export type EventResult = {
   totalCents: number;
   gate: GatePreview | null;
   notes: string[];
-};
+} & PlanChecks;
 
 export type Choice = { lineId: string; optionId: string };
 export type SheetLines = {
@@ -308,6 +312,7 @@ export function createScenarios(deps: ScenarioDeps) {
       gate: preview(gate),
       blockers: view.totals.blockers,
       notes: [...p.notes, ...(p.declineReason ? [p.declineReason] : [])],
+      ...checksOf(view),
     };
   }
 
@@ -508,7 +513,7 @@ export function createScenarios(deps: ScenarioDeps) {
         const r = await optionsForStuck(k, p, view, st);
         options[st.lineId] = r.options;
         unresolved[st.lineId] = r.unresolved;
-        if (!r.options.some((o) => o.kind !== "technique") && opts.swapDishes !== false) {
+        if (!r.options.some((o) => o.kind !== "technique") && opts.swapDishes === true) {
           const swap = await dishSwap(k, p, st, by);
           if (swap) options[st.lineId] = [...r.options, swap].sort((a, b) => b.score - a.score).map((o, i) => ({ ...o, rank: (["best", "better", "good"] as const)[Math.min(i, 2)] }));
         }
@@ -535,6 +540,7 @@ export function createScenarios(deps: ScenarioDeps) {
       totalCents: view.totals.totalCents,
       gate: preview(gate),
       notes: p.notes,
+      ...checksOf(view),
     };
   }
 

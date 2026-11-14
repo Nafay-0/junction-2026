@@ -43,9 +43,20 @@ async function seasonalBefore(url: string, lang: string): Promise<void> {
   if (facts.seasonal?.planId) facts.seasonalOrder = (await asOutsideAgent(url, `/api/v1/menus/${facts.seasonal.planId}/order`, { by: "Eval head chef" })).body;
 }
 
+/** The next Tuesday after today (Helsinki), as YYYY-MM-DD. */
+function nextTuesday(): string {
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Helsinki" }).format(new Date());
+  const d = new Date(`${today}T12:00:00Z`);
+  do d.setUTCDate(d.getUTCDate() + 1);
+  while (d.getUTCDay() !== 2);
+  return d.toISOString().slice(0, 10);
+}
+
 async function eventBefore(url: string, lang: string): Promise<void> {
   const text = lang === "fi" ? "Yllättävä 40 hengen varaus huomiseksi, kolmen ruokalajin illallinen." : "Unexpected booking for 40 tomorrow, a three-course dinner.";
-  const r = await asOutsideAgent(url, "/api/v1/menus/event", { text, by: "Eval head chef" });
+  // "Tomorrow" as a fixed weekday, whatever day the run is on: the next Tuesday, a delivery day with the partner's
+  // usual cut-offs (stock products ordered the day before; supplier-shipped ones by the Thursday before), never a weekend.
+  const r = await asOutsideAgent(url, "/api/v1/menus/event", { text, deliverBy: nextTuesday(), by: "Eval head chef" });
   facts.event = r.body.result;
   if (r.status !== 200) facts.error = `event ${r.status}: ${r.body?.error?.message ?? ""}`;
   const ev = facts.event;

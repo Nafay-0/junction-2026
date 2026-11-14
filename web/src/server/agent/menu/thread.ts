@@ -257,3 +257,35 @@ export async function inLanguage(t: ThreadScenario, lang: Lang): Promise<ThreadS
   const rt = await getRuntime();
   return t.kind === "seasonal" ? seasonalSay(t.facts.seasonal as SeasonalResult, rt, lang, t.pending.words, String(t.facts.kitchen)) : eventSay(t.facts.event as EventResult, rt, lang, t.pending.words);
 }
+
+export type MenuChecks = import("./scenarios").PlanChecks & {
+  /** One or two sentences for the conversation, in the kitchen's language: the refused dish and its rule first, then what can be made instead; else the lines a rule or the day keeps off, and the staples assumed. Empty when there is nothing to say. */
+  say: string;
+  /** The question for a refused dish ("Which one?"), answered by naming one of `instead`; then plan it with the planner as any menu. */
+  ask?: string;
+};
+
+/**
+ * The planner's own checks on any menu plan (the thread's plan_menu, a menu card), as facts for one sentence: a dish
+ * refused under a named rule and what to make instead, the lines a rule keeps off (with the rule), the lines that
+ * cannot make the offered day (with why), and how every ingredient is covered (ordered, on hand, a staple assumed).
+ */
+export async function menuChecks(slug: string, planId: string, lang: Lang = "en"): Promise<MenuChecks> {
+  const { service, kitchen } = await kit(slug);
+  const { view } = await service.get(kitchen, planId);
+  const { checksOf } = await import("./scenarios");
+  const c = checksOf(view);
+  const t = MENU_SAY_TEXT[lang];
+  const parts: string[] = [];
+  let ask: string | undefined;
+  if (c.refusedDish) {
+    parts.push(t.refused(c.refusedDish.name, lower(c.refusedDish.ingredient), c.refusedDish.rule.text));
+    ask = c.instead.length ? t.insteadAsk(list(c.instead.map((x) => (lang === "fi" && x.nameFi ? x.nameFi : x.name)), lang)) : t.noInstead;
+  } else {
+    for (const r of c.ruleRefusals.slice(0, 2)) parts.push(t.ruleLine(r.ingredient, r.rule.text));
+    for (const d of c.day.lines.filter((x) => !x.ok).slice(0, 2)) parts.push(t.dayLine(d.ingredient, d.why ?? ""));
+    const staples = c.coverage.filter((x) => x.basis === "staple").map((x) => lower(x.ingredient));
+    if (staples.length) parts.push(t.staples(list([...new Set(staples)], lang)));
+  }
+  return { ...c, say: upper(parts.join(" ")), ...(ask ? { ask: upper(ask) } : {}) };
+}
