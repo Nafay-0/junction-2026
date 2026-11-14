@@ -143,10 +143,19 @@ export function Butler() {
     else setDrawerOpen((v) => !v);
   }, [wide, sidebarPref, setSidebarPref]);
 
-  // The live browser opening beside the chat needs the width: on anything but a very wide screen,
-  // the conversation list steps aside. The user can bring it back.
+  // The live browser beside the chat needs the width, so the conversation list steps aside while it
+  // is there and comes back when the browser goes. If the user closed the list themselves, or
+  // reopens it beside the browser, their choice stands.
+  const steppedAside = React.useRef(false);
   const makeRoom = React.useCallback(() => {
-    if (window.innerWidth < 1500) setSidebarPref("closed");
+    if (sidebarPref !== "open") return;
+    steppedAside.current = true;
+    setSidebarPref("closed");
+  }, [sidebarPref, setSidebarPref]);
+  const giveRoomBack = React.useCallback(() => {
+    if (!steppedAside.current) return;
+    steppedAside.current = false;
+    setSidebarPref("open");
   }, [setSidebarPref]);
 
   const newTask = React.useCallback(() => {
@@ -201,6 +210,7 @@ export function Butler() {
             onToggleSidebar={toggleSidebar}
             onNewTask={newTask}
             onBrowserBeside={makeRoom}
+            onBrowserGone={giveRoomBack}
           />
         ) : null}
       </div>
@@ -215,6 +225,7 @@ function ChatView({
   onToggleSidebar,
   onNewTask,
   onBrowserBeside,
+  onBrowserGone,
 }: {
   conversationId: string;
   initialMessages: ButlerMessage[];
@@ -223,6 +234,8 @@ function ChatView({
   onNewTask: () => void;
   /** The live browser has opened beside the chat. */
   onBrowserBeside: () => void;
+  /** The live browser is no longer shown. */
+  onBrowserGone: () => void;
 }) {
   const [modelId, setModelId] = useStored("hovi.model", DEFAULT_MODEL_ID);
   const [place, setPlace] = useStored("hovi.place", "");
@@ -454,7 +467,7 @@ function ChatView({
 
   return (
     <BrowserWorkspace browserId={browserId} onHandoverDone={answerHandover}>
-      <LayoutBridge target={openBrowser} onBeside={onBrowserBeside} />
+      <LayoutBridge target={openBrowser} onBeside={onBrowserBeside} onGone={onBrowserGone} />
       <TopBar stats={stats} onNewChat={onNewTask} showNew={!empty} sidebarOpen={sidebarOpen} onToggleSidebar={onToggleSidebar} />
 
       <div ref={scroller} onScroll={onScroll} className={cn("relative flex-1 overflow-y-auto overscroll-contain", empty && "backdrop-room")}>
@@ -531,7 +544,7 @@ function ChatView({
             }}
             autoFocus
           />
-          <p className="mt-2 hidden text-center text-[0.7rem] text-subtle sm:block">Searches the live web with Exa. Check important details at the source before you act.</p>
+          <p className="mt-2 hidden text-center text-[0.7rem] text-subtle @min-[520px]/chat:block">Searches the live web with Exa. Check important details at the source before you act.</p>
         </div>
       </div>
     </BrowserWorkspace>
@@ -539,11 +552,17 @@ function ChatView({
 }
 
 /** Lets the chat's own handlers open the live browser, which only something inside the workspace can do. */
-function LayoutBridge({ target: targetRef, onBeside }: { target: React.RefObject<(() => void) | null>; onBeside: () => void }) {
+function LayoutBridge({ target: targetRef, onBeside, onGone }: { target: React.RefObject<(() => void) | null>; onBeside: () => void; onGone: () => void }) {
   const { open, mode } = useBrowserLayout();
+  // Only a change of layout counts: the list is moved when the browser arrives or leaves, not on every render.
+  const seen = React.useRef<string | null>(null);
   React.useEffect(() => {
+    if (seen.current === mode) return;
+    const first = seen.current === null;
+    seen.current = mode;
     if (mode === "split") onBeside();
-  }, [mode, onBeside]);
+    else if (mode === "closed" && !first) onGone();
+  }, [mode, onBeside, onGone]);
   React.useEffect(() => {
     targetRef.current = () => open();
     return () => {

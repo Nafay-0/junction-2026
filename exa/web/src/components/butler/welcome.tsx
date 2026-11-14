@@ -63,34 +63,37 @@ export function Welcome({ place, onPick }: { place: string; onPick: (prompt: str
   const hello = hour >= 0 ? greeting(hour) : null;
 
   return (
-    <div className="mx-auto flex w-full max-w-[760px] flex-col px-4 pt-[8vh] pb-6 sm:pt-[12vh]">
+    // Sized to the chat column: beside the live browser it is narrow even on a wide screen.
+    <div className="mx-auto flex w-full max-w-[760px] flex-col px-4 pt-[6vh] pb-6 @min-[440px]/chat:pt-[8vh] @min-[640px]/chat:pt-[12vh]">
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.2, 0.8, 0.2, 1] }}>
-        <p className="text-[0.8rem] font-medium tracking-[0.14em] text-brand uppercase">{APP_NAME}, your internet butler</p>
-        <h1 className="font-display mt-3 text-[2.6rem] leading-[1.05] text-balance sm:text-[3.6rem]">
+        <p className="text-[0.74rem] font-medium tracking-[0.14em] text-brand uppercase @min-[440px]/chat:text-[0.8rem]">{APP_NAME}, your internet butler</p>
+        <h1 className="font-display mt-3 text-[2.05rem] leading-[1.07] text-balance @min-[440px]/chat:text-[2.6rem] @min-[640px]/chat:text-[3.6rem] @min-[640px]/chat:leading-[1.05]">
           <span className={hello ? "opacity-100 transition-opacity duration-500" : "opacity-0"}>{hello ?? "Good evening"}.</span>
           <br />
           <span className="text-muted-foreground italic">What can I take off your hands?</span>
         </h1>
-        <p className="mt-5 max-w-[34rem] text-[0.95rem] leading-relaxed text-muted-foreground">
-          Hand over a task. I search the live web with Exa, show what I find as maps, charts and cards you can use, and get it as close to done as I can. You approve the last step.
+        <p className="mt-4 max-w-[34rem] text-[0.9rem] leading-relaxed text-muted-foreground @min-[440px]/chat:mt-5 @min-[440px]/chat:text-[0.95rem]">
+          Pass me a task. I search the live web with Exa, show what I find as maps, charts and cards you can use, and do the work in a live browser you can watch. The last step comes back to you.
         </p>
       </motion.div>
 
-      <div className="mt-9 grid grid-cols-1 gap-2.5 min-[480px]:grid-cols-2 sm:mt-11 sm:grid-cols-3">
+      {/* Narrow column: two columns of small chips, name only. Wider: tiles with a line of explanation, two then three across. */}
+      <div className="mt-6 grid grid-cols-2 gap-2 @min-[440px]/chat:mt-9 @min-[440px]/chat:gap-2.5 @min-[640px]/chat:mt-11 @min-[640px]/chat:grid-cols-3">
         {PRESETS.map((preset, i) => (
           <motion.button
             key={preset.title}
             type="button"
+            title={preset.hint}
             onClick={() => onPick(preset.prompt(place))}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.12 + i * 0.05, ease: [0.2, 0.8, 0.2, 1] }}
-            className="group/preset relative flex flex-col items-start gap-2 rounded-2xl border border-border bg-card/70 p-4 text-left shadow-card backdrop-blur-sm transition-[border-color,transform,background-color] duration-200 hover:-translate-y-0.5 hover:border-ring/50 hover:bg-card"
+            className="group/preset relative flex min-w-0 items-center gap-2.5 rounded-xl border border-border bg-card/70 p-2.5 text-left shadow-card backdrop-blur-sm transition-[border-color,transform,background-color] duration-200 hover:-translate-y-0.5 hover:border-ring/50 hover:bg-card @min-[440px]/chat:flex-col @min-[440px]/chat:items-start @min-[440px]/chat:gap-2 @min-[440px]/chat:rounded-2xl @min-[440px]/chat:p-4"
           >
-            <span className="flex size-8 items-center justify-center rounded-lg bg-brand-soft text-brand [&_svg]:size-4">{preset.icon}</span>
-            <span className="text-[0.95rem] font-medium tracking-tight">{preset.title}</span>
-            <span className="text-[0.8rem] leading-snug text-muted-foreground">{preset.hint}</span>
-            <ArrowUpRight className="absolute top-4 right-4 size-4 text-subtle opacity-0 transition-[opacity,transform] duration-200 group-hover/preset:translate-x-0.5 group-hover/preset:-translate-y-0.5 group-hover/preset:opacity-100" />
+            <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand @min-[440px]/chat:size-8 [&_svg]:size-4">{preset.icon}</span>
+            <span className="min-w-0 text-[0.84rem] leading-tight font-medium tracking-tight @min-[440px]/chat:text-[0.95rem] @min-[440px]/chat:leading-normal">{preset.title}</span>
+            <span className="hidden text-[0.8rem] leading-snug text-muted-foreground @min-[440px]/chat:block">{preset.hint}</span>
+            <ArrowUpRight className="absolute top-4 right-4 hidden size-4 text-subtle opacity-0 transition-[opacity,transform] duration-200 group-hover/preset:translate-x-0.5 group-hover/preset:-translate-y-0.5 group-hover/preset:opacity-100 @min-[440px]/chat:block" />
           </motion.button>
         ))}
       </div>

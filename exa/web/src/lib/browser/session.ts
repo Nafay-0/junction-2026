@@ -1,9 +1,13 @@
 import "server-only";
 
+import { spawn, type ChildProcess } from "node:child_process";
+import { once } from "node:events";
+import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
+import { homedir } from "node:os";
 import path from "node:path";
 import { chromium, type BrowserContext, type CDPSession, type Locator, type Page } from "playwright-core";
-import { isPaymentFrame, isPaymentHost, isSensitiveField, judge, type Step, type Target, type Verdict } from "./guard";
+import { isIdentityHost, isPaymentFrame, isPaymentHost, isSensitiveField, judge, refusesAssistedSignIn, type Step, type Target, type Verdict } from "./guard";
 import {
   IDLE_STATE,
   VIEWPORT,
@@ -33,14 +37,36 @@ import { renderPage, type AriaNode } from "./snapshot";
  */
 
 const HEADED = process.env.HOVI_BROWSER_HEADED === "1";
-const PROFILE_ROOT = process.env.HOVI_BROWSER_PROFILES || path.join(process.cwd(), ".browser-profiles");
+// Sign-ins live outside the project folder: they are the user's, not the app's, and a path under
+// the project makes the bundler try to trace the whole folder into the build.
+const PROFILE_ROOT = process.env.HOVI_BROWSER_PROFILES || path.join(homedir(), ".hovi", "browser-profiles");
 const MAX_BROWSERS = 4;
 const IDLE_CLOSE_MS = 20 * 60_000;
 /** How long the agent waits for the user to hand the page back before giving up on a step. */
 const WAIT_FOR_USER_MS = 90_000;
 
+/**
+ * The installed Chrome, for opening an ordinary window on this computer: a plain Chrome with
+ * nothing attached, where the user does a step that a site will not accept from an assisted
+ * browser. Null on a machine without a screen or without Chrome, and when HOVI_BROWSER_WINDOW=0
+ * (set that on a hosted server: the window would open where no user can see it).
+ */
+const WINDOW_BINARY: string | null = (() => {
+  if (process.env.HOVI_BROWSER_WINDOW === "0") return null;
+  const env = process.env;
+  const candidates =
+    process.platform === "darwin"
+      ? ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", `${env.HOME ?? ""}/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`]
+      : process.platform === "win32"
+        ? [`${env.PROGRAMFILES ?? ""}\\Google\\Chrome\\Application\\chrome.exe`, `${env["PROGRAMFILES(X86)"] ?? ""}\\Google\\Chrome\\Application\\chrome.exe`, `${env.LOCALAPPDATA ?? ""}\\Google\\Chrome\\Application\\chrome.exe`]
+        : env.DISPLAY || env.WAYLAND_DISPLAY
+          ? ["/usr/bin/google-chrome", "/usr/bin/google-chrome-stable", "/opt/google/chrome/chrome"]
+          : [];
+  return candidates.find((candidate) => existsSync(candidate)) ?? null;
+})();
+
 /** The idle state with the optional parts spelled out, so closing a browser leaves no stale banner behind. */
-const CLEARED: BrowserState = { ...IDLE_STATE, handover: undefined, approval: undefined, error: undefined };
+const CLEARED: BrowserState = { ...IDLE_STATE, handover: undefined, approval: undefined, outside: undefined, error: undefined, canOpenWindow: WINDOW_BINARY !== null };
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 const hostOf = (url: string) => {
@@ -190,7 +216,17 @@ export class BrowserSession {
   private starting?: Promise<void>;
   private listeners = new Set<Listener>();
   private lastFrame?: Extract<BrowserEvent, { type: "frame" }>;
-  private state: BrowserState = { ...IDLE_STATE };
+  private state: BrowserState = { ...IDLE_STATE, canOpenWindow: WINDOW_BINARY !== null };
+  /** The ordinary Chrome window, while the user is doing a step there. */
+  private plain?: ChildProcess;
+  /** True while the assisted browser lets go of the profile for that window: not a real close. */
+  private switching = false;
+  private returning?: Promise<void>;
+  private resumeUrl?: string;
+  /** Message boxes the page showed since the model last read it. */
+  private dialogs: string[] = [];
+  /** Pictures of the page taken for the model, by tool call. Only the last few are kept. */
+  private pictures = new Map<string, string>();
   private actionId = 0;
   private tabSeq = 0;
   /** Agent steps run one at a time, in the order they were asked for. */
@@ -222,12 +258,17 @@ export class BrowserSession {
     };
   }
 
+  /** True while the user is in the ordinary Chrome window. */
+  get outside(): boolean {
+    return Boolean(this.plain);
+  }
+
   get watchers(): number {
     return this.listeners.size;
   }
 
   get running(): boolean {
-    return Boolean(this.context);
+    return Boolean(this.context) || Boolean(this.plain);
   }
 
   private emit(event: BrowserEvent) {
@@ -298,7 +339,7 @@ export class BrowserSession {
       this.context = undefined;
       this.page = undefined;
       const message = err instanceof Error ? err.message.split("\n")[0] : "The browser could not be started.";
-      this.patch({ status: "error", error: /executable doesn't exist|chrome.*not found|ENOENT/i.test(message) ? "Google Chrome is not installed on the machine running Hovi." : clip(message, 200) });
+      this.patch({ status: "error", error: /executable doesn't exist|chrome.*not found|ENOENT/i.test(message) ? "Google Chrome is not installed on the computer that runs this app." : clip(message, 200) });
     }
   }
 
@@ -314,6 +355,18 @@ export class BrowserSession {
         if (next) void this.activate(next);
       }
       this.patch({});
+    });
+    // A page's own message boxes are not part of the picture, so nobody would see them. A plain
+    // notice is acknowledged. A question is answered "no" while the agent is driving (it must not
+    // confirm things by reflex) and "yes" while the user is, who has just pressed the button.
+    page.on("dialog", (dialog) => {
+      const kind = dialog.type();
+      const yes = kind === "alert" || kind === "beforeunload" || this.state.control === "user";
+      if (kind !== "beforeunload") {
+        this.dialogs.push(`${kind === "alert" ? "The page showed a notice" : "The page asked"}: "${clip(dialog.message(), 240)}"${kind === "alert" ? "" : yes ? " (answered OK)" : " (answered Cancel)"}`);
+        if (this.dialogs.length > 5) this.dialogs.shift();
+      }
+      void (yes ? dialog.accept() : dialog.dismiss()).catch(() => {});
     });
     page.on("framenavigated", (frame) => {
       if (frame === page.mainFrame()) void this.refresh(page);
@@ -387,16 +440,94 @@ export class BrowserSession {
   }
 
   private onClosed() {
+    if (this.switching) return;
     this.context = undefined;
     this.page = undefined;
     this.pages = [];
     this.lastFrame = undefined;
+    this.dialogs = [];
+    this.pictures.clear();
     this.approvals.clear();
     this.modifiers.clear();
     this.patch({ ...CLEARED, status: "closed" });
   }
 
+  /* ───────────────────────── An ordinary Chrome window, for what an assisted browser may not do ───────────────────────── */
+
+  /**
+   * Move the page to an ordinary Chrome window on this computer. The assisted browser closes
+   * first (one Chrome per profile), a plain Chrome opens on the same profile with nothing
+   * attached to it, and the user does the step there: typically signing in to Google, which
+   * refuses sign-ins from a browser that is being driven. What they type goes to that Chrome
+   * directly; it never passes through this app.
+   */
+  private async openOutside(rawUrl?: string) {
+    if (!WINDOW_BINARY || this.plain) return;
+    const current = this.page && !this.page.isClosed() ? this.page.url() : "";
+    const url = rawUrl?.trim() ? toAddress(rawUrl) : /^https?:/.test(current) ? current : "about:blank";
+    this.resumeUrl = /^https?:/.test(current) ? current : undefined;
+    this.switching = true;
+    try {
+      await this.context?.close();
+    } catch {
+      /* already gone */
+    }
+    this.context = undefined;
+    this.page = undefined;
+    this.pages = [];
+    const child = spawn(WINDOW_BINARY, [`--user-data-dir=${path.join(PROFILE_ROOT, this.id)}`, "--use-mock-keychain", "--no-first-run", "--no-default-browser-check", "--new-window", url], {
+      stdio: "ignore",
+    });
+    this.plain = child;
+    const back = () => {
+      if (this.plain === child) void this.comeBack();
+    };
+    child.once("exit", back);
+    child.once("error", back);
+    this.patch({ status: "ready", control: "user", outside: { site: hostOf(url) || "the page" }, busy: false, activity: "", loading: false, approval: undefined });
+  }
+
+  /** The user is done in the ordinary window (or closed it): quit it so it saves, and bring the assisted browser back. */
+  private async closeOutside() {
+    const child = this.plain;
+    if (child && child.exitCode === null && child.signalCode === null) {
+      child.kill("SIGTERM");
+      await Promise.race([once(child, "exit"), delay(6000)]);
+      if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+    }
+    await this.comeBack();
+  }
+
+  private comeBack(): Promise<void> {
+    this.returning ??= (async () => {
+      this.plain = undefined;
+      this.switching = false;
+      await delay(250); // Chrome has just let go of the profile
+      this.patch({ outside: undefined, status: "starting" });
+      try {
+        const page = await this.ensureStarted();
+        if (this.resumeUrl) await page.goto(this.resumeUrl, { waitUntil: "domcontentloaded", timeout: 25_000 }).catch(() => {});
+        await this.refresh(page);
+      } catch {
+        /* the error state says why */
+      }
+    })().finally(() => {
+      this.returning = undefined;
+    });
+    return this.returning;
+  }
+
   async close() {
+    if (this.plain) {
+      const child = this.plain;
+      this.plain = undefined;
+      this.switching = false;
+      child.removeAllListeners("exit");
+      child.kill("SIGTERM");
+      await Promise.race([once(child, "exit"), delay(4000)]).catch(() => {});
+      this.patch({ ...CLEARED, status: "closed" });
+      return;
+    }
     const context = this.context;
     if (!context) {
       this.patch({ ...CLEARED, status: "closed" });
@@ -435,8 +566,16 @@ export class BrowserSession {
         this.patch({ control: "user" });
         break;
       case "release":
+        // Handing back from the ordinary window: close it first, so the agent has its browser again.
+        if (this.plain || this.returning) await this.closeOutside();
         this.modifiers.clear();
         this.patch({ control: "agent", handover: undefined });
+        break;
+      case "window":
+        await this.openOutside(request.url);
+        break;
+      case "window-done":
+        await this.closeOutside();
         break;
       case "close":
         await this.close();
@@ -445,6 +584,7 @@ export class BrowserSession {
         await this.forget();
         break;
       case "tab": {
+        if (this.plain) break;
         const page = this.pages.find((p) => this.pageIds.get(p) === request.tabId);
         if (page) await this.activate(page);
         break;
@@ -454,7 +594,7 @@ export class BrowserSession {
       case "reload":
       case "navigate": {
         // The address bar and its buttons are the user's: they work only while the user is driving.
-        if (this.state.control !== "user") break;
+        if (this.state.control !== "user" || this.plain) break;
         const page = await this.ensureStarted();
         try {
           if (request.action === "back") await page.goBack({ waitUntil: "domcontentloaded", timeout: 15_000 });
@@ -628,8 +768,22 @@ export class BrowserSession {
       };
       mark(tree);
       let text = renderPage(tree, { url: page.url(), title: await page.title(), viewport: { ...VIEWPORT }, ...facts }, { ...options, sensitive });
+      if (this.dialogs.length) {
+        text += `\n\n${this.dialogs.join("\n")}\nIf a question that was answered Cancel needs a yes, that is a commitment: tell the user what the page asked.`;
+        this.dialogs = [];
+      }
+      if (this.pages.length > 1) {
+        const others = this.pages.filter((p) => p !== page).map((p) => clip(this.titles.get(p) || hostOf(p.url()) || "a page", 50));
+        text += `\n\nOther tabs are open behind this one: ${others.join("; ")}. You are working in the newest. When it closes, you are back in the previous one.`;
+      }
       if (await this.humanCheck(page)) {
         text += `\n\nThis page has a "verify you are human" check that has not been passed. You cannot see it or pass it, and buttons may stay disabled until it is. Do not try to get around it: call requestUserAction with kind "captcha" so the user does it in the live browser.`;
+      }
+      if (isIdentityHost(page.url())) {
+        text += `\n\nThis is a sign-in page. Signing in is the user's, start to finish: do not click or type here. Call requestUserAction with kind "login".`;
+        if (refusesAssistedSignIn(page.url()) && this.state.canOpenWindow) {
+          text += ` This site only accepts sign-ins from an ordinary browser, so tell the user in your reason to press "Use a normal Chrome window" in the live browser and sign in there.`;
+        }
       }
       if (this.state.paymentPage) {
         text += `\n\nThis page takes payment. You never pay and never enter payment details: hand it to the user with requestUserAction (kind "payment").`;
@@ -641,7 +795,7 @@ export class BrowserSession {
   }
 
   /** Give the page a moment to react to what was just done. */
-  private async settle(page: Page, quietMs = 1200) {
+  private async settle(page: Page, quietMs = 900) {
     const now = this.page ?? page;
     try {
       await now.waitForLoadState("domcontentloaded", { timeout: 8000 });
@@ -661,8 +815,20 @@ export class BrowserSession {
     return { kind: "browser", label, action, url: page?.url() ?? "", title: this.state.title, ok: true, sources: [], ...extra };
   }
 
-  /** Open an address in the live browser. */
-  open(rawUrl: string, signal?: AbortSignal): Promise<BrowserStepData> {
+  /** The agent closes the browser: the task there is finished, or the user asked. Sign-ins are kept. */
+  shut(signal?: AbortSignal): Promise<BrowserStepData> {
+    return this.queue(async () => {
+      const waiting = await this.waitForAgentTurn(signal);
+      if (waiting) return this.step("Waiting for you", "close", this.page, { ok: false, problem: waiting, page: waiting });
+      const wasOpen = this.running;
+      await this.close();
+      const page = wasOpen ? "The live browser is closed. Sign-ins are kept. Open a page again with browserOpen when a task needs it." : "The live browser was not open.";
+      return { kind: "browser", label: wasOpen ? "Closed the browser" : "The browser was already closed", action: "close", url: "", title: "", ok: true, page, sources: [] };
+    });
+  }
+
+  /** Open an address in the live browser. `fresh` closes the tabs a previous task left behind. */
+  open(rawUrl: string, signal?: AbortSignal, fresh = false): Promise<BrowserStepData> {
     return this.queue(async () => {
       const waiting = await this.waitForAgentTurn(signal);
       if (waiting) return this.step("Waiting for you", "open", this.page, { ok: false, problem: waiting, page: waiting });
@@ -676,6 +842,9 @@ export class BrowserSession {
       } catch (err) {
         const problem = err instanceof Error ? err.message : "The browser could not be started.";
         return this.step("The browser did not start", "open", undefined, { ok: false, problem, page: `${problem} Carry on without the live browser: give the user links instead.` });
+      }
+      if (fresh) {
+        for (const other of [...this.pages]) if (other !== page) await other.close().catch(() => {});
       }
       const site = hostOf(url);
       this.announce({ kind: "navigate", label: `Opening ${site}`, leadMs: 0 });
@@ -710,6 +879,46 @@ export class BrowserSession {
     });
   }
 
+  /**
+   * A picture of the page for the model, for what the text cannot show: a page drawn as an image
+   * or a canvas, or a control that does nothing for no visible reason. Never of a payment or
+   * sign-in page, and fields that hold secrets are painted over.
+   */
+  look(toolCallId: string, signal?: AbortSignal): Promise<BrowserStepData> {
+    return this.queue(async () => {
+      const waiting = await this.waitForAgentTurn(signal);
+      if (waiting) return this.step("Waiting for you", "read", this.page, { ok: false, problem: waiting, page: waiting });
+      const page = this.page;
+      if (!page) return this.step("No page is open", "read", undefined, { ok: false, problem: "No page is open.", page: "No page is open in the live browser. Open one with browserOpen." });
+      await this.refresh(page);
+      if (this.state.paymentPage || isPaymentHost(page.url()) || isIdentityHost(page.url())) {
+        const problem = "No picture is taken of a payment or sign-in page. Hand it to the user with requestUserAction.";
+        this.announce({ kind: "blocked", label: "Stopped by a safety rule", leadMs: 0 });
+        this.done();
+        return this.step("Stopped by a safety rule", "read", page, { ok: false, blocked: true, problem, page: `NOT DONE. ${problem}` });
+      }
+      this.announce({ kind: "read", label: "Looking at the page", leadMs: 0 });
+      let text = await this.pageText(page);
+      try {
+        const secrets =
+          'input[type="password"], input[autocomplete^="cc-"], input[autocomplete="one-time-code"], input[autocomplete*="password"], input[name*="card" i], input[name*="cvv" i], input[name*="cvc" i], input[name*="iban" i], iframe[src*="stripe"], iframe[src*="adyen"], iframe[src*="braintree"], iframe[src*="checkout.com"], iframe[title*="card" i], iframe[title*="payment" i]';
+        const shot = await page.screenshot({ type: "jpeg", quality: 60, mask: [page.locator(secrets)], maskColor: "#1c211d", caret: "hide", scale: "css", timeout: 8000 });
+        this.pictures.set(toolCallId, shot.toString("base64"));
+        while (this.pictures.size > 3) this.pictures.delete(this.pictures.keys().next().value as string);
+        text = `A picture of the page as it looks now is attached. Fields that hold secrets are painted over. You still act through the references below.\n\n${text}`;
+      } catch {
+        text = `The picture could not be taken. The page as text:\n\n${text}`;
+      }
+      this.done();
+      return this.step("Looked at the page", "read", page, { page: text });
+    });
+  }
+
+  /** The picture taken for a tool call, while it is still kept. */
+  picture(toolCallId: string): string | undefined {
+    return this.pictures.get(toolCallId);
+  }
+
   /** What the safety rules say about a step, before it is taken. Cached per tool call. */
   async review(toolCallId: string, input: ActInput): Promise<Verdict> {
     const cached = this.approvals.get(toolCallId);
@@ -734,7 +943,7 @@ export class BrowserSession {
     if (!page) return { decision: "allow" };
     const stepKind = input.action;
     if (stepKind !== "click" && stepKind !== "type" && stepKind !== "select" && stepKind !== "press" && stepKind !== "hover") {
-      return isPaymentHost(page.url()) && stepKind !== "back" && stepKind !== "wait" && stepKind !== "scroll"
+      return (isPaymentHost(page.url()) || isIdentityHost(page.url())) && stepKind !== "back" && stepKind !== "wait" && stepKind !== "scroll"
         ? judge({ action: "click" }, null, page.url())
         : { decision: "allow" };
     }
@@ -835,8 +1044,8 @@ export class BrowserSession {
 
         switch (input.action) {
           case "click": {
-            this.announce({ kind: "click", label: `Clicking${named || " the element"}`, box, point, leadMs: 420 });
-            await delay(420);
+            this.announce({ kind: "click", label: `Clicking${named || " the element"}`, box, point, leadMs: 320 });
+            await delay(320);
             if (point) await page.mouse.move(point.x, point.y, { steps: 4 }).catch(() => {});
             await locator.click({ timeout: 6000 });
             await this.settle(page);
@@ -965,7 +1174,7 @@ function sweep() {
   const timer = setInterval(() => {
     for (const [id, session] of registry.sessions) {
       const idle = Date.now() - session.lastUsed > IDLE_CLOSE_MS;
-      if (idle && session.watchers === 0) {
+      if (idle && session.watchers === 0 && !session.outside) {
         if (session.running) void session.close();
         registry.sessions.delete(id);
       }

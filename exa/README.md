@@ -1,10 +1,10 @@
-# Hovi: the Exa "Internet Butler" project
+# Baton: the Exa "Internet Butler" project
 
-**Owner:** Asadullah (`Asadullah378`). **Status (Sat 14 Nov, 05:30):** steps 1 and 2 are built and run locally. Step 2, the live browser, works end to end on a test site and on real shops and booking pages; real sites that put up a "verify you are human" check are handed to the user. Not deployed yet.
+**Owner:** Asadullah (`Asadullah378`). **Status (Sat 14 Nov, 08:00):** steps 1 and 2 are built and run locally. The live browser works end to end on a test site and on real shops and booking pages. Sign-ins a site will not take from an assisted browser (Google's above all) are done in an ordinary Chrome window and carried over; that path is built and its mechanics are tested, but nobody has signed in to a real Google account through it yet. Not deployed yet.
 
-Hovi is a general web agent for Exa's challenge "The Internet Butler". You hand it a task; it searches the live web with Exa, answers with live widgets instead of plain text (a map, fare cards, price charts, a gallery, a research report), and ends with buttons that take the task as far as it can go. "Hovi" is a working title, set in `web/src/lib/brand.ts`.
+Baton is a general web agent for Exa's challenge "The Internet Butler". You hand it a task; it searches the live web with Exa, answers with live widgets instead of plain text (a map, fare cards, price charts, a gallery, a research report), and ends with buttons that take the task as far as it can go. The name is set in `web/src/lib/brand.ts`, with the logo's shapes: a baton is what a relay runner passes on (you pass a task, it is handed back for the step that is yours) and what a conductor holds. It was called Hovi until 14 Nov; storage keys and `HOVI_*` variables keep that prefix so nothing saved is lost.
 
-Dock, the Valio Aimo project, is a separate project in this repo, owned by Nafay. It lives in `/web` and `/infra` at the repo root. Everything for Hovi lives in `exa/`.
+Dock, the Valio Aimo project, is a separate project in this repo, owned by Nafay. It lives in `/web` and `/infra` at the repo root. Everything for Baton lives in `exa/`.
 
 ## The plan, in three steps
 
@@ -63,11 +63,17 @@ Reading, navigating, searching, filling in a form, adding to a basket and refusi
 
 **What the agent can read.** It reads the page as text (Chrome's accessibility tree, cut down to what is in view), never as a picture. Values of password, card and code fields are removed before the text reaches the model, including ones the user typed while in control. What the user types during a hand-over goes to Chrome and nowhere else: it is not logged or stored.
 
-**Sign-ins.** Kept in a browser profile per visitor (`web/.browser-profiles/`, not committed) so the user signs in once. "Forget sign-ins" in the browser's menu wipes it.
+**Sign-ins.** Kept in a browser profile per visitor (`~/.hovi/browser-profiles/` on the computer running the app, outside the project) so the user signs in once. "Forget sign-ins" in the browser's menu wipes it.
+
+**Sign-ins that an assisted browser may not do (Google).** Chrome tells every site when it is being driven, and Google refuses sign-ins typed into such a browser. We do not hide that. Instead, the hand-over offers "Use a normal Chrome window": the assisted browser closes, the same profile opens as an ordinary Chrome on the computer running the app with nothing attached to it, and the user signs in there. What they type goes to that Chrome only; it never passes through this app. When they come back ("I am done there"), the assisted browser reopens on the same profile, signed in, on the page it left. The agent does nothing on the sign-in pages of identity providers (Google, Microsoft, Apple, bank identification), not even picking an account: it hands them over. This needs the app to run on the user's own computer; on a hosted server set `HOVI_BROWSER_WINDOW=0`.
+
+**Tidying up.** The agent closes the browser when the task there is finished and nothing is left for the user on the page, or when asked; the pane closes with it and the conversation list returns. It leaves the browser open when the page is waiting for the user. A new, unrelated task starts with the old tabs closed.
+
+**When the text is not enough.** `browserLook` gives the model a picture of the page (a canvas, a seat map, a control that does nothing for no visible reason). Fields that hold secrets are painted over, and no picture is taken of payment or sign-in pages. A page's own message boxes are answered for it (a notice is acknowledged, a question gets "no" while the agent drives) and reported to the model.
 
 **Assumptions and limits, stated plainly.**
 - The browser runs on the machine that runs the app (a real Chrome through Playwright). That rules out serverless hosting; a public demo needs a small server or a tunnel to a laptop. `BrowserSession` is the one place a hosted browser would plug in.
-- Chrome runs hidden and sends the same browser name a visible Chrome would; nothing else is disguised, and sites can still tell it is automated. The agent does not solve CAPTCHAs: it detects the common ones and hands them to the user. Some sites will refuse an automated browser altogether; the agent then says so and gives the link.
+- Chrome runs hidden and sends the same browser name a visible Chrome would. Nothing else is disguised: Chrome reports that it is being driven and we leave that alone, so sites can tell. The agent does not solve CAPTCHAs: it detects the common ones and hands them to the user, in the live view or in an ordinary Chrome window. Some sites refuse an assisted browser altogether; the agent then says so and gives the link.
 - The safety rules are patterns (field names, button texts in seven languages, known payment hosts). They err towards asking, and they can miss an unusual page. The approval step is the second line: a commitment the patterns miss is still one the model is told to mark.
 - One browser per visitor, at most four at once on a server; idle ones close after twenty minutes.
 - Anyone who knows a visitor's browser id (a random value in their browser's storage) could watch that browser. Fine for a demo, not for production: that needs accounts.
@@ -90,7 +96,7 @@ Code: `web/src/lib/browser/` (`protocol.ts` the contract, `session.ts` the brows
 - **Code map** (all under `web/src`):
   - `lib/widgets/types.ts`: the contract between tools and widgets.
   - `lib/exa/client.ts`: the Exa client (search, contents, agent runs), with cost tracking and a 5-minute cache.
-  - `lib/agent/tools/`: the 22 tools. `lib/agent/instructions.ts`: the system prompt.
+  - `lib/agent/tools/`: the 24 tools. `lib/agent/instructions.ts`: the system prompt.
   - `app/api/chat/route.ts`: the agent loop, usage metadata, context trimming, prompt caching.
   - `components/butler/`: the chat interface. `components/widgets/`: the widgets. `WIDGETS.md` at the app root is the guide for building one.
 
@@ -103,6 +109,6 @@ Code: `web/src/lib/browser/` (`protocol.ts` the contract, `session.ts` the brows
 
 - **Two projects, one team of two.** Can one team submit two projects (Dock and this), and is each eligible for the main prize? Someone has to be at each table during peer review. Ask the organisers.
 - **Deployment.** Not done. The app needs a public address for the submission's demo link and for phones at the table. With the live browser it must be a server that can run Chrome (or a tunnel to the laptop), not a serverless host.
-- **Human checks inside the live browser.** Detected and handed to the user, but nobody has yet tried passing one by hand in the automated Chrome; some may refuse it.
+- **Human checks and Google sign-in.** Human checks are detected and handed to the user, and the ordinary-window path exists for what the live view cannot do. Neither has been tried by a person yet: passing a check by hand in the assisted Chrome, and signing in to a real Google account in the ordinary window and continuing in the assisted one.
 - **Hotels are slow** (up to a minute through Jinko). A faster source would improve the trip demo.
 - **Not yet checked on a phone.** The layout is responsive, but nobody has used it on one.

@@ -46,7 +46,17 @@ export type Target = {
 export type Verdict =
   | { decision: "allow" }
   | { decision: "approve"; reason: string }
-  | { decision: "block"; kind: "payment" | "password" | "code"; reason: string };
+  | { decision: "block"; kind: "payment" | "password" | "code" | "login"; reason: string };
+
+/**
+ * Sign-in pages run by identity providers: Google, Microsoft, Apple, banks' strong identification.
+ * Signing in is the user's, start to finish: the agent does not click, type or choose an account there.
+ */
+const IDENTITY_HOSTS =
+  /(^|\.)(accounts\.google\.com|accounts\.youtube\.com|login\.microsoftonline\.com|login\.live\.com|login\.microsoft\.com|appleid\.apple\.com|idmsa\.apple\.com|login\.yahoo\.com|id\.atlassian\.com|signin\.aws\.amazon\.com|[a-z0-9-]+\.auth0\.com|[a-z0-9-]+\.okta\.com|[a-z0-9-]+\.onelogin\.com|tunnistautuminen\.suomi\.fi|tunnistus\.suomi\.fi|bankid\.com)$/i;
+
+/** Sites that refuse a sign-in typed into an assisted browser. The user signs in to these in an ordinary Chrome window. */
+const REFUSES_ASSISTED_SIGN_IN = /(^|\.)(accounts\.google\.com|accounts\.youtube\.com)$/i;
 
 /** Hosts whose whole page is a payment or bank step. The agent does nothing there. */
 const PAYMENT_HOSTS =
@@ -91,6 +101,16 @@ const host = (url: string): string => {
   }
 };
 
+/** The whole page is an identity provider's sign-in. */
+export function isIdentityHost(url: string): boolean {
+  return IDENTITY_HOSTS.test(host(url));
+}
+
+/** The site only accepts sign-ins from an ordinary browser. */
+export function refusesAssistedSignIn(url: string): boolean {
+  return REFUSES_ASSISTED_SIGN_IN.test(host(url));
+}
+
 /** The whole page is a payment or bank step. */
 export function isPaymentHost(url: string): boolean {
   return PAYMENT_HOSTS.test(host(url));
@@ -124,6 +144,7 @@ export function isSensitiveName(name: string): boolean {
 }
 
 const HANDOVER_HINT = {
+  login: 'Call requestUserAction with kind "login": the user signs in themselves.',
   payment: 'Call requestUserAction with kind "payment": the user pays themselves in the live browser, or stops there.',
   password: 'Call requestUserAction with kind "login": the user signs in themselves in the live browser.',
   code: 'Call requestUserAction with kind "verification": the user enters the code themselves in the live browser.',
@@ -141,6 +162,9 @@ export type Step = {
 export function judge(step: Step, target: Target | null, pageUrl: string): Verdict {
   if (isPaymentHost(pageUrl)) {
     return { decision: "block", kind: "payment", reason: `This is a payment page (${host(pageUrl)}). You never act on payment pages. ${HANDOVER_HINT.payment}` };
+  }
+  if (isIdentityHost(pageUrl)) {
+    return { decision: "block", kind: "login", reason: `This is a sign-in page (${host(pageUrl)}). You never act on sign-in pages, not even to pick an account. ${HANDOVER_HINT.login}` };
   }
   if (!target) return step.commits ? { decision: "approve", reason: "The agent says this step acts on your behalf." } : { decision: "allow" };
 

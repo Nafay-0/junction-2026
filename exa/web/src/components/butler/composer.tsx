@@ -202,6 +202,9 @@ export function Composer({
   );
 }
 
+/** "Claude Opus 5.5" is "Opus 5.5" where room is short: the dot beside it already says which family. */
+const shortModel = (label: string) => label.replace(/^Claude\s+/, "").replace(/^Gemini\s+\d+\s+/, "");
+
 function ModelPicker({ modelId, onChange }: { modelId: string; onChange: (id: string) => void }) {
   const current = getModel(modelId);
   const groups: Array<[string, ModelInfo[]]> = [
@@ -211,11 +214,13 @@ function ModelPicker({ modelId, onChange }: { modelId: string; onChange: (id: st
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        className="flex h-9 min-w-0 items-center gap-1.5 rounded-full px-2.5 text-[0.8rem] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-[state=open]:bg-muted data-[state=open]:text-foreground"
-        aria-label="Choose model"
+        className="flex h-9 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[0.8rem] whitespace-nowrap text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-[state=open]:bg-muted data-[state=open]:text-foreground"
+        aria-label={`Choose model. Now: ${current.label}`}
       >
         <span className={cn("size-1.5 shrink-0 rounded-full", current.provider === "claude" ? "bg-brass" : "bg-chart-3")} />
-        <span className="truncate">{current.label}</span>
+        {/* Never cut off mid-word: the short name in a narrow column, the full one where it fits. */}
+        <span className="@min-[560px]/chat:hidden">{shortModel(current.label)}</span>
+        <span className="hidden @min-[560px]/chat:inline">{current.label}</span>
         <ChevronDown className="size-3.5 shrink-0 opacity-60" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" side="top" className="w-72">
@@ -273,6 +278,8 @@ function PlaceChip({ place, onPlaceChange, exact, onLocate, onClearExact }: Wher
   const [problem, setProblem] = React.useState("");
   // Always a name. Until the name of a freshly shared position has been looked up, say so in words.
   const label = exact ? (exact.label ?? "Your location") : place;
+  // "Otaniemi, Espoo, Finland" is "Otaniemi" where room is short.
+  const short = label.split(",")[0]?.trim() ?? "";
 
   const shareExact = async () => {
     setLocating(true);
@@ -294,11 +301,14 @@ function PlaceChip({ place, onPlaceChange, exact, onLocate, onClearExact }: Wher
       }}
     >
       <PopoverTrigger
-        className="hidden h-9 min-w-0 items-center gap-1.5 rounded-full px-2.5 text-[0.8rem] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-[state=open]:bg-muted min-[420px]:flex"
+        className="flex h-9 min-w-9 shrink-0 items-center justify-center gap-1.5 rounded-full px-2.5 text-[0.8rem] whitespace-nowrap text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-[state=open]:bg-muted"
         aria-label={exact ? `Your exact location: ${label}` : `Your location: ${label || "not set"}`}
+        title={label || "Set location"}
       >
         {exact ? <LocateFixed className="size-3.5 shrink-0 text-brand" /> : <MapPin className="size-3.5 shrink-0" />}
-        <span className="max-w-[9rem] truncate">{label || "Set location"}</span>
+        {/* The pin alone in a narrow column, then the first part of the name, then all of it. */}
+        <span className="hidden max-w-[8rem] truncate @min-[400px]/chat:inline @min-[560px]/chat:hidden">{short || "Set location"}</span>
+        <span className="hidden max-w-[11rem] truncate @min-[560px]/chat:inline">{label || "Set location"}</span>
       </PopoverTrigger>
       <PopoverContent align="start" side="top" className="w-80 p-0">
         <div className="space-y-2.5 p-3.5">

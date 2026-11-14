@@ -2,8 +2,9 @@
 
 import * as React from "react";
 import { useTheme } from "next-themes";
-import { ConciergeBell, Moon, PanelLeft, Plus, Sun } from "lucide-react";
+import { Moon, PanelLeft, Plus, Sun } from "lucide-react";
 import { APP_NAME } from "@/lib/brand";
+import { Logo } from "@/components/brand/logo";
 import { useHydrated } from "@/lib/use-client";
 import type { RunStats } from "@/lib/agent/models";
 import { EMPTY_USAGE } from "@/lib/agent/models";
@@ -58,8 +59,16 @@ export function TopBar({
   sidebarOpen: boolean;
   onToggleSidebar: () => void;
 }) {
+  // Nothing on the right yet (a new conversation): the name has all the room it needs.
+  const roomy = !stats && !showNew;
+  /*
+   * Sized to the chat column, not to the window: beside the live browser the column can be 380
+   * pixels wide on a large screen. Nothing here wraps. As the column narrows, things step out in
+   * this order: the Exa count, the token count, the "New task" label, the name. The cost, the
+   * theme switch and the conversation list button always stay.
+   */
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-1.5 border-b border-transparent bg-background/80 px-3 backdrop-blur-xl sm:px-4">
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-1.5 border-b border-transparent bg-background/80 px-3 whitespace-nowrap backdrop-blur-xl @min-[480px]/chat:px-4">
       {/* When the list is open it carries its own close button; on phones it is a drawer, so the toggle stays. */}
       <button
         type="button"
@@ -70,14 +79,12 @@ export function TopBar({
       >
         <PanelLeft className="size-[1.1rem]" />
       </button>
-      <button type="button" onClick={onNewChat} className="flex items-center gap-2.5 rounded-lg py-1 pr-2 transition-opacity hover:opacity-80" aria-label={`${APP_NAME}: start over`}>
-        <span className="flex size-8 items-center justify-center rounded-[0.6rem] bg-primary text-primary-foreground shadow-card">
-          <ConciergeBell className="size-[1.05rem]" strokeWidth={2} />
-        </span>
-        <span className="font-display text-[1.45rem] leading-none tracking-tight">{APP_NAME}</span>
+      <button type="button" onClick={onNewChat} className="flex shrink-0 items-center gap-2.5 rounded-lg py-1 pr-2 transition-opacity hover:opacity-80" aria-label={`${APP_NAME}: start over`}>
+        <Logo size={32} className="rounded-[0.6rem] shadow-card" />
+        <span className={`font-display text-[1.45rem] leading-none tracking-tight ${roomy ? "" : "hidden @min-[360px]/chat:inline"}`}>{APP_NAME}</span>
       </button>
 
-      <div className="ml-auto flex items-center gap-1">
+      <div className="ml-auto flex shrink-0 items-center gap-1">
         {stats ? <UsageMeter stats={stats} /> : null}
         {showNew ? (
           <Tooltip>
@@ -86,10 +93,10 @@ export function TopBar({
                 type="button"
                 onClick={onNewChat}
                 aria-label="New task"
-                className="flex h-9 items-center gap-1.5 rounded-full px-2.5 text-[0.8rem] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="flex h-9 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[0.8rem] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <Plus className="size-4" />
-                <span className="hidden sm:inline">New task</span>
+                <span className="hidden @min-[410px]/chat:inline">New task</span>
               </button>
             </TooltipTrigger>
             <TooltipContent>Start a new task</TooltipContent>
@@ -107,14 +114,14 @@ function UsageMeter({ stats }: { stats: RunStats }) {
   return (
     <Popover>
       <PopoverTrigger
-        className="nums flex h-9 items-center gap-2 rounded-full border border-border bg-card px-3 text-[0.75rem] text-muted-foreground transition-colors hover:border-ring/50 hover:text-foreground"
+        className="nums flex h-9 shrink-0 items-center gap-2 rounded-full border border-border bg-card px-3 text-[0.75rem] text-muted-foreground transition-colors hover:border-ring/50 hover:text-foreground"
         aria-label="Usage for this conversation"
       >
         <span className="font-medium text-foreground">{fmtUsd(totalCost(stats))}</span>
-        <span className="hidden text-border min-[400px]:inline">|</span>
-        <span className="hidden min-[400px]:inline">{tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}k` : tokens} tokens</span>
-        <span className="hidden text-border sm:inline">|</span>
-        <span className="hidden sm:inline">{calls} Exa</span>
+        <span className="hidden text-border @min-[520px]/chat:inline">|</span>
+        <span className="hidden @min-[520px]/chat:inline">{tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}k` : tokens} tokens</span>
+        <span className="hidden text-border @min-[590px]/chat:inline">|</span>
+        <span className="hidden @min-[590px]/chat:inline">{calls} Exa</span>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-72 p-0 text-[0.8rem]">
         <StatsBreakdown stats={stats} title="This conversation" />
@@ -131,7 +138,7 @@ function ThemeToggle() {
       type="button"
       onClick={() => setTheme(dark ? "light" : "dark")}
       aria-label={dark ? "Switch to light theme" : "Switch to dark theme"}
-      className="flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      className="flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
     >
       {dark ? <Sun className="size-[1.05rem]" /> : <Moon className="size-[1.05rem]" />}
     </button>

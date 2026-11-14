@@ -16,6 +16,11 @@ export type BrowserSnapshot = {
   state: BrowserState;
   /** The agent's most recent step. Its `id` changes with every new one. */
   action: AgentAction | null;
+  /**
+   * True while that step is happening. A step is news once: when a view is opened again, or the
+   * agent gets the page back, the last step must not play a second time as if it were new.
+   */
+  fresh: boolean;
   /** False before the first message arrives and while the connection is being restored. */
   connected: boolean;
 };
@@ -46,13 +51,17 @@ type Entry = {
   retryTimer: ReturnType<typeof setTimeout> | undefined;
   closeTimer: ReturnType<typeof setTimeout> | undefined;
   mock: MockHandlers | null;
+  /** Ends the life of the step being shown. */
+  actionTimer: ReturnType<typeof setTimeout> | undefined;
   /** Input waiting to be sent, and the send in flight (batches go out one at a time, in order). */
   queue: UserInput[];
   flushTimer: ReturnType<typeof setTimeout> | undefined;
   sending: Promise<void>;
 };
 
-const DISCONNECTED: BrowserSnapshot = { state: IDLE_STATE, action: null, connected: false };
+const DISCONNECTED: BrowserSnapshot = { state: IDLE_STATE, action: null, fresh: false, connected: false };
+/** How long after it starts a step still counts as happening: long enough for its drawing to finish. */
+const STEP_LIFE_MS = 4500;
 const entries = new Map<string, Entry>();
 
 function entryFor(id: string): Entry {
@@ -71,6 +80,7 @@ function entryFor(id: string): Entry {
       retryTimer: undefined,
       closeTimer: undefined,
       mock: null,
+      actionTimer: undefined,
       queue: [],
       flushTimer: undefined,
       sending: Promise.resolve(),
@@ -92,9 +102,17 @@ function receive(entry: Entry, event: BrowserEvent) {
     entry.lastFrame = { data: event.data, width: event.width, height: event.height };
     entry.frameListeners.forEach((listener) => listener(entry.lastFrame!));
   } else if (event.type === "state") {
-    update(entry, { state: event.state });
+    // No page, no step: a browser that was closed and opened again starts with a clean view.
+    if (event.state.status !== "ready" && entry.snapshot.action) {
+      clearTimeout(entry.actionTimer);
+      update(entry, { state: event.state, action: null, fresh: false });
+    } else update(entry, { state: event.state });
   } else if (event.type === "action") {
-    update(entry, { action: event.action });
+    update(entry, { action: event.action, fresh: true });
+    clearTimeout(entry.actionTimer);
+    entry.actionTimer = setTimeout(() => {
+      if (entry.snapshot.action?.id === event.action.id) update(entry, { fresh: false });
+    }, event.action.leadMs + STEP_LIFE_MS);
   }
 }
 
@@ -316,7 +334,7 @@ export function mockBrowser(id: string, handlers: MockHandlers = {}): { emit: (e
     stop: () => {
       entry.mock = null;
       entry.lastFrame = null;
-      update(entry, { state: IDLE_STATE, action: null, connected: false });
+      update(entry, { state: IDLE_STATE, action: null, fresh: false, connected: false });
       if (entry.users > 0) connect(entry);
     },
   };

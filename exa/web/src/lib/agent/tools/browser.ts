@@ -31,8 +31,9 @@ export function browserOpenTool(ctx: ToolContext) {
       "You get back the page as text: what is in view, with a reference like [e12] on everything you can act on. References are only good for the page text you saw last.",
     inputSchema: z.object({
       url: z.string().describe("The address to open: one a tool returned or the user gave, or a site's home page when you need to find your way from there."),
+      fresh: z.boolean().optional().describe("True when this starts a different task from the one the browser was last used for: tabs left over from that task are closed first."),
     }),
-    execute: async ({ url }, { abortSignal }): Promise<BrowserStepData> => session(ctx)?.open(url, abortSignal) ?? unavailable("open"),
+    execute: async ({ url, fresh }, { abortSignal }): Promise<BrowserStepData> => session(ctx)?.open(url, abortSignal, fresh === true) ?? unavailable("open"),
     toModelOutput: ({ output }) => ({ type: "text", value: output.page }),
   });
 }
@@ -85,6 +86,43 @@ export function browserReadTool(ctx: ToolContext) {
     }),
     execute: async ({ scope, find }, { abortSignal }): Promise<BrowserStepData> =>
       session(ctx)?.read({ scope: find ? "page" : (scope ?? "view"), find }, abortSignal) ?? unavailable("read"),
+    toModelOutput: ({ output }) => ({ type: "text", value: output.page }),
+  });
+}
+
+export function browserLookTool(ctx: ToolContext) {
+  return tool({
+    description:
+      "Look at the page open in the live browser as a picture. Use it only when the text you get back is not enough: the page is drawn as an image or a canvas (a seat map, a chart, a calendar), " +
+      "a control does nothing and you cannot tell why, or you need to check how something looks. It is slower than reading, so do not use it as a routine step. You still act through references; the picture is for understanding.",
+    inputSchema: z.object({
+      why: z.string().optional().describe("A few words on what you need to see."),
+    }),
+    execute: async (_input, { abortSignal, toolCallId }): Promise<BrowserStepData> => session(ctx)?.look(toolCallId, abortSignal) ?? unavailable("read"),
+    toModelOutput: ({ toolCallId, output }) => {
+      // The picture is kept on the server for a few steps, never in the conversation the browser saves.
+      const picture = session(ctx)?.picture(toolCallId);
+      if (!picture) return { type: "text", value: output.ok ? output.page.replace(/^A picture of the page[^\n]*\n\n/, "(The picture taken here is no longer kept. Look again if you need it.)\n\n") : output.page };
+      return {
+        type: "content",
+        value: [
+          { type: "text", text: output.page },
+          { type: "file", mediaType: "image/jpeg", data: { type: "data", data: picture } },
+        ],
+      };
+    },
+  });
+}
+
+export function browserCloseTool(ctx: ToolContext) {
+  return tool({
+    description:
+      "Close the live browser. Do it as your last step when the task there is finished and nothing is left for the user to see or do on the page, and whenever the user asks you to close it. " +
+      "Sign-ins are kept, so the next task starts signed in. Do not close it while the user still needs the page: a basket waiting for them to pay, a form they should check, a page you have handed over.",
+    inputSchema: z.object({
+      reason: z.string().optional().describe("A few words on why: 'the reservation is confirmed', 'you asked me to'."),
+    }),
+    execute: async (_input, { abortSignal }): Promise<BrowserStepData> => session(ctx)?.shut(abortSignal) ?? unavailable("close"),
     toModelOutput: ({ output }) => ({ type: "text", value: output.page }),
   });
 }

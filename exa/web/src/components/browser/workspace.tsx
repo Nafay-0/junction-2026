@@ -119,6 +119,13 @@ export function BrowserWorkspace({
       const started = (previous.status === "idle" || previous.status === "closed") && (next.status === "starting" || next.status === "ready");
       const handedOver = Boolean(next.handover) && (!previous.handover || previous.handover.toolCallId !== next.handover?.toolCallId);
       if ((started || handedOver) && modeRef.current === "closed") writeMode("split");
+      // The browser was closed (the agent finished there, or the user chose "Close browser"): the
+      // pane has nothing left to show, so the chat gets its room back.
+      const ended = previous.status === "ready" && (next.status === "closed" || next.status === "idle");
+      if (ended && modeRef.current !== "closed") {
+        setPeek(false);
+        writeMode("closed");
+      }
       // An approval is answered in the chat: bring the chat in when the page covers it.
       if (next.approval && !previous.approval && modeRef.current === "full") setPeek(true);
     });
@@ -268,7 +275,9 @@ export function BrowserWorkspace({
         <div
           inert={full && !peek}
           className={cn(
-            "flex min-w-0 flex-col",
+            // A named container: what is inside sizes itself to this column, not to the window,
+            // because beside the browser the column is far narrower than the screen.
+            "@container/chat flex min-w-0 flex-col",
             full
               ? cn(
                   "fixed inset-y-0 right-0 z-[44] w-[min(30rem,100vw)] border-l border-border bg-background shadow-float transition-transform duration-300 ease-out",

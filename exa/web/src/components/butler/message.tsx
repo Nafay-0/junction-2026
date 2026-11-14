@@ -62,7 +62,7 @@ export function UserMessage({
       ) : (
         <>
           {text ? (
-            <div className="max-w-[88%] rounded-2xl rounded-br-md bg-secondary px-4 py-2.5 text-[0.95rem] leading-relaxed whitespace-pre-wrap text-secondary-foreground">
+            <div className="max-w-[88%] rounded-2xl rounded-br-md bg-secondary px-4 py-2.5 text-[0.95rem] leading-relaxed [overflow-wrap:anywhere] whitespace-pre-wrap text-secondary-foreground">
               {text}
             </div>
           ) : null}

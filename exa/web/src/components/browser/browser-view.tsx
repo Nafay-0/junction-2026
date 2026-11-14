@@ -76,7 +76,10 @@ export function BrowserView({
   /** Extra content under the "no browser yet" message, for example a button. */
   empty?: React.ReactNode;
 }) {
-  const { state, action, connected } = useBrowser(browserId);
+  const { state, action: latest, fresh, connected } = useBrowser(browserId);
+  // Only a step that is happening now is drawn. The last one is not replayed when this view is
+  // opened again or the agent gets the page back; a step waiting for approval stays marked.
+  const action = latest && (fresh || (latest.kind === "approval" && Boolean(state.approval))) ? latest : null;
   const viewport = state.viewport.width > 0 && state.viewport.height > 0 ? state.viewport : VIEWPORT;
 
   /* Fit the page into whatever room there is, keeping its shape. */
@@ -378,8 +381,9 @@ function AgentPointer({
       void glide.start({ opacity: 0, transition: { duration: 0.2 } });
       return;
     }
-    if (busy || id === null) return;
-    const timer = setTimeout(() => void glide.start({ opacity: 0, transition: { duration: 0.5 } }), 2600);
+    if (busy) return;
+    // Idle: step aside after a moment. With no step to point at any more, step aside at once.
+    const timer = setTimeout(() => void glide.start({ opacity: 0, transition: { duration: 0.5 } }), id === null ? 0 : 2600);
     return () => clearTimeout(timer);
   }, [hidden, busy, id, glide]);
 

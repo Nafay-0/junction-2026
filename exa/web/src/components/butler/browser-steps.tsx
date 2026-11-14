@@ -21,12 +21,13 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { APP_NAME } from "@/lib/brand";
 import type { BrowserStepData } from "@/lib/browser/protocol";
 import { faviconOf } from "@/lib/widgets/types";
 import type { ToolPart, WidgetHandlers } from "./tool-part";
 
 /** The agent's steps in the live browser. They are shown together, as one trail. */
-export const BROWSER_TOOLS = new Set(["tool-browserOpen", "tool-browserAct", "tool-browserRead"]);
+export const BROWSER_TOOLS = new Set(["tool-browserOpen", "tool-browserAct", "tool-browserRead", "tool-browserLook", "tool-browserClose"]);
 
 type RowState = "running" | "done" | "failed" | "blocked" | "waiting" | "approved" | "declined";
 
@@ -56,6 +57,8 @@ type ActInput = { action?: string; text?: string; direction?: string; summary?: 
 function intent(part: ToolPart): { label: string; action: string } {
   const input = (part.input ?? {}) as ActInput;
   if (part.type === "tool-browserOpen") return { label: input.url ? `Opening ${hostOf(input.url) || "the page"}` : "Opening a page", action: "open" };
+  if (part.type === "tool-browserClose") return { label: "Closing the browser", action: "close" };
+  if (part.type === "tool-browserLook") return { label: "Looking at the page", action: "read" };
   if (part.type === "tool-browserRead") return { label: input.find ? `Looking for "${clip(input.find, 40)}"` : "Reading the page", action: "read" };
   const text = input.text ? `"${clip(input.text, 40)}"` : "";
   switch (input.action) {
@@ -108,7 +111,7 @@ function toRow(part: ToolPart): Row {
 function firstSentence(text: string | undefined): string | undefined {
   if (!text) return undefined;
   const cut = text.split(/(?<=[.!?])\s+(?=[A-Z"])/)[0];
-  return clip(cut.replace(/\bYou never\b/g, "Hovi never").replace(/\byou\b/g, "Hovi"), 200);
+  return clip(cut.replace(/\bYou never\b/g, `${APP_NAME} never`).replace(/\byou\b/g, APP_NAME), 200);
 }
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -122,6 +125,7 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   hover: MousePointerClick,
   read: Eye,
   wait: Hourglass,
+  close: X,
 };
 
 const VISIBLE_WHILE_WORKING = 4;

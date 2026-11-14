@@ -3,6 +3,7 @@
 import * as React from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
+  AppWindow,
   ArrowLeft,
   ArrowRight,
   Check,
@@ -190,9 +191,30 @@ export function BrowserPane({
 
       {/* The moments that need the user */}
       <AnimatePresence initial={false}>
-        {state.handover && userControl ? (
+        {state.outside ? (
+          <Banner key="outside" tone="brass">
+            <BannerRow
+              icon={<AppWindow />}
+              title="Carry on in the Chrome window that opened"
+              text={`It is an ordinary Chrome on this computer with nothing attached, so ${state.outside.site} accepts your sign-in, and what you type there never passes through ${APP_NAME}. Come back here when you are done.`}
+              actions={
+                <BannerButton primary onClick={() => void run({ action: "window-done" })}>
+                  <Check className="size-3.5" strokeWidth={2.5} />I am done there
+                </BannerButton>
+              }
+            />
+          </Banner>
+        ) : state.handover && userControl ? (
           <Banner key="handover" tone="brass">
-            <HandoverBanner kind={state.handover.kind} reason={state.handover.reason} site={state.handover.site} onAnswer={onHandover} />
+            <HandoverBanner
+              kind={state.handover.kind}
+              reason={state.handover.reason}
+              site={state.handover.site}
+              onAnswer={onHandover}
+              // Google refuses a sign-in typed into an assisted browser: the ordinary window is the way.
+              window={state.canOpenWindow && state.handover.kind !== "payment" ? (ONLY_ORDINARY.test(domainOf(state.url)) ? "first" : "offer") : undefined}
+              onWindow={() => void run({ action: "window" })}
+            />
           </Banner>
         ) : state.paymentPage ? (
           <Banner key="payment" tone="brass">
@@ -225,13 +247,33 @@ export function BrowserPane({
               <span>
                 <span className="font-medium text-foreground">You are in control.</span> {APP_NAME} is paused until you hand the page back.
               </span>
+              {state.canOpenWindow ? (
+                <button
+                  type="button"
+                  onClick={() => void run({ action: "window" })}
+                  title="For a sign-in the site will not accept here: an ordinary Chrome window opens on this computer"
+                  className="ml-auto flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-border bg-card px-2.5 text-[0.75rem] font-medium text-foreground transition-colors hover:bg-muted"
+                >
+                  <AppWindow className="size-3.5 text-muted-foreground" />
+                  Normal Chrome window
+                </button>
+              ) : null}
             </p>
           </Banner>
         ) : null}
       </AnimatePresence>
 
       {/* The page */}
-      <div className="flex min-h-0 flex-1 p-2 @[26rem]:p-3">
+      <div className="relative flex min-h-0 flex-1 p-2 @[26rem]:p-3">
+        {state.outside ? (
+          <div className="absolute inset-0 z-50 flex animate-fade flex-col items-center justify-center gap-3 bg-surface/90 px-6 text-center backdrop-blur-sm">
+            <span className="flex size-11 items-center justify-center rounded-2xl bg-card text-brass shadow-card hairline">
+              <AppWindow className="size-5" />
+            </span>
+            <p className="max-w-[22rem] text-[0.9rem] leading-relaxed font-medium">The page is open in a Chrome window on this computer.</p>
+            <p className="max-w-[24rem] text-[0.8rem] leading-relaxed text-muted-foreground">Do the step there, then come back and say you are done. Your sign-in is kept, and {APP_NAME} carries on from where it was.</p>
+          </div>
+        ) : null}
         <BrowserView
           browserId={browserId}
           empty={
@@ -561,8 +603,27 @@ const HANDOVER: Record<HandoverKind, { icon: React.ReactNode; title: string; hel
   },
 };
 
-function HandoverBanner({ kind, reason, site, onAnswer }: { kind: HandoverKind; reason: string; site?: string; onAnswer: (answer: HandoverAnswer) => void }) {
+/** Sites that only accept a sign-in from an ordinary browser. */
+const ONLY_ORDINARY = /(^|\.)accounts\.(google|youtube)\.com$/i;
+
+function HandoverBanner({
+  kind,
+  reason,
+  site,
+  onAnswer,
+  window: ordinary,
+  onWindow,
+}: {
+  kind: HandoverKind;
+  reason: string;
+  site?: string;
+  onAnswer: (answer: HandoverAnswer) => void;
+  /** Whether to offer an ordinary Chrome window for this step: "first" when it is the only way that works. */
+  window?: "offer" | "first";
+  onWindow: () => void;
+}) {
   const copy = HANDOVER[kind] ?? HANDOVER.other;
+  const help = ordinary === "first" ? "This site only accepts sign-ins from an ordinary browser. Open one here, sign in, and come back: your sign-in is kept." : copy.help;
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5">
       <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-card text-brass hairline [&_svg]:size-[1.1rem]">{copy.icon}</span>
@@ -572,11 +633,17 @@ function HandoverBanner({ kind, reason, site, onAnswer }: { kind: HandoverKind; 
           {site ? <span className="font-normal text-muted-foreground"> on {site}</span> : null}
         </p>
         {reason ? <p className="mt-0.5 text-[0.82rem] leading-snug text-foreground">{reason}</p> : null}
-        <p className="mt-0.5 text-[0.75rem] leading-snug text-muted-foreground">{copy.help}</p>
+        <p className="mt-0.5 text-[0.75rem] leading-snug text-muted-foreground">{help}</p>
       </div>
-      <div className="flex shrink-0 items-center gap-1.5">
+      <div className="flex shrink-0 flex-wrap items-center gap-1.5">
         <BannerButton onClick={() => onAnswer({ status: "skipped" })}>Skip</BannerButton>
-        <BannerButton primary onClick={() => onAnswer({ status: "done" })}>
+        {ordinary ? (
+          <BannerButton primary={ordinary === "first"} onClick={onWindow}>
+            <AppWindow className="size-3.5" />
+            Use a normal Chrome window
+          </BannerButton>
+        ) : null}
+        <BannerButton primary={ordinary !== "first"} onClick={() => onAnswer({ status: "done" })}>
           <Check className="size-3.5" strokeWidth={2.5} />
           {copy.done}
         </BannerButton>

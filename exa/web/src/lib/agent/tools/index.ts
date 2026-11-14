@@ -2,7 +2,7 @@ import "server-only";
 
 import type { InferUITools, LanguageModel, UIMessage } from "ai";
 import type { RunStats } from "../models";
-import { browserActTool, browserOpenTool, browserReadTool, requestUserActionTool } from "./browser";
+import { browserActTool, browserCloseTool, browserLookTool, browserOpenTool, browserReadTool, requestUserActionTool } from "./browser";
 import { askUserTool, requestLocationTool, showActionsTool, showComparisonTool, showKeyFactsTool, showWidgetTool, updatePlanTool } from "./compose";
 import type { ToolContext } from "./context";
 import { getPredictionMarketTool, getStocksTool } from "./markets";
@@ -36,6 +36,8 @@ export function createTools(ctx: ToolContext, mainModel: LanguageModel) {
     browserOpen: browserOpenTool(ctx),
     browserAct: browserActTool(ctx),
     browserRead: browserReadTool(ctx),
+    browserLook: browserLookTool(ctx),
+    browserClose: browserCloseTool(ctx),
     requestUserAction: requestUserActionTool(ctx),
   };
 }

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- The Baton mark as the browser tab's icon. The shapes are copied from LOGO in src/lib/brand.ts:
+       change them together. It follows the browser's own light or dark setting. -->
+  <style>
+    .tile { fill: #004935 }
+    .mark { fill: #f5fcf8 }
+    @media (prefers-color-scheme: dark) {
+      .tile { fill: #62d8a6 }
+      .mark { fill: #03160f }
+    }
+  </style>
+  <rect class="tile" width="32" height="32" rx="9"/>
+  <path class="mark" d="M14.7 13.06 7.48 20.28A3 3 0 0 0 11.72 24.52L14.7 21.54Z"/>
+  <path class="mark" opacity="0.6" d="M17.3 10.46 20.28 7.48A3 3 0 0 1 24.52 11.72L17.3 18.94Z"/>
+</svg>

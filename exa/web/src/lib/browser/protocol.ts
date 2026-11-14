@@ -61,6 +61,15 @@ export type BrowserState = {
   activity: string;
   /** The page takes payment. The agent never acts here; the user may pay themselves. */
   paymentPage: boolean;
+  /**
+   * Set while the page is open in an ordinary Chrome window on the computer that runs the app,
+   * with nothing attached to it. That is where a step is done that a site will not accept from an
+   * assisted browser (Google's sign-in is the usual one). The live view is paused until the user
+   * comes back; what they did there (a sign-in) is kept.
+   */
+  outside?: { site: string };
+  /** The app runs on a computer with a screen and Chrome, so such a window can be opened. */
+  canOpenWindow: boolean;
   /** Set with status "error". */
   error?: string;
 };
@@ -78,6 +87,7 @@ export const IDLE_STATE: BrowserState = {
   busy: false,
   activity: "",
   paymentPage: false,
+  canOpenWindow: false,
 };
 
 export type Box = { x: number; y: number; width: number; height: number };
@@ -141,6 +151,13 @@ export type ControlRequest =
   /** Go to an address the user typed. Opens the browser if there is none. Only while the user is in control. */
   | { action: "navigate"; url: string }
   | { action: "tab"; tabId: string }
+  /**
+   * Open the page in an ordinary Chrome window on the computer running the app, for a step the
+   * site will not accept from an assisted browser. `url` defaults to the page that is open.
+   */
+  | { action: "window"; url?: string }
+  /** The user is done in that window: close it and bring the live view back. */
+  | { action: "window-done" }
   /** Close the browser. Sign-ins are kept. */
   | { action: "close" }
   /** Close the browser and wipe every sign-in, cookie and saved form entry. */
@@ -154,7 +171,7 @@ export type BrowserStepData = {
   kind: "browser";
   /** What was done, in plain words: "Opened tableonline.fi", "Clicked 'Reserve'". */
   label: string;
-  action: AgentAction["kind"] | "open";
+  action: AgentAction["kind"] | "open" | "close";
   url: string;
   title: string;
   /** False when the step did not happen. */
