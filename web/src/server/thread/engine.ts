@@ -107,7 +107,7 @@ const ActionSchema: z.ZodType<ThreadAction> = z.discriminatedUnion("type", [
   z.object({ type: z.literal("memory_edit"), itemId: z.string().min(1).max(80), text: z.string().trim().min(2).max(500) }),
   z.object({ type: z.literal("memory_forget"), itemId: z.string().min(1).max(80) }),
   z.object({ type: z.literal("rules_show") }),
-  z.object({ type: z.literal("rules_propose"), change: RulesChangeSchema }),
+  z.object({ type: z.literal("rules_propose"), change: RulesChangeSchema, sign: z.boolean().optional() }),
   z.object({ type: z.literal("rules_sign"), proposalId: z.string().min(1).max(80) }),
   z.object({ type: z.literal("rules_cancel"), proposalId: z.string().min(1).max(80) }),
 ]);
