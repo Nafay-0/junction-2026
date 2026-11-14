@@ -20,7 +20,8 @@ import { ThreadStore, type StoredThread } from "./store";
 import { subjectOf } from "./subject";
 import { runWidget } from "./widgets";
 import { speakFacts } from "./speak";
-import { codeLeaks, englishDays, insideOrTell } from "./refusal";
+import { codeLeaks, englishDays, insideOrTell, readable } from "./refusal";
+import { shortName } from "./watch";
 import { fmtFor, gateReasons } from "@/app/k/[kitchen]/thread-words";
 import { THREAD_WORDS } from "@/app/k/[kitchen]/thread-words.text";
 import { changeLines, groupNameL } from "@/app/k/[kitchen]/rules-change";
@@ -445,6 +446,17 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
         // Words about the order emails ("email receipts to chef@…", "stop the emails", "which address?"): plain code,
         // never the model, never the reader (server/notify/thread.ts).
         const { mailWordsOf, answerMailWords } = await import("@/server/notify/thread");
+        // "Yes" to "Shall I email the receipt? I'd need an address.": the one question that moves it on.
+        const { MAIL_SAY_TEXT } = await import("@/server/notify/say.text");
+        const lastLine = [...thread.turns].reverse().find((x) => x.role === "agent" && x.turnId !== run.turnId && x.replyTo !== "");
+        const { yesOrNo } = await import("@/server/channels/speech");
+        if (lastLine?.role === "agent" && (lastLine.line ?? "").includes(MAIL_SAY_TEXT[body.lang ?? "en"].offer) && body.text!.trim().split(/\s+/).length <= 4 && yesOrNo(body.text!) === "yes" && !/@/.test(body.text!)) {
+          if (run.opening) first.done("email");
+          store.line(thread, run.turnId, { en: "Which address shall I send the receipts to?", fi: "Mihin osoitteeseen lähetän kuitit?", sv: "Vilken adress ska jag skicka kvittona till?" }[body.lang ?? "en"]);
+          store.mark(thread, run.turnId, "line", Date.now() - run.t0);
+          await finishTurn(run);
+          return;
+        }
         const mail = mailWordsOf(body.text!);
         if (mail) {
           const r = await answerMailWords(run.rt, run.k, mail, { person: run.person, via: "thread", lang: body.lang ?? "en" });
@@ -798,14 +810,16 @@ const thousands = (n: number) => String(n).replace(".", ",").replace(/\B(?=(\d{3
 function waitingSentence(order: OrderCard, gate: GateCard, lang: "en" | "fi" | "sv", cards: Card[] = []): string {
   const eur = (c: number) => `**${(c / 100).toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, " ")} €**`;
   const first = order.lines[0];
-  const what = first ? `${thousands(first.quantity)} × ${first.name.replace(/[®™]/g, "").split(/\s+/).slice(0, 4).join(" ")}${order.lines.length > 1 ? (lang === "fi" ? ` ja ${order.lines.length - 1} muuta` : lang === "sv" ? ` och ${order.lines.length - 1} till` : ` and ${order.lines.length - 1} more`) : ""}` : "";
+  // The product as a chef says it; a fractional lot as its amount ("2,1 kg of the Peltolan churned butter").
+  const shortOf = (n: string) => readable(shortName(n.replace(/[®™]/g, "")), lang);
+  const what = first ? `${Number.isInteger(first.quantity) ? `${thousands(first.quantity)} × ${shortOf(first.name)}` : `${thousands(Math.round(first.quantity * (first.packSize ?? 1) * 100) / 100)} ${first.unit === "L" ? "l" : (first.unit ?? "")} ${{ en: "of the", fi: "", sv: "av" }[lang]} ${shortOf(first.name)}`.replace(/\s+/g, " ")}${order.lines.length > 1 ? (lang === "fi" ? ` ja ${order.lines.length - 1} muuta` : lang === "sv" ? ` och ${order.lines.length - 1} till` : ` and ${order.lines.length - 1} more`) : ""}` : "";
   const over = gate.rules?.find((r) => r.rule === "per_order_limit" && r.outcome !== "pass");
   const limit = over?.details?.limitCents;
   // A signer named by role on the test kitchens ("Kitchen manager") is said in the buyer's language.
   const ROLES: Record<string, Record<"fi" | "sv", string>> = { "kitchen manager": { fi: "keittiöpäällikkö", sv: "köksansvarig" }, "head chef": { fi: "keittiömestari", sv: "kökschef" }, owner: { fi: "omistaja", sv: "ägare" }, "food service manager": { fi: "ruokapalvelupäällikkö", sv: "måltidschef" } };
   const raw = gate.approver?.name ?? "";
   const who = raw ? (lang === "en" ? raw : (ROLES[raw.toLowerCase()]?.[lang] ?? raw)) : lang === "fi" ? "vastuuhenkilö" : lang === "sv" ? "en ansvarig" : "a person";
-  const whoEn = /^[A-Z][a-z]+ [a-z]/.test(who) ? `the ${who.toLowerCase()}` : who;
+  const whoEn = /^[A-Z][a-z]+ [a-z]/.test(who) || ROLES[who.toLowerCase()] ? `the ${who.toLowerCase()}` : who;
   if (typeof limit === "number") {
     if (lang === "fi") return `${what} hintaan ${eur(order.totalCents)} ylittää ${eur(limit)}, jonka voin käyttää yksin, joten se tarvitsee hyväksynnän: ${who}.`;
     if (lang === "sv") return `${what} för ${eur(order.totalCents)} är över de ${eur(limit)} jag får handla för själv, så det behöver godkännas av ${who}.`;
@@ -947,7 +961,10 @@ async function tellRequestDifferences(run: TurnRun): Promise<void> {
       const day = u.deliverOn ?? u.deliverBy;
       const one = o.lines.length === 1 ? o.lines[0] : undefined;
       const pack = one?.packSize && one.unit && one.packSize !== 1 ? { count: one.quantity, size: one.packSize, unit: one.unit } : undefined;
-      const diffs = optionDifferences({ key: u.requestId!, name: u.item, ...(u.amount ? { amount: u.amount } : {}), ...(day ? { day } : {}), exact: !!u.deliverOn }, { delivered: o.delivered, deliveryDate: sheet?.type === "sheet" ? sheet.deliveryDate : o.deliveryDate, ...(sub ? { substituteFor: sub.substituteFor, title: o.title } : {}), ...(pack ? { pack } : {}) });
+      // A stand-in by its short name, and not again when the reply already names it.
+      const subName = sub ? readable(shortName(o.title.replace(/[®™]/g, "").replace(/^(Valio )?Hyvä suomalainen /i, "$1").replace(/\s*\(.*\)$/, "")), lang) : "";
+      const named = !!subName && (fold(line).includes(fold(subName.split(/\s+/).slice(0, 2).join(" "))) || /\b(instead|in place of|tilalla|tilalle|i stället)\b/i.test(line));
+      const diffs = optionDifferences({ key: u.requestId!, name: u.item, ...(u.amount ? { amount: u.amount } : {}), ...(day ? { day } : {}), exact: !!u.deliverOn }, { delivered: o.delivered, deliveryDate: sheet?.type === "sheet" ? sheet.deliveryDate : o.deliveryDate, ...(sub && !named ? { substituteFor: sub.substituteFor, title: subName } : {}), ...(pack ? { pack } : {}) });
       fresh.push(...diffs.filter((d) => !told[keyOf(d)]));
     } else if (understood.length > 1 && notice?.type === "notice" && (notice.kind === "refused" || notice.kind === "not_found" || notice.kind === "unavailable")) {
       // An item of a several-item order that will not be on it: its own refusal (the rule, the reason, the next step).
@@ -1628,6 +1645,10 @@ async function changeMenuInWords(run: TurnRun, words: string, lang: "en" | "fi" 
   if (!c.edits.length) return undefined;
   // "New total 19,00 € (was 19,00 €)" says nothing: the old total only when it changed.
   if (c.beforeCents === c.totalCents) c.say = c.say.replace(/\s*\((?:was|oli|var) [^)]*\)/, "");
+  if (!c.changed.length) {
+    const { MENU_SAY_TEXT } = await import("@/server/agent/menu/say.text");
+    c.say = c.say.replace(MENU_SAY_TEXT[lang].nothingElse, "").replace(/\s+/g, " ").trim();
+  }
   const { refreshMenu } = await import("./menu");
   let card = await refreshMenu(run, subj.planId).catch(() => undefined);
   // A line the kitchen's allergen rule still stops (the chocolate with milk in it): one search for the same ingredient

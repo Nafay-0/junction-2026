@@ -398,9 +398,9 @@ describe("the conversation's adapter", () => {
     const fake = new FakeTransport();
     setMailTransport(rt, fake);
     const o = await order(rt, session);
-    expect(await mailFactAfterOrder(rt, k, o, { lang: "en", threadId: "th_1" })).toBe("Want the receipt by email? Tell me the address.");
+    expect(await mailFactAfterOrder(rt, k, o, { lang: "en", threadId: "th_1" })).toBe("Shall I email the receipt? I'd need an address.");
     expect(await mailFactAfterOrder(rt, k, o, { lang: "en", threadId: "th_1" })).toBeUndefined(); // once
-    expect(await mailFactAfterOrder(rt, k, o, { lang: "fi", threadId: "th_2" })).toBe("Haluatko kuitin sähköpostiin? Kerro osoite.");
+    expect(await mailFactAfterOrder(rt, k, o, { lang: "fi", threadId: "th_2" })).toBe("Lähetänkö kuitin sähköpostiin? Tarvitsisin osoitteen.");
 
     const intent = mailWordsOf(`email receipts to ${ADDRESS}`)!;
     expect((await answerMailWords(rt, k, intent, { person: undefined, via: "thread" })).reply).toMatch(/Only the kitchen's signed-in person/);
@@ -417,6 +417,6 @@ describe("the conversation's adapter", () => {
     const o2 = await order(rt, session);
     expect(await mailFactAfterOrder(rt, k, o2, { lang: "en", threadId: "th_1" })).toBe(`I've emailed the receipt to ${MASKED} and will email you if anything changes.`);
     expect((await answerMailWords(rt, k, { kind: "stop" }, { person: { name: "Kaari (kaari)" }, via: "thread", lang: "sv" })).reply).toBe(`Klart: inga fler mejl till ${MASKED}. Kvittona finns kvar i webbutiken.`);
-    expect(await mailFactAfterOrder(rt, k, o2, { lang: "en", threadId: "th_9" })).toBe("Want the receipt by email? Tell me the address.");
+    expect(await mailFactAfterOrder(rt, k, o2, { lang: "en", threadId: "th_9" })).toBe("Shall I email the receipt? I'd need an address.");
   });
 });

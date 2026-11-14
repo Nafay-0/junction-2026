@@ -672,14 +672,31 @@ export async function dishesCard(run: TurnRun, planId: string, before?: Dishes, 
   if (p.draft.dishes.length === 1 && covers) {
     const { dishGroups } = await import("@/server/agent/menu/thread");
     const g = await dishGroups(run.k.info.slug, planId, run.lang ?? "en").catch(() => undefined);
-    if (g)
+    if (g) {
+      // Clean, not bloated: the staples said once ("staples you keep"), a stand-in only when the product is not simply
+      // the ingredient itself (DILL 100G for fresh dill is the dill), by its short name; small amounts in grams.
+      const lang = run.lang ?? "en";
+      const { shortName } = await import("./watch");
+      const { readable } = await import("./refusal");
+      const fold = (t: string) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const itself = (ingredient: string, product: string) => fold(ingredient).split(/[^a-z0-9äöå]+/).filter((w) => w.length >= 4 && !/^(fresh|dried|whole|tuore|kuivattu|färsk)$/.test(w)).every((w) => fold(product).includes(w.slice(0, Math.max(3, w.length - 2))));
+      const grams = (need: string | null) => {
+        const m = /^0[.,](\d+)\s*(kg|l)$/i.exec(need ?? "");
+        if (!m) return need ?? undefined;
+        const n = Math.round(Number(`0.${m[1]}`) * 1000);
+        return `${n} ${m[2].toLowerCase() === "kg" ? "g" : "ml"}`;
+      };
+      const staples = g.onHand.filter((x) => x.status === "staple");
+      const keep = { en: "staples you keep", fi: "perusaineita, joita teillä on aina", sv: "basvaror ni alltid har" }[lang];
       groups = {
-        have: g.onHand.map((x) => ({ name: x.ingredient, ...(x.need ? { need: x.need } : {}), ...(x.basis ? { basis: x.basis } : {}) })),
-        order: g.toOrder.map((x) => ({ name: x.ingredient, ...(x.need ? { need: x.need } : {}), ...(x.standIn ? { instead: x.standIn } : {}) })),
-        cannot: g.cannotGet.map((x) => ({ name: x.ingredient, ...(x.need ? { need: x.need } : {}), why: x.words })),
+        have: g.onHand.map((x) => ({ name: x.ingredient, ...(grams(x.need) ? { need: grams(x.need) } : {}), ...(x.status === "staple" ? (x === staples.at(-1) ? { basis: keep } : {}) : x.basis ? { basis: x.basis } : {}) })),
+        order: g.toOrder.map((x) => ({ name: x.ingredient, ...(grams(x.need) ? { need: grams(x.need) } : {}), ...(x.standIn && !itself(x.ingredient, x.standIn) ? { instead: readable(shortName(x.standIn), lang) } : {}) })),
+        // The reason in a few words ("cannot arrive by Tue 17 Nov"), never the products and ids behind it (the steps hold those).
+        cannot: g.cannotGet.map((x) => ({ name: x.ingredient, ...(grams(x.need) ? { need: grams(x.need) } : {}), why: x.words.split(/:\s|;\s/)[0].replace(/\s*\((?:[A-Z]{2}-)?\d{4,}\)/g, "").replace(/\.$/, "").slice(0, 120) })),
         totalToOrderCents: g.totalToOrderCents,
         complete: g.complete,
       };
+    }
   }
   return {
     ...(groups ? { groups } : {}),

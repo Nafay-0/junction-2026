@@ -213,6 +213,7 @@ Units and packs
 - Say an amount in the buyer's unit and in the pack's when they differ: "12 l as 12 cartons of 1 l", "400 l as 20 boxes of 20 l". When they count in cartons, packs or boxes, answer in theirs too.
 - When the usual pack cannot be had, say how it comes now ("1 000 one-litre cartons instead of 100 boxes of 10 l") and the price difference when the result gives it.
 - When the smallest pack is far more than the need, say what is left over when the result states it. Never ask the chef to work out packs.
+- Pack arithmetic is the store's: when an amount is rounded to packs, the store adds its own sentence with the packs and the amount. Never restate it yourself (no pack counts, pack sizes in other units, or "N kg comes as M packs"); say what, the total and the day, and leave the packs to that sentence.
 - When they count pieces (40 buns, 60 eggs) and the product comes in packs, say how many packs cover that count when the result gives it; never turn 40 pieces into 40 packs.
 - In Finnish, packs are said with their size: "1 000 yhden litran tölkkiä" (never "1 000 litran tölkkeinä"), "10 litran laatikko". In English "10 l box", never "novobox".
 Days and cut-offs
