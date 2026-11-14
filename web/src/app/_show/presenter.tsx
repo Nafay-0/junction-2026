@@ -442,7 +442,7 @@ function Preflight({ checks, spend, checking, onClose, onModel }: { checks?: Pre
       </ul>
       {spend && (
         <p className="mt-4 text-[0.98rem] text-ink-soft">
-          Today: {spend.weeks.used} of {spend.weeks.cap} weeks, {spend.outsideRuns.used} of {spend.outsideRuns.cap} outside-agent runs, model ${spend.modelUsd.used.toFixed(2)} of ${spend.modelUsd.cap.toFixed(2)}. Partner calls: {spend.partnerCalls.byShow} by the show, {spend.partnerCalls.byDock} by Dock since start (ceiling {spend.partnerCalls.dailyCeiling} a day){spend.callsPerWeek !== null ? `, about ${spend.callsPerWeek} per week played` : ""}.
+          Today: {spend.weeks.used} of {spend.weeks.cap} weeks, {spend.outsideRuns.used} of {spend.outsideRuns.cap} outside-agent runs, model ${spend.modelUsd.used.toFixed(2)} of ${spend.modelUsd.cap.toFixed(2)}. Partner calls: {spend.partnerCalls.byShow} by the show, {spend.partnerCalls.byDock} by {PRODUCT_NAME} since start (ceiling {spend.partnerCalls.dailyCeiling} a day){spend.callsPerWeek !== null ? `, about ${spend.callsPerWeek} per week played` : ""}.
         </p>
       )}
       <p className="mt-4">

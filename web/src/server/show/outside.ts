@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { addDaysIso, localNow, nextDeliveryDay } from "@/core/kitchen";
+import { PRODUCT_NAME } from "@/app/_ui/brand";
 import { moneyShort, say } from "@/app/_ui/plain";
 import { runBuyerAgent } from "../agent/runner";
 import { defaultModel, hasCredentials, parseModelSpec, CHEAP_DEFAULTS } from "../agent/models";
@@ -203,7 +204,7 @@ function eventOf(e: TranscriptEvent): OutsideEvent | undefined {
     case "refusal":
       return { at, kind: "error", text: `${e.name} refused${e.rule ? ` (${e.rule})` : ""}: ${say(e.message).slice(0, 200)}` };
     case "human":
-      return { at, kind: "human", text: "Dock asked the buyer a question; a stand-in answered for the demo." };
+      return { at, kind: "human", text: `${PRODUCT_NAME} asked the buyer a question; a stand-in answered for the demo.` };
     case "cap":
       return { at, kind: "error", text: `Stopped by the run's own cap (${e.cap}).` };
     case "error":
