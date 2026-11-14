@@ -123,6 +123,9 @@ function desiredEnvironment(publicUrl) {
     // Seals each kitchen's private key and mandate token in the database (AES-256-GCM). Never change it once
     // kitchens exist: sealed kitchens stay locked until the old value returns.
     "DOCK_ACCOUNT_KEY_SECRET",
+    // Signs the agent runtime's paused approval steps (web/src/server/thread): a sign-off given after a restart
+    // still resumes the agent that was waiting for it.
+    "DOCK_TOOL_APPROVAL_SECRET",
     // /ops can suspend agents: entering it needs this passcode on the public server.
     "DOCK_OPS_PASSCODE",
     // Demo kitchens' connector addresses (/api/mcp/c/<token>) are derived from it: stable across restarts.
