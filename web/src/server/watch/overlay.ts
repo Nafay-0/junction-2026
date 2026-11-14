@@ -7,11 +7,13 @@ import type { LiveOffer, LiveStatus } from "@/core/catalog";
  * (server/watch/service.ts decides who may); every offer it touches says `simulated: true`, so every claim signed
  * from it says so, and its message starts with "STAGED".
  *
- * Kept per Dock instance, so a test's fresh runtime starts with nothing staged.
+ * Kept per Dock instance, so a test's fresh runtime starts with nothing staged; on globalThis, because the bundler
+ * may load this module once per route and the operations route that stages must reach the runtime's overlay.
  */
 export type StagedStockOut = { stageId: string; productId: string; until: string; by: string };
 
-const byDock = new WeakMap<object, Map<string, StagedStockOut[]>>();
+const g = globalThis as typeof globalThis & { __dockStagedStockOuts?: WeakMap<object, Map<string, StagedStockOut[]>> };
+const byDock = (g.__dockStagedStockOuts ??= new WeakMap());
 
 const table = (dock: object) => {
   let t = byDock.get(dock);

@@ -156,7 +156,9 @@ type State = {
   liveCalls: number;
   runs: { at: string; by: string; kitchens: number; findings: number; placed: number; held: number; liveCalls: number }[];
 };
-const states = new WeakMap<Runtime, State>();
+// On globalThis: the bundler may load this module once per route; every route must see the same watch.
+const gw = globalThis as typeof globalThis & { __dockWatchStates?: WeakMap<Runtime, State> };
+const states = (gw.__dockWatchStates ??= new WeakMap<Runtime, State>());
 
 function stateOf(rt: Runtime): State {
   let s = states.get(rt);
