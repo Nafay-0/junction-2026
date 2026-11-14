@@ -242,15 +242,23 @@ function sensitiveBoxesInPage() {
   return out;
 }
 
+/** Where a "verify you are human" check that has not been passed is: the whole page, on screen, or elsewhere on the page. */
+type HumanCheck = "" | "wall" | "view" | "elsewhere";
+
 /**
- * Runs inside the page: is there a "verify you are human" check that has not been passed?
- * These widgets sit in frames the agent cannot read, so without this the agent only sees a
- * button that stays disabled and has no idea why.
+ * Runs inside the page: is there a "verify you are human" check that has not been passed, and
+ * where? These widgets sit in frames the agent cannot read, so without this the agent only sees a
+ * button that stays disabled and has no idea why. Where it is matters as much as whether: many
+ * sites carry one in a newsletter form at the foot of every page, which blocks nothing else.
  */
-function humanCheckInPage() {
+function humanCheckInPage(): "" | "wall" | "view" | "elsewhere" {
   const shown = (el: Element) => {
     const r = el.getBoundingClientRect();
     return r.width > 30 && r.height > 20;
+  };
+  const onScreen = (el: Element) => {
+    const r = el.getBoundingClientRect();
+    return r.bottom > 0 && r.top < window.innerHeight && r.right > 0 && r.left < window.innerWidth;
   };
   const widgets = Array.from(
     document.querySelectorAll('.cf-turnstile, .h-captcha, .g-recaptcha:not([data-size="invisible"]), .frc-captcha, #px-captcha, [data-sitekey]:not([data-size="invisible"])'),
@@ -266,9 +274,13 @@ function humanCheckInPage() {
   const answers = Array.from(
     document.querySelectorAll<HTMLInputElement>('input[name="cf-turnstile-response"], textarea[name="h-captcha-response"], textarea[name="g-recaptcha-response"], input[name="frc-captcha-solution"]'),
   );
-  const visibleAnswer = answers.some((a) => a.parentElement !== null && shown(a.parentElement));
-  if (!widgets.length && !frames.length && !visibleAnswer) return false;
-  return answers.length === 0 ? widgets.length + frames.length > 0 : answers.some((a) => !a.value);
+  const waiting = answers.filter((a) => !a.value && a.parentElement !== null && shown(a.parentElement)).map((a) => a.parentElement as Element);
+  const spots: Element[] = answers.length === 0 ? [...widgets, ...frames] : answers.every((a) => a.value) ? [] : [...waiting, ...(waiting.length ? [] : [...widgets, ...frames])];
+  if (spots.length === 0) return "";
+  // A page that is nothing but the check (an interstitial in front of the site): hardly any words, and nothing else to press.
+  const others = Array.from(document.querySelectorAll("a[href], button, input:not([type=hidden]), select, textarea")).filter((el) => shown(el) && !spots.some((spot) => spot.contains(el)));
+  if ((document.body?.innerText ?? "").trim().length < 500 && others.length < 3) return "wall";
+  return spots.some(onScreen) ? "view" : "elsewhere";
 }
 
 type Listener = (event: BrowserEvent) => void;
@@ -1031,13 +1043,22 @@ export class BrowserSession {
     }
   }
 
-  private async humanCheck(page: Page): Promise<boolean> {
+  private async humanCheck(page: Page): Promise<HumanCheck> {
     try {
-      if (/just a moment|attention required|verify (that )?you are (a )?human|are you (a )?(human|robot)|pardon our interruption|security check/i.test(await page.title())) return true;
-      const results = await Promise.all(page.frames().map((frame) => frame.evaluate(humanCheckInPage).catch(() => false)));
-      return results.some(Boolean);
+      if (/just a moment|attention required|verify (that )?you are (a )?human|are you (a )?(human|robot)|pardon our interruption|security check|access to this page has been denied/i.test(await page.title())) return "wall";
+      const main = page.mainFrame();
+      const results = await Promise.all(
+        page.frames().map((frame) =>
+          frame
+            .evaluate(humanCheckInPage)
+            // Inside an embedded frame "the whole page" only means the whole frame.
+            .then((found): HumanCheck => (found === "wall" && frame !== main ? "view" : found))
+            .catch((): HumanCheck => ""),
+        ),
+      );
+      return (["wall", "view", "elsewhere"] as const).find((where) => results.includes(where)) ?? "";
     } catch {
-      return false;
+      return "";
     }
   }
 
@@ -1075,8 +1096,13 @@ export class BrowserSession {
         const others = this.pages.filter((p) => p !== page).map((p) => clip(this.titles.get(p) || hostOf(p.url()) || "a page", 50));
         text += `\n\nOther tabs are open behind this one: ${others.join("; ")}. You are working in the newest. When it closes, you are back in the previous one.`;
       }
-      if (await this.humanCheck(page)) {
-        text += `\n\nThis page has a "verify you are human" check that has not been passed. You cannot see it or pass it, and buttons may stay disabled until it is. Do not try to get around it: call requestUserAction with kind "captcha" so the user does it in the live browser.`;
+      const check = await this.humanCheck(page);
+      if (check === "wall") {
+        text += `\n\nThis page is a "verify you are human" check: the site shows nothing else until it is passed. You cannot see it or pass it. Do not try to get around it: call requestUserAction with kind "captcha" so the user does it in the live browser.`;
+      } else if (check === "view") {
+        text += `\n\nOne form on screen has a "verify you are human" check that has not been passed. It belongs to that form and only matters if the task needs that form: its button may stay disabled, or it may not go through, until the check is passed. The rest of the page works as usual, links included. You cannot see the check or pass it. If the task needs that form, call requestUserAction with kind "captcha" when you get to it; otherwise ignore it and carry on.`;
+      } else if (check === "elsewhere" && options.scope === "page") {
+        text += `\n\nA form elsewhere on this page has a "verify you are human" check. It only matters if the task needs that form; nothing else on the page is held back by it.`;
       }
       if (isIdentityHost(page.url())) {
         text += `\n\nThis is a sign-in page. Signing in is the user's, start to finish: do not click or type here. Call requestUserAction with kind "login".`;
@@ -1111,7 +1137,9 @@ export class BrowserSession {
   }
 
   private step(label: string, action: BrowserStepData["action"], page: Page | undefined, extra: Partial<BrowserStepData> & { page: string }): BrowserStepData {
-    return { kind: "browser", label, action, url: page?.url() ?? "", title: this.state.title, ok: true, sources: [], ...extra };
+    // Chrome's own "this site can't be reached" page is not a site the agent worked on.
+    const url = page?.url() ?? "";
+    return { kind: "browser", label, action, url: url.startsWith("chrome-error:") ? "" : url, title: this.state.title, ok: true, sources: [], ...extra };
   }
 
   /** The agent closes the browser: the task there is finished, or the user asked. Sign-ins are kept. */

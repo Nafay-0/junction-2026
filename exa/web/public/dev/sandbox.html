@@ -58,6 +58,7 @@
     <a href="#shop" data-go="shop">Shop</a>
     <a href="#reserve" data-go="reserve">Reserve a table</a>
     <a href="#contact" data-go="contact">Contact</a>
+    <a href="#newsletter" data-go="newsletter">Newsletter</a>
     <a href="#account" data-go="account">My account</a>
     <a href="#basket" data-go="basket">Basket (<span id="count">0</span>)</a>
   </nav>
@@ -159,6 +160,18 @@
     <p class="notice" id="sent" hidden>Thank you. Your message has been sent. (Pretend.)</p>
   </section>
 
+  <section id="newsletter" hidden>
+    <h1>Newsletter</h1>
+    <p class="lead">One email a month. This form has a pretend "are you human" check, the kind many sites put in front of a form.</p>
+    <form id="newsletter-form">
+      <label>Your email <input name="email" type="email" autocomplete="email" required></label>
+      <!-- Like the real ones, the check cannot be read or pressed by anything that reads the page (here: a closed shadow root). Only a person can tick it. -->
+      <div class="cf-turnstile" id="human" style="width:300px;height:65px;margin:6px 0 12px"><input type="hidden" name="cf-turnstile-response"></div>
+      <p><button class="primary" type="submit" id="subscribe" disabled>Subscribe</button></p>
+    </form>
+    <p class="notice" id="subscribed" hidden>Subscribed. One email a month. (Pretend.)</p>
+  </section>
+
   <section id="account" hidden>
     <div id="signin">
       <h1>Sign in</h1>
@@ -223,11 +236,11 @@
   const euro = (n) => n.toFixed(2).replace(".", ",") + " €";
   const basket = [];
   const $ = (s) => document.querySelector(s);
-  const sections = ["shop", "basket", "checkout", "reserve", "contact", "account", "autofill"];
+  const sections = ["shop", "basket", "checkout", "reserve", "contact", "newsletter", "account", "autofill"];
   function go(name) {
     for (const s of sections) $("#" + s).hidden = s !== name;
     document.querySelectorAll("nav a").forEach((a) => a.setAttribute("aria-current", a.dataset.go === name ? "page" : "false"));
-    document.title = { shop: "Kahvila Sandbox", basket: "Basket · Kahvila Sandbox", checkout: "Checkout · Kahvila Sandbox", reserve: "Reserve a table · Kahvila Sandbox", contact: "Contact · Kahvila Sandbox", account: "My account · Kahvila Sandbox", autofill: "Saved details · Kahvila Sandbox" }[name];
+    document.title = { shop: "Kahvila Sandbox", basket: "Basket · Kahvila Sandbox", checkout: "Checkout · Kahvila Sandbox", reserve: "Reserve a table · Kahvila Sandbox", contact: "Contact · Kahvila Sandbox", newsletter: "Newsletter · Kahvila Sandbox", account: "My account · Kahvila Sandbox", autofill: "Saved details · Kahvila Sandbox" }[name];
     window.scrollTo(0, 0);
   }
   document.querySelectorAll("[data-go]").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); history.replaceState(null, "", "#" + a.dataset.go); go(a.dataset.go); }));
@@ -258,6 +271,12 @@
     $("#reserved").hidden = false;
     $("#reserved").textContent = `Reserved: a table for ${f.get("guests")} on ${f.get("date")} at ${f.get("time")}, under the name ${f.get("name")}. Confirmation number R-70421. (Pretend.)`;
   });
+  {
+    const inside = $("#human").attachShadow({ mode: "closed" });
+    inside.innerHTML = `<label style="box-sizing:border-box;width:100%;height:100%;display:flex;align-items:center;gap:10px;padding:0 14px;border:1px solid #c9c4b8;border-radius:6px;background:#fff;font:14px system-ui,sans-serif;cursor:pointer"><input type="checkbox" style="width:22px;height:22px"> I am human (pretend check)</label>`;
+    inside.querySelector("input").addEventListener("change", (e) => { $("[name=cf-turnstile-response]").value = e.target.checked ? "pretend-pass" : ""; $("#subscribe").disabled = !e.target.checked; });
+  }
+  $("#newsletter-form").addEventListener("submit", (e) => { e.preventDefault(); $("#newsletter-form").hidden = true; $("#subscribed").hidden = false; });
   $("#contact-form").addEventListener("submit", (e) => { e.preventDefault(); $("#contact-form").hidden = true; $("#sent").hidden = false; });
   $("#signin-form").addEventListener("submit", (e) => {
     e.preventDefault();

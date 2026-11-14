@@ -62,7 +62,7 @@ When the task is to do something on a site (reserve a table, fill a basket, take
 
 **What stays with the user.** Three things, enforced in code (`web/src/lib/browser/guard.ts`), not left to the model:
 - **Payment: never.** The agent cannot type into card, bank or security-code fields, cannot press a button that pays, and cannot submit a form that holds card fields. It does nothing at all on payment providers' pages. It takes the task to the payment page and hands it over; the user may pay there themselves.
-- **Passwords, one-time codes and human checks: the user's.** The agent cannot type into them. It hands the page over with a "your turn" card; the user types straight into the live browser, then hands it back.
+- **Passwords, one-time codes and human checks: the user's.** The agent cannot type into them. It hands the page over with a "your turn" card; the user types straight into the live browser, then hands it back. A human check is only handed over when it is in the way: the whole page is the check, or the form the task needs carries it. Many sites keep one in a newsletter form at the foot of every page; the agent is told where a check is (the whole page, a form on screen, a form elsewhere) and leaves those alone. `/dev/sandbox.html#newsletter` has a pretend one.
 - **Commitment: with approval.** Anything that submits, sends, books, orders, posts, deletes, signs up or accepts terms stops for a yes. The card says exactly what will happen, the button is ringed in the live browser, and nothing runs until the user approves. Approvals are signed by the server, so one cannot be forged by editing the conversation.
 Reading, navigating, searching, filling in a form, adding to a basket and refusing cookies need no approval.
 

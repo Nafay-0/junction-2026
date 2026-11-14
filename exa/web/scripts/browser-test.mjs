@@ -78,6 +78,13 @@ try {
   check("a filled-in security code is hidden from the model", !/987/.test(step.page));
   check("an ordinary field is still readable", /you@example\.com/.test(step.page));
 
+  // A human check matters where it is, not on the whole site.
+  step = await call({ open: `${base}/dev/sandbox.html#reserve` });
+  check("no human-check notice on a page that has none in sight", !/verify you are human/.test(step.page));
+  step = await call({ open: `${base}/dev/sandbox.html#newsletter` });
+  check("a human check on screen is reported as that form's, not as a blocked page", /verify you are human/.test(step.page) && /only matters if the task needs that form/.test(step.page), step.page.split("\n").slice(-3).join(" "));
+  check("the check itself is not something the agent can see or press", !/I am human/.test(step.page) && /button "Subscribe"[^\n]*disabled/.test(step.page), step.page.split("\n").find((l) => /Subscribe|human/.test(l)));
+
   // While the user is in control, the agent's steps wait instead of acting.
   await control("take");
   const state = await (await control("take")).json();
