@@ -110,6 +110,11 @@ export type UnderstoodCard = CardBase & {
   memoryUsed: string[];
   /** Other items the same message named; each gets its own cards in the same agent turn. */
   alsoAsked: string[];
+  /**
+   * Things noticed that do not stop the order (the mistake check's quiet tier, core/concerns.ts): one line each, from
+   * a code and parameters, e.g. { code: "amount_above_usual", params: { ratio: 2.5, usual: 400, unit: "L" } }.
+   */
+  notes?: { code: string; params: Record<string, string | number> }[];
 };
 
 export type AnomalyCard = CardBase & {
