@@ -205,6 +205,12 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
   }
 
   if (line) await showLine(run, line);
+  await finishTurn(run);
+}
+
+/** The end of an agent turn: what to remember, its status (waiting for the buyer, for a person, or done) and the record. */
+async function finishTurn(run: TurnRun): Promise<void> {
+  const { store, thread } = run;
   await proposeMemory(run);
   const a = store.agentTurn(thread, run.turnId)!;
   const waitingApprover = a.cards.some((c) => c.type === "gate" && c.outcome === "waiting");
@@ -212,6 +218,41 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
   store.mark(thread, run.turnId, "done", Date.now() - run.t0);
   store.status(thread, run.turnId, waitingApprover ? "waiting_approver" : waitingBuyer ? "waiting_buyer" : "done", { ms: Date.now() - run.t0, marks: a.marks });
   record(run, "turn_done", `Agent turn finished (${a.status}) in ${Date.now() - run.t0} ms: ${a.cards.map((c) => c.type).join(", ") || "no cards"}.`, { status: a.status, marks: a.marks, cards: a.cards.map((c) => c.type), requests: [...run.requests], orders: [...run.orders.keys()] });
+}
+
+// ---------- a door that converses itself (the voice call) ----------
+
+/**
+ * A turn of a door that runs its own conversation (the voice call's realtime model) but shares this thread: the
+ * buyer's heard words become the buyer turn, and the door's step becomes the agent turn's cards, through the same
+ * plain-code engine (so a routine order is placed alone here too). `work` gets the turn and returns what the door
+ * should say; the turn is finished and recorded whatever happens. Never throws for the door: a failure here leaves
+ * the call working exactly as before, without the mirror.
+ */
+export async function doorTurn<T>(kitchen: Kitchen | string, buyer: { door: ThreadDoor; via: BuyerTurn["via"]; text?: string; label?: string }, work: (run: TurnRun) => Promise<T>): Promise<T> {
+  const r = await resolve(kitchen, buyer.door);
+  const e = await engine(r.rt);
+  const thread = e.store.get(r.k.info.slug, r.k.info.orgId);
+  const now = new Date().toISOString();
+  const b: BuyerTurn = { turnId: newId("trn"), role: "buyer", at: now, door: buyer.door, via: buyer.via, ...(buyer.text ? { text: buyer.text } : {}), ...(buyer.label ? { label: buyer.label } : {}) };
+  const agentTurnRec: AgentTurn = { turnId: newId("trn"), role: "agent", at: now, replyTo: b.turnId, status: "working", steps: [], cards: [] };
+  e.store.addTurn(thread, b);
+  e.store.addTurn(thread, agentTurnRec);
+  e.store.status(thread, agentTurnRec.turnId, "working");
+  const run: TurnRun = { rt: r.rt, store: e.store, thread, turnId: agentTurnRec.turnId, buyer: b, k: r.k, session: r.session, person: r.person, door: buyer.door, t0: Date.now(), facts: [], requests: new Set(), orders: new Map(), readings: new Map() };
+  return withTurn({ threadId: thread.threadId, turnId: run.turnId, door: buyer.door, kitchen: r.k.info.slug, orgId: r.k.info.orgId, agentId: r.session.agentId }, async () => {
+    record(run, "turn", buyer.text ? `The buyer said (${buyer.door}): "${buyer.text.slice(0, 300)}"` : `The buyer ${buyer.label ?? "acted"} (${buyer.door}).`, { via: buyer.via, ...(buyer.text ? { words: buyer.text.slice(0, 2000) } : {}) });
+    try {
+      return await work(run);
+    } finally {
+      await finishTurn(run).catch(() => undefined);
+    }
+  });
+}
+
+/** A sentence the door's own code wrote (the read-back), shown as the agent's line after the same grounding check. */
+export async function doorLine(run: TurnRun, text: string): Promise<void> {
+  await showLine(run, text);
 }
 
 /** The agent loop for words (or a nudge from the engine), with the thread's history; the loop's messages are kept. */

@@ -2,7 +2,6 @@
 
 import { X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import type { Lang } from "../../_i18n/lang";
 import { useFormat, useText } from "../../_i18n/provider";
 import { buttonClass, useToast } from "../../_ui/kit";
 import { money, shortProduct } from "../../_ui/plain";
@@ -38,7 +37,6 @@ import { THREAD_PAGE_TEXT } from "./thread.text";
  * the full Order page; the state lives in the portal (thread-state.ts), so both show the same thread.
  */
 
-const SPEECH: Record<Lang, string> = { en: "en-GB", fi: "fi-FI", sv: "sv-SE" };
 
 type Tap = (action: ThreadAction, label: string) => void;
 
@@ -349,65 +347,18 @@ function Options({ card, tap, busy }: { card: OptionsCardT; tap: Tap; busy: bool
 
 // ---------- the composer: words, the microphone, a photo ----------
 
-type SpeechRec = { lang: string; interimResults: boolean; continuous: boolean; start: () => void; stop: () => void; abort: () => void; onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void) | null; onend: (() => void) | null; onerror: ((e: { error: string }) => void) | null };
-
-function speechCtor(): (new () => SpeechRec) | undefined {
-  if (typeof window === "undefined") return undefined;
-  const w = window as unknown as { SpeechRecognition?: new () => SpeechRec; webkitSpeechRecognition?: new () => SpeechRec };
-  return w.SpeechRecognition ?? w.webkitSpeechRecognition;
-}
-
-/** Hold to talk: the browser's own speech recognition, in the store's language. The final words become a voice turn. */
-function useSpeech(lang: Lang, onFinal: (text: string) => void, onError: () => void) {
-  const [state, setState] = useState<MicState>("off");
-  const [heard, setHeard] = useState("");
-  const rec = useRef<SpeechRec | null>(null);
-  const text = useRef("");
-  useEffect(() => {
-    queueMicrotask(() => setState(speechCtor() ? "idle" : "off"));
-  }, []);
+/**
+ * The microphone is the voice door (server/channels/voice/): its realtime recogniser primed with the kitchen's own
+ * words in three languages, and the spoken read-back of amount, product and day before anything is priced. The
+ * call writes every step into this same thread (server/thread/voice-bridge.ts), so the conversation continues
+ * here when the call ends. A visitor's kitchen calls from its own phone at /call; an account's kitchen at
+ * /call?k=<kitchen>, on a phone signed in to it (this one).
+ */
+function useVoiceDoor(slug: string, visitor: boolean) {
   const onDown = () => {
-    const Ctor = speechCtor();
-    if (!Ctor || rec.current) return;
-    const r = new Ctor();
-    r.lang = SPEECH[lang];
-    r.interimResults = true;
-    r.continuous = true;
-    text.current = "";
-    r.onresult = (e) => {
-      let all = "";
-      for (let i = 0; i < e.results.length; i++) all += e.results[i][0].transcript;
-      text.current = all.trim();
-      setHeard(text.current);
-    };
-    r.onerror = (e) => {
-      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
-        setState("off");
-        onError();
-      }
-    };
-    r.onend = () => {
-      rec.current = null;
-      setHeard("");
-      setState((s) => (s === "off" ? s : "idle"));
-      if (text.current) onFinal(text.current);
-      text.current = "";
-    };
-    rec.current = r;
-    setState("listening");
-    try {
-      r.start();
-    } catch {
-      rec.current = null;
-      setState("idle");
-    }
+    window.location.assign(visitor ? "/call" : `/call?k=${encodeURIComponent(slug)}`);
   };
-  const onUp = () => {
-    if (!rec.current) return;
-    setState("processing");
-    rec.current.stop();
-  };
-  return { state, heard, onDown, onUp };
+  return { state: "idle" as MicState, heard: "", onDown, onUp: () => undefined };
 }
 
 type ScanReply = { lines: { read: string; status: string }[]; deliverByAsWritten: string | null };
@@ -444,7 +395,7 @@ export function ThreadComposer({ id = "need", size = "md", standalone = false, p
       }
     }
   };
-  const mic = useSpeech(lang, (t) => void send(t, "voice"), () => toast.show(tx.micDenied, "bad"));
+  const mic = useVoiceDoor(kitchen.slug, kitchen.kind === "visitor");
 
   const onFile = async (f: File | undefined) => {
     if (!f) return;
