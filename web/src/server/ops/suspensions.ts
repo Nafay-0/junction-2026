@@ -2,6 +2,7 @@ import type { LedgerEntryType } from "@/core/ledger";
 import { DockError, type AgentSession, type Dock } from "@/core/orders";
 import { newId } from "@/core/util";
 import { clock } from "@/app/_ui/plain";
+import type { RecordStore } from "../records";
 import type { Via } from "./door";
 
 /**
@@ -15,7 +16,10 @@ import type { Via } from "./door";
  * stopped which agent, when and why. Orders already waiting for a customer's sign-off are left to the customer:
  * operations can stop an agent, never decide for a kitchen.
  *
- * In memory, per runtime. On several instances, keep it in shared storage next to the repository.
+ * Suspensions outlive a restart: the runtime hands the registry a store (`restore`, server/records.ts: in memory
+ * by default, PostgreSQL with DOCK_STORE=postgres), every suspension and resumption is written to it, and a new
+ * process takes over the ones in force. The registry itself is per process; several instances would each need to
+ * re-read the store, which this does not do.
  */
 export const SUSPENSION_RULE = "operator_suspension";
 
@@ -49,6 +53,8 @@ export class SuspensionRegistry {
   private readonly items: Suspension[] = [];
   /** When each (suspension, method, call) was last written to the ledger. */
   private readonly logged = new Map<string, number>();
+  private store?: RecordStore<Suspension>;
+  private writes: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly dock: Dock,
@@ -57,6 +63,29 @@ export class SuspensionRegistry {
 
   all(): Suspension[] {
     return structuredClone(this.items);
+  }
+
+  /**
+   * Keep suspensions in a store that outlives the process, and take over the ones it already holds: after a
+   * restart, an agent that was suspended still is. Returns how many are in force.
+   */
+  async restore(store: RecordStore<Suspension>): Promise<number> {
+    this.store = store;
+    for (const s of await store.list()) if (!this.items.some((x) => x.suspensionId === s.suspensionId)) this.items.push(s);
+    this.items.sort((a, b) => a.at.localeCompare(b.at));
+    return this.active().length;
+  }
+
+  /** Resolves when every suspension and resumption so far is in the store. */
+  saved(): Promise<void> {
+    return this.writes;
+  }
+
+  private persist(s: Suspension): void {
+    const store = this.store;
+    if (!store) return;
+    const copy = structuredClone(s);
+    this.writes = this.writes.then(() => store.put(copy.suspensionId, copy)).catch((err) => console.error("suspension not saved", copy.suspensionId, err));
   }
 
   active(): Suspension[] {
@@ -85,6 +114,7 @@ export class SuspensionRegistry {
       refusals: 0,
     };
     this.items.push(s);
+    this.persist(s);
     const what = input.scope === "agent" ? `agent ${input.target} (${input.label})` : `every agent of ${input.label} (${input.target})`;
     this.dock.ledger.append({
       type: CONTROL_ENTRY,
@@ -102,6 +132,7 @@ export class SuspensionRegistry {
     s.resumedAt = this.now().toISOString();
     s.resumedBy = input.by;
     s.resumeNote = input.note?.trim() || undefined;
+    this.persist(s);
     this.dock.ledger.append({
       type: CONTROL_ENTRY,
       actor: `operator:${input.by}`,
@@ -136,6 +167,7 @@ export class SuspensionRegistry {
     const last = this.logged.get(key);
     if (last === undefined || at.getTime() - last >= SUSPENSION_LOG_EVERY_MS) {
       this.logged.set(key, at.getTime());
+      this.persist(s); // the refusal count, as often as the ledger line
       this.dock.ledger.append({
         type: "refusal",
         actor: `agent:${session.agentId}`,

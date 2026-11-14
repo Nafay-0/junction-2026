@@ -9,8 +9,7 @@ import { PasskeyError, type PasskeyService, type RelyingParty } from "@/core/pas
 import { addMinutes, newId } from "@/core/util";
 import { SANDBOX_ROLE, sandboxIdentity, sandboxMandate, type SandboxIdentity } from "./dev-fixtures";
 import { hotelKitchenProfile } from "./demo-kitchen";
-import { doorLog } from "./ops/door";
-import { suspensions } from "./ops/suspensions";
+import { onsiteSession } from "./ops/onsite";
 import { runKitchenScenario } from "./sandbox-scenario";
 
 /**
@@ -218,17 +217,8 @@ export class SandboxService {
   async runDemoOrder(sandboxId: string): Promise<PublicOrder> {
     const creds = await this.agentCredentials(sandboxId);
     if (!creds) throw new DockError(404, "sandbox_not_found", "This demo kitchen does not exist or has closed.");
-    const session = await this.deps.dock.authenticate(creds.mandateToken, creds.agentId);
-    // The scripted buyer passes the same operations check as every other caller (see ops/suspensions.ts).
-    const call = { via: "onsite" as const, transport: "direct" as const, path: "scripted demo order" };
-    const record = { at: this.now().toISOString(), agentId: session.agentId, orgId: session.mandate.issuer.orgId, orgName: session.mandate.issuer.name, ...call };
-    try {
-      suspensions(this.deps.dock).enforce(session, call);
-    } catch (err) {
-      if (err instanceof DockError) doorLog(this.deps.dock).record({ ...record, ok: false, code: err.code, rule: err.rule });
-      throw err;
-    }
-    doorLog(this.deps.dock).record({ ...record, ok: true }, session.mandate);
+    // The scripted buyer passes the same operations check as every other caller (ops/onsite.ts admission).
+    const session = await onsiteSession(this.deps.dock, creds, "scripted demo order");
     const s = await this.sandboxes.get(sandboxId);
     return runKitchenScenario(this.deps.dock, session, { now: this.now(), by: s ? `${s.approverName} (scripted buyer)` : undefined });
   }

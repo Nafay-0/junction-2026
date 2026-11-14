@@ -11,6 +11,7 @@ import { InMemoryPasskeyStore, type PasskeyStore } from "@/core/passkeys";
 import { LiveLookupAllowance } from "@/core/live-allowance";
 import { InMemorySandboxStore, type SandboxRecord, type SandboxStore } from "@/server/sandboxes";
 import { ValioCatalog } from "@/server/valio/valio-catalog";
+import { inMemoryRecords, type Records } from "../records";
 import { TappedLedgerStore, noActions, type ActionStream } from "./actions";
 import { aivenSwitches, errMessage, kafkaConfig, log, pgSchema, valkeyUrl, type AivenSwitches } from "./env";
 import { checkServices, type HealthReport } from "./health";
@@ -50,6 +51,8 @@ export type Adapters = {
   intakes: IntakeRepository;
   passkeyStore: PasskeyStore;
   sandboxStore: SandboxStore;
+  /** Small keyed records that outlive a restart (operator suspensions, reissued mandates): server/records.ts. */
+  records: Records;
   ledgerStore: LedgerStore;
   events: InMemoryEventBus;
   /** The per-agent live-lookup allowance for createDock: shared through Valkey when DOCK_CACHE=valkey. */
@@ -85,6 +88,7 @@ export async function selectAdapters(input: AdapterInput): Promise<Adapters> {
   let intakes: IntakeRepository = new InMemoryIntakeRepository();
   let passkeyStore: PasskeyStore = new InMemoryPasskeyStore();
   let sandboxStore: SandboxStore = new InMemorySandboxStore();
+  let records: Records = inMemoryRecords();
   let ledgerStore: LedgerStore = new InMemoryLedgerStore();
   let events = new InMemoryEventBus();
   let catalog: CatalogPort = input.catalog;
@@ -106,6 +110,7 @@ export async function selectAdapters(input: AdapterInput): Promise<Adapters> {
     intakes = new PgIntakeRepository(docs);
     passkeyStore = new PgPasskeyStore(docs);
     sandboxStore = new PgRecordStore<SandboxRecord>(docs, "sandbox", (s) => s.sandboxId);
+    records = <T>(collection: string) => ({ put: (id: string, value: T) => docs.put(collection, id, value), list: () => docs.find<T>(collection) });
     handle.ledger = await PgLedgerStore.open(handle.pool!, handle.schema!);
     ledgerStore = handle.ledger;
     log("info", "PostgreSQL store on", { schema: handle.schema, ledgerEntries: handle.ledger.all().length, ledgerVerified: handle.ledger.loaded.ok });
@@ -158,7 +163,7 @@ export async function selectAdapters(input: AdapterInput): Promise<Adapters> {
 
   if (handle.pool) startMetricsFlusher(handle);
   registerShutdownHook(handle);
-  return { repo, kitchens, intakes, passkeyStore, sandboxStore, ledgerStore, events, liveAllowance, catalog, aiven: handle };
+  return { repo, kitchens, intakes, passkeyStore, sandboxStore, records, ledgerStore, events, liveAllowance, catalog, aiven: handle };
 }
 
 // ---------- background: counters to telemetry.events, expired documents swept ----------

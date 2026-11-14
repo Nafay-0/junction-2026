@@ -300,6 +300,14 @@ export type DockDeps = {
   alternatives?: AlternativesSource;
   /** One line per remembered item an intake used (the server wires the kitchen memory; see intake.ts). */
   memoryUsage?: IntakeDeps["memoryUsage"];
+  /**
+   * Admission: called with every session right after its mandate verified, before the session is handed out, and
+   * again for a session held across calls (admit below). Throwing a DockError refuses the agent. The server's
+   * operations layer plugs in here (a suspended agent or organisation), so no door can verify a mandate and
+   * forget to ask: there is no way to a session that does not pass this. `entrance` is whatever the caller says
+   * about where the call came from; the core only passes it on.
+   */
+  admit?: (session: AgentSession, entrance?: unknown) => void | Promise<void>;
 };
 
 /** The holds in force on some products. Called with the products of one quote; must be cheap (no live call). */
@@ -745,7 +753,7 @@ export function createDock(deps: DockDeps) {
 
   const dock = {
     /** Verify the mandate the agent presents. Throws DockError (401/403) naming the failed check. */
-    async authenticate(mandateToken: string | undefined, agentId: string | undefined): Promise<AgentSession> {
+    async authenticate(mandateToken: string | undefined, agentId: string | undefined, entrance?: unknown): Promise<AgentSession> {
       const actor = `agent:${agentId ?? "unknown"}`;
       if (!mandateToken) throw refuse(new DockError(401, "mandate_missing", "No mandate presented. Send it as `Authorization: Mandate <jws>`.", "mandate_signature"), actor);
       let mandate: Mandate;
@@ -762,7 +770,15 @@ export function createDock(deps: DockDeps) {
       if (agentId !== mandate.agentId) {
         throw refuse(new DockError(403, "mandate_agent_mismatch", `This mandate is for agent ${mandate.agentId}, not ${agentId}.`, "mandate_agent"), actor);
       }
-      return { mandate, agentId };
+      const session: AgentSession = { mandate, agentId };
+      await deps.admit?.(session, entrance);
+      return session;
+    },
+
+    /** Admission for a session that was verified earlier and is used again later (a link that outlives the call that made it). */
+    async admit(session: AgentSession, entrance?: unknown): Promise<AgentSession> {
+      await deps.admit?.(session, entrance);
+      return session;
     },
 
     async openRequest(session: AgentSession, input: z.input<typeof OpenRequestInput>): Promise<PurchaseRequest> {

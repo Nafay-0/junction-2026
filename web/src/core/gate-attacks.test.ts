@@ -5,7 +5,7 @@ import { addDaysIso, localNow } from "./kitchen";
 import { generateEd25519KeyPair, type KeyPair } from "./keys";
 import { Ledger } from "./ledger";
 import { createTrustRegistry, signMandate, type Mandate } from "./mandate";
-import { InMemoryDockRepository, createDock, type AgentSession, type Dock } from "./orders";
+import { DockError, InMemoryDockRepository, createDock, type AgentSession, type Dock } from "./orders";
 import { SEED_PRODUCTS, SEED_STOCK } from "./seed";
 import { sampleMandate } from "./test-fixtures";
 import { addMinutes } from "./util";
@@ -156,6 +156,34 @@ describe("racing", () => {
     }
     expect(await committed()).toBeLessThanOrEqual(laakso.mandate.weeklyBudgetCents);
     expect(await committed()).toBe(2 * 89_400);
+  });
+});
+
+describe("admission", () => {
+  it("the core asks its admission hook for every session: a refusal there means no session, whoever asks", async () => {
+    const seen: string[] = [];
+    const guarded = createDock({
+      catalog: new MeteredCatalog(new InMemoryCatalog(SEED_PRODUCTS, SEED_STOCK, () => now)),
+      repo: new InMemoryDockRepository(),
+      ledger: new Ledger(undefined, () => now),
+      trustedIssuers: createTrustRegistry([{ kid: laakso.key.kid, orgId: "org_laakso", publicKey: laakso.key.publicKey }]),
+      wholesalerKey: wholesaler,
+      notifier: outbox,
+      now: () => now,
+      admit: (session, entrance) => {
+        seen.push(`${session.agentId} via ${String(entrance ?? "nothing said")}`);
+        if (session.agentId === "agent_buyer_1" && entrance !== "let through") throw new DockError(403, "agent_suspended", "Suspended.", "operator_suspension");
+      },
+    });
+    const token = await signMandate(laakso.mandate, laakso.key);
+    await expect(guarded.authenticate(token, laakso.mandate.agentId)).rejects.toMatchObject({ status: 403, rule: "operator_suspension" });
+    await expect(guarded.authenticate(token, laakso.mandate.agentId, "REST")).rejects.toMatchObject({ rule: "operator_suspension" });
+    const session = await guarded.authenticate(token, laakso.mandate.agentId, "let through");
+    await expect(guarded.admit(session, "a link used later")).rejects.toMatchObject({ rule: "operator_suspension" });
+    expect(seen).toEqual(["agent_buyer_1 via nothing said", "agent_buyer_1 via REST", "agent_buyer_1 via let through", "agent_buyer_1 via a link used later"]);
+    // A mandate that does not verify never reaches the hook.
+    await expect(guarded.authenticate(token + "x", laakso.mandate.agentId)).rejects.toMatchObject({ status: 401 });
+    expect(seen).toHaveLength(4);
   });
 });
 

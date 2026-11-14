@@ -15,6 +15,8 @@ import { KITCHEN_ORG, demoKitchenKeyPair, demoKitchenProfile, demoProducts } fro
 import { DEMO_ORG, demoOrgKeyPair } from "./dev-fixtures";
 import { selectAdapters, type AivenHandle } from "./aiven";
 import { LiveCacheSlot, liveCacheSlots } from "./aiven/live-slot";
+import { admission } from "./ops/onsite";
+import { suspensions } from "./ops/suspensions";
 import { recallLayer } from "./radar/gate";
 import { radar } from "./radar/registry";
 import { alternativesSource } from "./knowledge/service";
@@ -94,6 +96,9 @@ async function buildRuntime(): Promise<Runtime> {
   const dock = createDock({
     catalog: new MeteredCatalog(recall.catalog),
     holds: recall.holds,
+    // ADMISSION (src/server/ops/onsite.ts): the core asks the operations layer on every authenticate, so a
+    // suspended agent gets no session through any door.
+    admit: admission(() => dock),
     repo: stores.repo,
     ledger: new Ledger(stores.ledgerStore),
     trustedIssuers,
@@ -112,6 +117,8 @@ async function buildRuntime(): Promise<Runtime> {
     liveCacheTtlMs: Number(envValue("DOCK_LIVE_CACHE_SECONDS") ?? 120) * 1000 || 0,
   });
   recall.attach(dock);
+  // Suspensions outlive a restart: an agent staff stopped before this process started is still stopped.
+  await suspensions(dock).restore(stores.records("suspension"));
   const sandboxes = new SandboxService({ dock, registry: trustedIssuers, passkeys, limits: sandboxLimits, kitchens: stores.kitchens, products: async () => products, store: stores.sandboxStore });
   await sandboxes.restore();
   const rt: Runtime = { dock, outbox, catalog, catalogSource, events, passkeys, sandboxes, aiven, kitchens: stores.kitchens };
