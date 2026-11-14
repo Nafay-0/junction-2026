@@ -88,9 +88,12 @@ export async function runWidget(run: TurnRun, a: ThreadAction, words?: string): 
     case "rules_show":
       await showRules(run);
       return true;
-    case "rules_propose":
-      await showRules(run, a.change);
+    case "rules_propose": {
+      const card = await showRules(run, a.change);
+      // The widget's confirm is the person confirming: signed at once when this browser may (the same checks as rules_sign).
+      if (a.sign && card.proposal?.state === "open" && card.proposal.canSign) await signRules(run, card.proposal.proposalId);
       return true;
+    }
     case "rules_sign":
       await signRules(run, a.proposalId);
       return true;

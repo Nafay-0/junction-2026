@@ -95,7 +95,8 @@ export type ThreadAction =
   | { type: "memory_forget"; itemId: string }
   /** The rules card: propose a change (before and after shown, nothing signed), sign it as the kitchen's person, or drop it. */
   | { type: "rules_show" }
-  | { type: "rules_propose"; change: RulesChange }
+  /** `sign`: the person confirms in the same tap (the widget's confirm button): proposed, then signed, if this browser may. */
+  | { type: "rules_propose"; change: RulesChange; sign?: boolean }
   | { type: "rules_sign"; proposalId: string }
   | { type: "rules_cancel"; proposalId: string };
 
