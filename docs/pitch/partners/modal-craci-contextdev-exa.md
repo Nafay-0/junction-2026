@@ -1,7 +1,5 @@
 # Modal, CRACI, Context.dev and Exa
 
-> **Name: the team must choose.** Replace `{{NAME}}` ("Dock" in the code, "AimoPilot" in the draft submission).
-
 Four partners, four different sizes of use. Two of them (Modal and CRACI) are thin; say so if asked.
 
 ## Modal
@@ -43,7 +41,7 @@ holds a product that a recent notice names by EAN, or by producer, exact name an
 quote, order and sign-off with the rule `recall_hold`, and the notice is the reason.
 
 **Where to see it.** `/ops/radar` (passcode). Press the drill: it publishes a test notice marked HARJOITUS / DRILL on
-Dock's own page, in the authority's layout, and it goes through the same path. Then try to order the product.
+AimoPilot's own page, in the authority's layout, and it goes through the same path. Then try to order the product.
 
 **What is true.** Readers are tested on recorded Context.dev responses from real authority pages
 (`web/src/server/radar/radar.test.ts`, fixtures in `web/src/server/radar/fixtures/`). The drill is tested end to end,

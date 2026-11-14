@@ -4,6 +4,7 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { DEMO_NOTE, PRODUCT_NAME } from "../_ui/brand";
+import { Wordmark } from "../_ui/wordmark";
 import { moneyShort } from "../_ui/plain";
 import { Glyph } from "../_ui/glyphs";
 import { SESSION_COOKIE } from "@/server/approver-session";
@@ -20,9 +21,8 @@ export default function KitchenEntry() {
       <header className="on-dark relative overflow-hidden bg-petrol text-paper">
         <Glyph kind="case" size={320} strokeWidth={0.9} className="pointer-events-none absolute -right-10 -top-16 text-paper/10" />
         <div className="relative mx-auto max-w-[1100px] px-4 pb-12 pt-6 sm:px-8">
-          <p className="flex items-baseline gap-2">
-            <span aria-hidden className="size-3 bg-lime" />
-            <span className="display text-[2.2rem]">{PRODUCT_NAME}</span>
+          <p>
+            <Wordmark tone="paper" size={36} />
           </p>
           <h1 className="display mt-10 text-[3rem] sm:text-[4.2rem]">Enter a kitchen&apos;s shop</h1>
           <p className="mt-3 max-w-[60ch] text-[1.15rem] leading-snug text-paper/90">A wholesale shop for professional kitchens, with each kitchen&apos;s own purchasing agent working inside it: its own signed rules, its own memory, and a person who signs off when an order goes beyond them. Pick one; no password, it is a demo.</p>

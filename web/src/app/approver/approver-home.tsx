@@ -77,7 +77,7 @@ export function ApproverHome() {
     );
   if (state === "offline" || !home)
     return (
-      <PhoneNotice title="Can't reach Dock" body="Check the connection, then try again.">
+      <PhoneNotice title="Can't reach AimoPilot" body="Check the connection, then try again.">
         <button className={`mt-6 ${bigButton("dark")}`} onClick={() => void refresh()}>
           Try again
         </button>

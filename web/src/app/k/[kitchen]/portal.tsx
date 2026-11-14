@@ -9,6 +9,7 @@ import { DEMO_NOTE, PRODUCT_NAME } from "../../_ui/brand";
 import { Kbd } from "../../_ui/kit";
 import { day, helsinkiToday, money, shortProduct } from "../../_ui/plain";
 import { Target } from "../../_ui/target";
+import { Wordmark } from "../../_ui/wordmark";
 import { RecallNotice } from "../../_radar/recall-notice";
 import { AssistantPanel, type Turn } from "./assistant";
 import type { KitchenChoice, KitchenInfo, LiveReply, LiveResult, Overview, PortalRequest, Product } from "./types";
@@ -331,9 +332,8 @@ function Header() {
   return (
     <header className="bg-paper">
       <div className="mx-auto grid max-w-[1440px] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-3 px-4 py-3 sm:px-6 lg:grid-cols-[auto_minmax(13rem,1fr)_minmax(14rem,28rem)_auto] xl:px-8">
-        <Link href="/k" className="flex shrink-0 items-baseline gap-2" aria-label={`${PRODUCT_NAME}: all demo kitchens`}>
-          <span aria-hidden className="size-3 translate-y-[-0.1em] bg-lime" />
-          <span className="display text-[1.9rem] text-petrol">{PRODUCT_NAME}</span>
+        <Link href="/k" className="flex shrink-0 items-center" aria-label={`${PRODUCT_NAME}: all demo kitchens`}>
+          <Wordmark size={34} />
         </Link>
         <div className="col-span-2 row-start-2 min-w-0 lg:col-span-1 lg:row-start-auto lg:border-l lg:border-line lg:pl-4">
           <label htmlFor="kitchen-switch" className="sr-only">

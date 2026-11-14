@@ -6,6 +6,7 @@ import { SESSION_COOKIE } from "@/server/approver-session";
 import { getRuntime } from "@/server/runtime";
 import { Suspense } from "react";
 import { DEMO_NOTE, PRODUCT_NAME } from "../../_ui/brand";
+import { Wordmark } from "../../_ui/wordmark";
 import { listConsoleKitchens, resolveKitchen } from "@/server/console-kitchens";
 import { Portal } from "./portal";
 
@@ -50,9 +51,8 @@ function Shell() {
 function Closed({ kitchens }: { kitchens: { slug: string; name: string }[] }) {
   return (
     <main className="min-h-dvh bg-concrete px-4 py-10 text-ink sm:px-10">
-      <p className="flex items-baseline gap-2">
-        <span aria-hidden className="size-3 bg-lime" />
-        <span className="display text-[2rem] text-petrol">{PRODUCT_NAME}</span>
+      <p>
+        <Wordmark size={34} />
       </p>
       <h1 className="display mt-8 text-[3rem] text-ink">This kitchen is not open</h1>
       <p className="mt-2 max-w-prose text-[1.1rem] text-ink-soft">Visitor kitchens close after 90 minutes. Pick a kitchen that is here now:</p>

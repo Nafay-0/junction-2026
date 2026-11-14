@@ -25,7 +25,7 @@ export async function handle(fn: (rt: Runtime) => Promise<Response>): Promise<Re
     unstable_rethrow(err); // let Next.js see its own control-flow errors (e.g. "this route is request-time")
     if (isDockError(err)) return Response.json(errorBody(err.code, err.message, err.rule, err.details), { status: err.status });
     console.error(err);
-    return Response.json(errorBody("internal_error", "Something went wrong inside Dock."), { status: 500 });
+    return Response.json(errorBody("internal_error", "Something went wrong inside AimoPilot."), { status: 500 });
   }
 }
 

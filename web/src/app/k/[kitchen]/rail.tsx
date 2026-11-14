@@ -82,13 +82,13 @@ export function Memory({ memory, error, family }: { memory: KitchenMemory | unde
   return (
     <section aria-labelledby="memory" className="bg-lavender p-4">
       <h2 id="memory" className="text-[0.95rem] font-semibold">
-        What Dock remembers about this kitchen
+        What AimoPilot remembers about this kitchen
       </h2>
       {!memory && !error && <div className="mt-2 h-24 animate-pulse bg-mist" aria-label="Loading the kitchen's memory" />}
       {error && !memory && <p className="mt-1 text-ink-soft">Could not load the kitchen&apos;s memory: {error}</p>}
       {memory && memory.families.length === 0 && memory.stated.length === 0 && (
         <p className="mt-1 text-[0.98rem] leading-snug text-ink-soft">
-          Nothing yet. Dock learns usual amounts and habits from the orders this kitchen places, and keeps any rule a person states.
+          Nothing yet. AimoPilot learns usual amounts and habits from the orders this kitchen places, and keeps any rule a person states.
         </p>
       )}
       {memory && memory.stated.length > 0 && (

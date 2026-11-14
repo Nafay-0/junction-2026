@@ -52,7 +52,7 @@ export function useLive<T>(load: () => Promise<T>, { events = null, pollMs = 100
           setError(undefined);
           setUpdatedAt(Date.now());
         } catch (e) {
-          setError(e instanceof Error ? e.message : "Could not reach Dock.");
+          setError(e instanceof Error ? e.message : "Could not reach AimoPilot.");
         }
       } while (again.current);
       inFlight.current = false;

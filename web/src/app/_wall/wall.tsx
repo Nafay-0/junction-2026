@@ -7,6 +7,7 @@ import { useLive } from "../_client/use-live";
 import { DEMO_NOTE, PRODUCT_NAME } from "../_ui/brand";
 import { RULE_TITLE, ago, clockSeconds, fiMoney, money } from "../_ui/plain";
 import { Target } from "../_ui/target";
+import { PilotLight } from "../_ui/wordmark";
 import type { FeedItem, WallSnapshot } from "@/server/wall-snapshot";
 import type { Board } from "./crash-board";
 import { CrashMatrix } from "./crash-matrix";
@@ -47,8 +48,8 @@ export function Wall({ initial, join, board }: { initial: WallSnapshot; join: { 
     <div className="on-dark flex min-h-dvh flex-col bg-petrol-deep text-paper lg:grid lg:h-dvh lg:grid-cols-[minmax(0,1fr)_minmax(22rem,25vw)] lg:grid-rows-[auto_minmax(0,1fr)] lg:overflow-hidden">
       {/* ---------- header ---------- */}
       <header className="order-1 flex flex-wrap lg:order-none items-center gap-x-[2vw] gap-y-2 border-b-2 border-paper/20 px-[2vw] py-[1.4vh] lg:col-span-2">
-        <div className="flex items-center gap-[0.8vw]">
-          <Target size={52} tone="chalk" className="h-[max(2.4rem,3vw)] w-auto" />
+        <div className="flex items-center gap-[0.9vw]">
+          <PilotLight size="max(1.05rem,1.45vw)" bezel={4} onDark />
           <span className="display text-[max(2.4rem,3.3vw)] leading-none">{PRODUCT_NAME}</span>
         </div>
         <p className="min-w-0 flex-1 text-[max(1.05rem,1.35vw)] font-medium leading-tight text-paper/85">
@@ -225,7 +226,7 @@ function GateLanes({ feed, now, justRefused, lastAt, error }: { feed: FeedItem[]
         </ol>
       </div>
       <p className="mt-[0.8vh] text-[max(0.9rem,0.85vw)] text-paper/65">
-        {error ? "Reconnecting to Dock…" : lastAt ? `Last activity ${ago(lastAt, now)}. ` : ""}
+        {error ? "Reconnecting to AimoPilot…" : lastAt ? `Last activity ${ago(lastAt, now)}. ` : ""}
         Each lane is one request; the marker shows how far it got. Yellow means a person must decide; black means the gate refused.
       </p>
     </section>

@@ -74,7 +74,7 @@ function desiredEnvironment(publicUrl) {
     ["DOCK_PUBLIC_URL", publicUrl],
     ["DOCK_WEBAUTHN_RP_ID", host],
     ["DOCK_WEBAUTHN_ORIGINS", publicUrl],
-    ["DOCK_WEBAUTHN_RP_NAME", "Dock"],
+    ["DOCK_WEBAUTHN_RP_NAME", "AimoPilot"],
     // The partner's real catalogue (index loaded from PostgreSQL at start) and its live price API.
     ["DOCK_CATALOG", "valio"],
     ["VALIO_API_BASE", env("VALIO_API_BASE") ?? "https://junction26.valioaimo.fi"],

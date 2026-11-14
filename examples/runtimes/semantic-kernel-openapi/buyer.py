@@ -12,7 +12,7 @@ The REST door: the agent fetches /api/v1/openapi.json, keeps the operations that
 (the document's own `security` requirements), and calls them with the mandate as `Authorization: Bearer` plus
 `Dock-Agent-Id`. The buyer is a scripted person, Sanna, never the model: a Semantic Kernel auto-function-invocation
 filter stops any operation that carries a person's answer until she has reviewed it. The OpenAPI document does not
-mark which operations those are, so this file names them (HUMAN_INPUT_OPERATIONS): the one line that knows Dock.
+mark which operations those are, so this file names them (HUMAN_INPUT_OPERATIONS): the one line that knows AimoPilot.
 """
 
 import asyncio

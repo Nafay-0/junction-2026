@@ -149,7 +149,7 @@ export async function runBuyerAgent(opts: RunOptions): Promise<RunResult> {
     conn = isConnection(opts.dock) ? opts.dock : await connectDock(opts.credentials ?? (await demoCredentials("demo", startedAt)), opts.dock);
   } catch (err) {
     outcome = "error";
-    error = `Could not connect to Dock: ${describeError(err)}`;
+    error = `Could not connect to AimoPilot: ${describeError(err)}`;
     emit({ type: "error", step, message: error });
     return finish();
   }
@@ -210,7 +210,7 @@ export async function runBuyerAgent(opts: RunOptions): Promise<RunResult> {
       if (!answer) return null;
       const toolName = relayToolFor(prompt.kind);
       if (!toolName) {
-        error = `Dock asked the buyer (${prompt.kind}) but offers no tool to answer it.`;
+        error = `AimoPilot asked the buyer (${prompt.kind}) but offers no tool to answer it.`;
         emit({ type: "error", step, message: error });
         return null;
       }
@@ -311,13 +311,13 @@ export async function runBuyerAgent(opts: RunOptions): Promise<RunResult> {
         const args = (c.input ?? {}) as Record<string, unknown>;
         if (answered.has(c.toolCallId)) {
           emit({ type: "tool_call", step, id: c.toolCallId, name: c.toolName, args, by: "model" });
-          emit({ type: "tool_error", step, id: c.toolCallId, name: c.toolName, message: `Rejected before reaching Dock: ${describeError((c as { error?: unknown }).error ?? "invalid tool call")}` });
+          emit({ type: "tool_error", step, id: c.toolCallId, name: c.toolName, message: `Rejected before reaching AimoPilot: ${describeError((c as { error?: unknown }).error ?? "invalid tool call")}` });
           toolCallCount++;
           continue;
         }
         if (humanTools.has(c.toolName)) {
           emit({ type: "tool_call", step, id: c.toolCallId, name: c.toolName, args, by: "model" });
-          emit({ type: "violation", step, id: c.toolCallId, name: c.toolName, kind: "answered_for_human", args, detail: `The model called ${c.toolName}, which records the buyer's own answer. Blocked; Dock never saw it.` });
+          emit({ type: "violation", step, id: c.toolCallId, name: c.toolName, kind: "answered_for_human", args, detail: `The model called ${c.toolName}, which records the buyer's own answer. Blocked; AimoPilot never saw it.` });
           toolCallCount++;
           parts.push({ type: "tool-result", toolCallId: c.toolCallId, toolName: c.toolName, output: { type: "error-text", value: blockedHumanToolResult(c.toolName) } });
           continue;

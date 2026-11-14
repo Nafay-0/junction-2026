@@ -82,7 +82,7 @@ export function Console() {
         update(n, (r) => ({
           ...r,
           busy: undefined,
-          failure: { at: "understood", title: "Dock did not take the request", message: res.error.message, retry: res.status === 0 || res.status >= 500 ? () => void openIntake(n, interp) : undefined },
+          failure: { at: "understood", title: "AimoPilot did not take the request", message: res.error.message, retry: res.status === 0 || res.status >= 500 ? () => void openIntake(n, interp) : undefined },
         }));
     },
     [call, kitchen.by, update, absorb],
@@ -100,7 +100,7 @@ export function Console() {
           ? { at: "understood", title: "That does not read as something to buy", message: `${out.message} Write what the kitchen needs and how much.` }
           : out.kind === "unavailable"
             ? { at: "understood", title: "The model reader did not answer", message: out.message, retry: () => void read(n, text, false), offline: () => void read(n, text, true) }
-            : { at: "understood", title: "Dock could not read that", message: out.message };
+            : { at: "understood", title: "AimoPilot could not read that", message: out.message };
       update(n, (r) => ({ ...r, busy: undefined, failure }));
     },
     [slug, update, openIntake],
@@ -178,7 +178,7 @@ export function Console() {
         busyKey: undefined,
         failure: {
           at,
-          title: res.status === 409 ? "That step has moved on" : "Dock refused that",
+          title: res.status === 409 ? "That step has moved on" : "AimoPilot refused that",
           message: res.error.message,
           retry: res.status === 0 || res.status >= 500 ? () => void stepCall(busy, busyKey, at, path, body, after) : undefined,
         },
@@ -217,7 +217,7 @@ export function Console() {
     if (res.ok) update(n, (r) => ({ ...r, busy: undefined, order: res.data.order }));
     else if (res.data?.order) update(n, (r) => ({ ...r, busy: undefined, order: res.data!.order, orderRefusal: res.error }));
     else if (res.status === 0 || res.status >= 500)
-      update(n, (r) => ({ ...r, busy: undefined, failure: { at: "quote", title: "The order did not reach Dock", message: res.error.message, retry: () => void placeOrder() } }));
+      update(n, (r) => ({ ...r, busy: undefined, failure: { at: "quote", title: "The order did not reach AimoPilot", message: res.error.message, retry: () => void placeOrder() } }));
     else update(n, (r) => ({ ...r, busy: undefined, orderRefusal: res.error }));
   };
 

@@ -39,7 +39,7 @@ export function JoinFlow() {
       setPhase((p) => (p === "loading" || p === "offline" ? "ready" : p));
       return;
     }
-    setProblem({ title: r.status === 503 ? "The demo is full" : "Can't reach Dock", body: r.error.message });
+    setProblem({ title: r.status === 503 ? "The demo is full" : "Can't reach AimoPilot", body: r.error.message });
     setPhase(r.status === 503 ? "full" : "offline");
   }, []);
 
@@ -86,7 +86,7 @@ export function JoinFlow() {
   if (phase === "loading") return <p className="mt-20 text-center text-ink-soft">Setting up your kitchen…</p>;
   if (phase === "full" || phase === "offline")
     return (
-      <PhoneNotice title={problem?.title ?? "Can't reach Dock"} body={problem?.body ?? ""}>
+      <PhoneNotice title={problem?.title ?? "Can't reach AimoPilot"} body={problem?.body ?? ""}>
         <button className={`mt-6 ${bigButton("dark")}`} onClick={() => void load()}>
           Try again
         </button>
@@ -128,7 +128,7 @@ export function JoinFlow() {
           </li>
         ))}
       </ol>
-      <p className="mt-5 text-[0.95rem] leading-snug text-ink-soft">No name, no email, no password. The passkey is deleted from Dock when the demo kitchen closes.</p>
+      <p className="mt-5 text-[0.95rem] leading-snug text-ink-soft">No name, no email, no password. The passkey is deleted from AimoPilot when the demo kitchen closes.</p>
 
       {problem && phase === "failed" && <PhoneProblem title={problem.title} body={problem.body} />}
       {!canPasskey && <PhoneProblem quiet title="Passkeys are not available here" body={start.secureOrigin ? "This browser can't create passkeys. Try Safari on iPhone or Chrome on Android." : "Passkeys only work over https. Open the https address of this demo."} />}

@@ -46,7 +46,7 @@ function recordingHuman(h: Harness, said: string[]): Human {
     const verdict = h.intakeAnswer(prompt.kind === "confirmation" ? { kind: "confirmation", codes: prompt.concerns.map((c) => c.code), messages: asked } : { kind: "questions", messages: asked });
     if (verdict.refuse) {
       h.recordIntake(prompt.kind, asked, { declinedToPick: true, said: verdict.text });
-      said.push(`Dock asked the buyer: "${asked.join(" ")}" None of Dock's choices fits them. The buyer replied: "${verdict.text}"`);
+      said.push(`AimoPilot asked the buyer: "${asked.join(" ")}" None of AimoPilot's choices fits them. The buyer replied: "${verdict.text}"`);
       return null;
     }
     const a = await typed(prompt);

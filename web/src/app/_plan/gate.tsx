@@ -192,7 +192,7 @@ function ApprovalQrPanel({ kitchen, approvalId, base }: { kitchen: string; appro
         </div>
       </div>
       <p className="mt-1 leading-snug">
-        {qr.mode === "demo_link" ? `Scan to sign off as ${qr.approver.name}: the one-time link Dock sent to their phone (demo kitchen).` : `${qr.approver.name} signs off on their phone.`}
+        {qr.mode === "demo_link" ? `Scan to sign off as ${qr.approver.name}: the one-time link AimoPilot sent to their phone (demo kitchen).` : `${qr.approver.name} signs off on their phone.`}
       </p>
       <a href={qr.url} target="_blank" rel="noreferrer" className="font-semibold text-petrol underline decoration-2 underline-offset-4">
         Open the sign-off page

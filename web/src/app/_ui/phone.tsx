@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
-import { DEMO_NOTE, PRODUCT_NAME } from "./brand";
+import { DEMO_NOTE } from "./brand";
 import { Target } from "./target";
+import { Wordmark } from "./wordmark";
 
 /**
  * The phone pages (/join, /approver, /approve/<id>, /call): one column, one large control at the bottom, the demo
@@ -12,10 +13,7 @@ export function PhoneShell({ children, context, tone = "plain" }: { children: Re
     <div className={`flex min-h-dvh flex-col ${tone === "gate" ? "bg-paper" : "bg-mist"}`}>
       {tone === "gate" && <div aria-hidden className="hazard h-3 shrink-0" />}
       <header className="flex items-center justify-between gap-3 bg-paper px-5 py-3">
-        <span className="flex items-baseline gap-2">
-          <span aria-hidden className="size-2.5 bg-lime" />
-          <span className="display text-[1.5rem] text-petrol">{PRODUCT_NAME}</span>
-        </span>
+        <Wordmark size={26} />
         {context && <span className="truncate text-[0.95rem] text-ink-soft">{context}</span>}
       </header>
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col px-5 pb-6 pt-5 text-[1.08rem] text-ink">{children}</main>

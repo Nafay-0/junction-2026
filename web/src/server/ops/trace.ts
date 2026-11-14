@@ -203,7 +203,7 @@ const CONCERN_KIND: Record<string, string> = {
 };
 
 function actorOf(actor: string, approverNames: Map<string, string>): string {
-  if (actor === "dock") return "Dock";
+  if (actor === "dock") return "AimoPilot";
   if (actor.startsWith("agent:")) return "Buyer agent";
   if (actor.startsWith("buyer:")) return actor.slice(6);
   if (actor.startsWith("operator:")) return `Operations (${actor.slice(9)})`;
@@ -299,7 +299,7 @@ export function buildTrace(input: TraceInput): Trace {
           push({ phase: "answered", tone: "safety", title, lines, memory });
         } else if (step === "questions") {
           const fromMemory = memoryCount(d.reasons);
-          const qs = say(e.summary.replace(/^Dock asked \d+ questions?: /, "")).split(" / ");
+          const qs = say(e.summary.replace(/^(?:Dock|AimoPilot) asked \d+ questions?: /, "")).split(" / ");
           push({
             phase: "checked",
             tone: "safety",
@@ -340,7 +340,7 @@ export function buildTrace(input: TraceInput): Trace {
               step === "options"
                 ? `Built ${options.length === 1 ? "one option" : `${options.length} options`}; ruled out ${allExcluded.length} product${allExcluded.length === 1 ? "" : "s"}`
                 : `No option fits: ruled out ${allExcluded.length} product${allExcluded.length === 1 ? "" : "s"}`,
-            lines: step === "no_options" ? [say(e.summary.replace(/^Dock found no option: /, ""))] : fromMemory ? [`Ranked with ${fromMemory} preference${fromMemory > 1 ? "s" : ""} from the kitchen's own memory (kept private to the kitchen).`] : [],
+            lines: step === "no_options" ? [say(e.summary.replace(/^(?:Dock|AimoPilot) found no option: /, ""))] : fromMemory ? [`Ranked with ${fromMemory} preference${fromMemory > 1 ? "s" : ""} from the kitchen's own memory (kept private to the kitchen).`] : [],
             products,
             excluded: groupExclusions(allExcluded, name),
             memory,
@@ -467,7 +467,7 @@ export function buildTrace(input: TraceInput): Trace {
         const who = order?.approval?.approver.name ?? /^(.+?) \(/.exec(e.summary)?.[1] ?? base.actor;
         const how =
           signOff.method === "passkey"
-            ? "with the passkey on their phone (Face ID or fingerprint), verified by Dock"
+            ? "with the passkey on their phone (Face ID or fingerprint), verified by AimoPilot"
             : signOff.method === "link_token"
               ? "through the one-time link sent only to them"
               : signOff.method === "demo_tap"

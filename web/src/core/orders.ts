@@ -702,7 +702,7 @@ export function createDock(deps: DockDeps) {
       let claims: IssuedClaim[] = [];
       try {
         const products = await catalog.searchProducts({ ids, limit: 100 });
-        const live = await liveLookup(session, requestId, ids, request.neededBy, "Dock asked live prices for a quote", { fresh: true, batch: true });
+        const live = await liveLookup(session, requestId, ids, request.neededBy, "AimoPilot asked live prices for a quote", { fresh: true, batch: true });
         const offers = live.offers;
         // Say why a line cannot be quoted, in the partner's terms (a passed cut-off, a sales block, no price).
         for (const l of lines) {

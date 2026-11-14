@@ -44,7 +44,7 @@ export async function verifyPasted(input: string, jwks: JSONWebKeySet, ledger?: 
   } catch {
     return { ok: false, problem: "The token's header cannot be read: it is not a JWS." };
   }
-  if (!typ || !KNOWN_TYPES[typ]) return { ok: false, typ, problem: `Not a Dock document: typ is ${typ ?? "missing"}; expected order+jws, quote+jws or vc+jwt.` };
+  if (!typ || !KNOWN_TYPES[typ]) return { ok: false, typ, problem: `Not a AimoPilot document: typ is ${typ ?? "missing"}; expected order+jws, quote+jws or vc+jwt.` };
   try {
     const { payload, protectedHeader } = await compactVerify(token, createLocalJWKSet(jwks), { algorithms: ["Ed25519", "EdDSA"] });
     const body = JSON.parse(new TextDecoder().decode(payload)) as Record<string, unknown>;

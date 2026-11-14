@@ -21,7 +21,7 @@ export function CallJoin() {
 
   useEffect(() => {
     queueMicrotask(() => setSupported(browserSupportsWebAuthn() && window.isSecureContext));
-    void api<Start>("POST", "/api/v1/join").then((r) => (r.ok ? setStart(r.data) : setProblem({ title: r.status === 503 ? "The demo is full" : "Can't reach Dock", body: r.error.message })));
+    void api<Start>("POST", "/api/v1/join").then((r) => (r.ok ? setStart(r.data) : setProblem({ title: r.status === 503 ? "The demo is full" : "Can't reach AimoPilot", body: r.error.message })));
   }, []);
 
   async function join(body?: unknown) {

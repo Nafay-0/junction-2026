@@ -226,9 +226,9 @@ function Connect() {
     }
   };
   const mcpJson = c
-    ? JSON.stringify({ mcpServers: { dock: { type: "http", url: c.mcpUrl, headers: { Authorization: "Bearer ${DOCK_MANDATE}", "Dock-Agent-Id": c.agentId } } } }, null, 2)
+    ? JSON.stringify({ mcpServers: { aimopilot: { type: "http", url: c.mcpUrl, headers: { Authorization: "Bearer ${DOCK_MANDATE}", "Dock-Agent-Id": c.agentId } } } }, null, 2)
     : "";
-  const cli = c ? `claude mcp add --transport http dock ${c.mcpUrl} \\\n  --header "Authorization: Bearer $DOCK_MANDATE" \\\n  --header "Dock-Agent-Id: ${c.agentId}"` : "";
+  const cli = c ? `claude mcp add --transport http aimopilot ${c.mcpUrl} \\\n  --header "Authorization: Bearer $DOCK_MANDATE" \\\n  --header "Dock-Agent-Id: ${c.agentId}"` : "";
   return (
     <section aria-labelledby="connect" className="space-y-3">
       <div>

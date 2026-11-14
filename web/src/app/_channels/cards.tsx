@@ -58,7 +58,7 @@ export function ReadBack({ pending, act, busy }: { pending: Pending; act: Act; b
       <p className="text-[1.6rem] font-bold leading-tight tabular">
         {q ? measure(q.amount, q.unit) : ""} <span className="font-semibold">{pending.need.item.text}</span>
       </p>
-      <p className="text-[1.05rem] text-ink-soft">Dock asks because {pending.reason}.</p>
+      <p className="text-[1.05rem] text-ink-soft">AimoPilot asks because {pending.reason}.</p>
       <div className="flex flex-wrap gap-2">
         <Btn disabled={busy} onClick={() => act("confirm_read_back", {}, "Yes, that's right")}>Yes, that&apos;s right</Btn>
       </div>

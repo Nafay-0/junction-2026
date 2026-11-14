@@ -25,7 +25,7 @@ import { flag, loadLocalEnv } from "./lib/agent-cli";
 const terminalHuman: Human = async (p) => {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
-    const by = (await rl.question("\n  Dock has a question for the buyer. Your name: ")).trim() || "Buyer";
+    const by = (await rl.question("\n  AimoPilot has a question for the buyer. Your name: ")).trim() || "Buyer";
     if (p.kind === "confirmation") {
       const responses = [];
       for (const c of p.concerns) {
@@ -74,7 +74,7 @@ async function main() {
       if (e.type === "model") process.stderr.write(`  step ${e.step}: ${e.toolCalls.map((c) => c.name).join(", ") || "(reply)"}\n`);
     },
   };
-  console.error(`Running ${model} against ${url ?? "Dock in-process"}...`);
+  console.error(`Running ${model} against ${url ?? "AimoPilot in-process"}...`);
   const result = await runBuyerAgent(opts);
   console.log("\n" + formatTranscript(result));
   const out = flag(args, "--json");

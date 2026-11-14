@@ -7,7 +7,7 @@ import { CallPage } from "../_channels/call-page";
 import { SESSION_COOKIE } from "@/server/approver-session";
 import { getRuntime } from "@/server/runtime";
 
-export const metadata: Metadata = { title: "Dock: call your agent" };
+export const metadata: Metadata = { title: "AimoPilot: call your agent" };
 export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#f2f7f8" };
 
 /**

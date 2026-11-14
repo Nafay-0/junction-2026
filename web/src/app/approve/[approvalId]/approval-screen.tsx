@@ -86,7 +86,7 @@ export function ApprovalScreen({ approvalId, token }: { approvalId: string; toke
     if (!p || Date.now() - p.at > OPTIONS_FRESH_MS) p = await prepare();
     if (!p) {
       setPhase("idle");
-      setProblem({ title: "Can't start the passkey prompt", body: "Dock did not answer. Check the connection and try again." });
+      setProblem({ title: "Can't start the passkey prompt", body: "AimoPilot did not answer. Check the connection and try again." });
       return;
     }
     let response;

@@ -4,11 +4,11 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { DoorsPreview } from "../_channels/preview";
-import { Wordmark } from "../_ui/target";
+import { Wordmark } from "../_ui/wordmark";
 import { callLink } from "@/server/channels/call-links";
 import { getRuntime } from "@/server/runtime";
 
-export const metadata: Metadata = { title: "Dock: voice and photo doors" };
+export const metadata: Metadata = { title: "AimoPilot: voice and photo doors" };
 
 /**
  * Preview of the two extra doors for a demo kitchen: /channels?k=kaari (default) or ?k=laakso.

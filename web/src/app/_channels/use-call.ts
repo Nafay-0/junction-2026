@@ -52,7 +52,7 @@ const post: Post = async (path, body) => {
     const data = await res.json().catch(() => ({}));
     return { ok: res.ok && !data.error, status: res.status, data };
   } catch {
-    return { ok: false, status: 0, data: { error: { code: "network", message: "No connection to Dock. Check the network and try again." } } as never };
+    return { ok: false, status: 0, data: { error: { code: "network", message: "No connection to AimoPilot. Check the network and try again." } } as never };
   }
 };
 
@@ -158,8 +158,8 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
         let reply: ToolReply;
         if (r.ok) reply = r.data;
         else {
-          const message = r.data.error?.message ?? "Dock could not be reached.";
-          reply = { forModel: { ok: false, state: "error", say: `Dock could not do that: ${message}` }, screen: { problem: { code: r.data.error?.code ?? "error", message } } };
+          const message = r.data.error?.message ?? "AimoPilot could not be reached.";
+          reply = { forModel: { ok: false, state: "error", say: `AimoPilot could not do that: ${message}` }, screen: { problem: { code: r.data.error?.code ?? "error", message } } };
         }
         screen(reply);
         responses.push({ id: fc.id, name: fc.name, response: reply.forModel });
@@ -347,7 +347,7 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
       const r = await post<ToolReply>(`${base}/tool`, { callId: callId.current, name, args, heard: text ? { text, turn: turn.current } : undefined, via: "typed" });
       set({ busy: false });
       if (!r.ok) {
-        set({ problem: { code: r.data.error?.code ?? "error", message: r.data.error?.message ?? "Dock could not do that." } });
+        set({ problem: { code: r.data.error?.code ?? "error", message: r.data.error?.message ?? "AimoPilot could not do that." } });
         return;
       }
       screen(r.data);
@@ -367,11 +367,11 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
       const r = await post<ToolReply>(`${base}/tool`, { callId: callId.current, name, args, via: live ? "speech" : "typed", tapped: true });
       set({ busy: false });
       if (!r.ok) {
-        set({ problem: { code: r.data.error?.code ?? "error", message: r.data.error?.message ?? "Dock could not do that." } });
+        set({ problem: { code: r.data.error?.code ?? "error", message: r.data.error?.message ?? "AimoPilot could not do that." } });
         return;
       }
       screen(r.data);
-      if (live) sock.current!.text(`[Dock update] The caller tapped "${label}" on the screen. Dock's reply: ${JSON.stringify(r.data.forModel)}`);
+      if (live) sock.current!.text(`[AimoPilot update] The caller tapped "${label}" on the screen. AimoPilot's reply: ${JSON.stringify(r.data.forModel)}`);
       else addLine("dock", r.data.forModel.say);
     },
     [addLine, base, screen, set],
@@ -432,7 +432,7 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
       onOrder.current?.(o);
       if (r.data.forModel) {
         addFacts(facts.current, r.data.forModel);
-        if (sock.current?.open) sock.current.text(`[Dock update] ${r.data.forModel.say} Tell the caller in one sentence.`);
+        if (sock.current?.open) sock.current.text(`[AimoPilot update] ${r.data.forModel.say} Tell the caller in one sentence.`);
         else addLine("dock", r.data.forModel.say);
       }
     }, 3000);

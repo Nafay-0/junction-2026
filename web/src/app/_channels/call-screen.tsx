@@ -162,12 +162,12 @@ export function CallScreen({ kitchen, signOffHref, renderSignOff, onStep, onOrde
               {v.lines.length === 0 && <p className="text-[1.1rem] text-ink-soft">{live ? "Connected. The agent is saying hello…" : "Type what the kitchen needs."}</p>}
               {v.lines.map((l) => (
                 <div key={l.id} className={`px-3 py-2 ${l.who === "you" ? "ml-6 bg-mist" : l.who === "agent" ? "mr-6 bg-lavender" : "bg-paper outline-1 outline-line"} ${l.final ? "" : "opacity-75"}`}>
-                  <p className={`text-[0.85rem] font-semibold ${l.who === "agent" ? "text-lavender-deep" : "text-ink-soft"}`}>{l.who === "you" ? "You" : l.who === "agent" ? agentName : "Dock"}</p>
+                  <p className={`text-[0.85rem] font-semibold ${l.who === "agent" ? "text-lavender-deep" : "text-ink-soft"}`}>{l.who === "you" ? "You" : l.who === "agent" ? agentName : "AimoPilot"}</p>
                   <p className={`text-[1.35rem] leading-snug ${l.who === "you" ? "font-semibold" : ""}`}>
                     {l.dropped?.length ? (
                       <>
                         <span className="line-through decoration-2">{l.text}</span>
-                        <span className="mt-1 block bg-safety px-2 py-1 text-[0.95rem] font-semibold text-safety-ink">Cut off: {l.dropped.join(", ")} did not come from Dock.</span>
+                        <span className="mt-1 block bg-safety px-2 py-1 text-[0.95rem] font-semibold text-safety-ink">Cut off: {l.dropped.join(", ")} did not come from AimoPilot.</span>
                       </>
                     ) : (
                       l.text
@@ -246,7 +246,7 @@ export function CallScreen({ kitchen, signOffHref, renderSignOff, onStep, onOrde
           <p className="text-[1.15rem] font-semibold">{v.phase === "lost" ? "The call dropped." : "Call ended."} {v.endReason && v.endReason !== "hung up" ? v.endReason : ""}</p>
           {v.micProblem && <p className="text-[1rem]">Microphone: {v.micProblem === "denied" ? "blocked. Allow it in the browser's site settings to call." : v.micProblem.replace("_", " ")}.</p>}
           <p className="text-sm text-ink-soft tabular">
-            {v.grounding.checked > 0 ? `${v.grounding.checked} agent turn${v.grounding.checked > 1 ? "s" : ""} checked against Dock, ${v.grounding.dropped} cut off. ` : ""}About ${v.costUsd.toFixed(3)} of voice.
+            {v.grounding.checked > 0 ? `${v.grounding.checked} agent turn${v.grounding.checked > 1 ? "s" : ""} checked against AimoPilot, ${v.grounding.dropped} cut off. ` : ""}About ${v.costUsd.toFixed(3)} of voice.
           </p>
           <div className="flex flex-wrap justify-center gap-3">
             <button type="button" onClick={() => void c.call(mode, c.callId() ?? undefined)} className="min-h-12 bg-lime text-ink px-6 font-semibold text-paper">

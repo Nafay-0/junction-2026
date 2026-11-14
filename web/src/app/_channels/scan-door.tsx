@@ -60,7 +60,7 @@ async function postJson<T>(path: string, body: unknown): Promise<{ ok: boolean; 
     const data = await res.json().catch(() => ({}));
     return { ok: res.ok && !data.error, data };
   } catch {
-    return { ok: false, data: { error: { code: "network", message: "No connection to Dock." } } as never };
+    return { ok: false, data: { error: { code: "network", message: "No connection to AimoPilot." } } as never };
   }
 }
 
@@ -101,10 +101,10 @@ export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorPr
     try {
       const res = await fetch(base, { method: "POST", body: form, cache: "no-store" });
       const data = await res.json();
-      if (!res.ok || data.error) setError(data.error?.message ?? `Dock answered ${res.status}.`);
+      if (!res.ok || data.error) setError(data.error?.message ?? `AimoPilot answered ${res.status}.`);
       else accept(data);
     } catch {
-      setError("No connection to Dock.");
+      setError("No connection to AimoPilot.");
     }
     setReading(false);
   }

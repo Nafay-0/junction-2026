@@ -4,9 +4,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { api } from "../../_client/api";
-import { PRODUCT_NAME } from "../../_ui/brand";
 import { buttonClass, Spinner } from "../../_ui/kit";
-import { Target } from "../../_ui/target";
+import { Wordmark } from "../../_ui/wordmark";
 import { OPS_DEMO_NOTE } from "../_ui/rail";
 
 /**
@@ -36,9 +35,8 @@ export function Entry({ mode }: { mode: "demo" | "passcode" }) {
   return (
     <main className="grid min-h-dvh bg-mist text-ink md:grid-cols-[1.05fr_1fr]">
       <section className="on-dark flex flex-col justify-between gap-10 bg-petrol-deep px-6 py-10 text-paper sm:px-12">
-        <div className="flex items-center gap-3">
-          <Target size={40} tone="chalk" />
-          <span className="display text-[2.4rem]">{PRODUCT_NAME}</span>
+        <div>
+          <Wordmark tone="paper" size={40} />
         </div>
         <div>
           <h1 className="display max-w-[16ch] text-[clamp(2.6rem,4.4vw,4.2rem)] leading-[0.95]">The wholesaler&apos;s operations desk</h1>

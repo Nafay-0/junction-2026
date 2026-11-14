@@ -57,7 +57,7 @@ function answered(human: HumanChannel): Record<string, unknown> | undefined {
   if (r.kind !== "elicit") return undefined;
   if (r.action === "cancel") {
     // Dismissed without a choice, or a client that declares elicitation but cannot show the form (e.g. headless).
-    throw new DockError(409, "form_not_answered", "Dock's form was closed without an answer. Nothing was changed.", "human_input", { action: r.action });
+    throw new DockError(409, "form_not_answered", "AimoPilot's form was closed without an answer. Nothing was changed.", "human_input", { action: r.action });
   }
   if (r.action !== "accept" || !r.content) {
     throw new DockError(409, "buyer_declined", "The buyer did not answer. Nothing was changed.", "human_input", { action: r.action });
@@ -78,7 +78,7 @@ export function concernsFromBuyer(step: IntakeView, human: HumanChannel, propose
       return [c.key, { type: "string", title: c.message, oneOf: options, ...(wanted && options.some((o) => o.const === wanted) ? { default: wanted } : {}) }];
     }),
   );
-  return form("Dock spotted something that may be a mistake in this order. Please check it before anything is priced.", fields, proposed?.by);
+  return form("AimoPilot spotted something that may be a mistake in this order. Please check it before anything is priced.", fields, proposed?.by);
 }
 
 /** Questions: ask the buyer through the client, or read their answer from the retried call. */
@@ -93,7 +93,7 @@ export function answersFromBuyer(step: IntakeView, human: HumanChannel, proposed
       return [q.id, { type: "string", title: q.text, oneOf: q.options.map((o) => ({ const: o.id, title: o.label })), ...(wanted && q.options.some((o) => o.id === wanted) ? { default: wanted } : {}) }];
     }),
   );
-  return form(`Dock needs ${questions.length === 1 ? "one answer" : "your answers"} to find the right options.`, fields, proposed?.by, {
+  return form(`AimoPilot needs ${questions.length === 1 ? "one answer" : "your answers"} to find the right options.`, fields, proposed?.by, {
     remember: { type: "boolean", title: "Remember my answers for next time", default: false },
   });
 }

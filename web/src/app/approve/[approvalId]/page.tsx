@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { PhoneShell } from "../../_ui/phone";
 import { ApprovalScreen } from "./approval-screen";
 
-export const metadata: Metadata = { title: "Dock: sign-off" };
+export const metadata: Metadata = { title: "AimoPilot: sign-off" };
 
 /**
  * The sign-off screen behind an approval link or QR code. Approvers with a passkey approve with it (the challenge

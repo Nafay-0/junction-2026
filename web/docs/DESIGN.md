@@ -1,6 +1,6 @@
-# Dock design system
+# AimoPilot design system
 
-The customer side of Dock (the kitchen store under `/k/**`, the menu planner, the phone pages) and the system the
+The customer side of AimoPilot (the kitchen store under `/k/**`, the menu planner, the phone pages) and the system the
 operations portal (`/ops/**`) and the wall (`/`) should adopt. Tokens live in `src/app/globals.css`; components in
 `src/app/_ui/`. This file is the contract: if you add a surface, use these and nothing else.
 
@@ -47,7 +47,7 @@ Content is left-aligned on a 12-column grid, max 1440 px wide.
 ```
  demo note (petrol-deep, one line)
  ┌──────────────────────────────────────────────────────────────┬───────────────┐
- │ ◐ Dock   Ravintola Kaari ▾        [ search 17 546 products ] │ Agent  ⌘K     │
+ │ ▣ AimoPilot  Ravintola Kaari ▾      [ search 17 546 products ] │ Agent  ⌘K     │
  │          deliveries Mon–Fri       [Ask the agent ⌘K] [Basket 3  412,00 €]   │ (lavender)    │
  ├──────────────────────────────────────────────────────────────┤               │
  │ Home  Order  Catalogue  Menu planner  Orders  Agent and rules│  answers,     │
@@ -167,7 +167,12 @@ on the main surface; put them behind "Show details".
   department glyphs, `TempGlyph`, `DEPARTMENT_GLYPH`.
 - `phone.tsx`: `PhoneShell` (one column, demo note at the foot; tone `gate` adds the hazard band), `GateHead` (the
   black slab with the mark, for a phone), `bigButton()`, `PhoneNotice`, `PhoneProblem`.
-- `target.tsx`: the crash-test mark. Use it only at the gate: a stopped order, a refusal, a sign-off.
+- `wordmark.tsx`: the product's sign. `Wordmark` (tone `petrol` on light grounds, `paper` on petrol-deep) and
+  `PilotLight` (the lamp alone). The pilot light is the indicator lamp on a control panel that says a system is on
+  and supervised: a lime square in a square petrol-deep bezel, then "AimoPilot" in Barlow Condensed 800 with a hair of
+  negative tracking. One weight for the whole name, no colour split. The app icon (`app/icon.svg`) is the lamp.
+- `target.tsx`: the crash-test mark. It is the gate's symbol, not the product's: use it only at the gate (a stopped
+  order, a refusal, a sign-off), never beside the name.
 - The order lane (`k/[kitchen]/ui.tsx`): `StationStrip` (seven stations, compact on phones), `Lane` (current stage
   open, earlier ones one line each), `useFollowLane`. Stage cards are in `k/[kitchen]/stages.tsx`; `Gate` and
   `SignOff` are the loud moment and the hand-off.

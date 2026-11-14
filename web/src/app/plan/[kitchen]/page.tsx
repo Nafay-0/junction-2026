@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
+import { Wordmark } from "../../_ui/wordmark";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { MENU_KITCHENS } from "@/server/agent/menu/kitchens";
 import { MenuPlanner } from "../../_plan/menu-planner";
 
-export const metadata: Metadata = { title: "Dock: menu to order" };
+export const metadata: Metadata = { title: "AimoPilot: menu to order" };
 
 const NAMES: Record<string, { name: string; kind: string }> = {
   kaari: { name: "Ravintola Kaari", kind: "Lunch restaurant" },
@@ -36,9 +37,8 @@ async function Loaded({ params }: PageProps<"/plan/[kitchen]">) {
       <header className="border-b-4 border-petrol bg-paper">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <div className="flex items-center gap-3">
-            <Link href={`/k/${kitchen}/menu`} className="flex items-baseline gap-2">
-              <span aria-hidden className="size-3 bg-lime" />
-              <span className="display text-[1.9rem] text-petrol">Dock</span>
+            <Link href={`/k/${kitchen}/menu`} className="flex items-center">
+              <Wordmark size={32} />
             </Link>
             <span className="display text-[1.5rem]">Menu planner</span>
           </div>
