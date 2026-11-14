@@ -342,12 +342,9 @@ Model and tool calls also go to the action stream (Aiven) as `agent.model` and `
 
 - **In process:** `submitTurn(kitchen, body)` from `server/thread/engine.ts` (a `Kitchen` the route resolved, or
   the slug), then `threadStore().subscribe(slug, fn)` for the events. Over HTTP: the three routes above.
-- **Voice:** send each final transcript as `{ door: "voice", via: "speech", text }`. The agent maps a spoken
-  answer onto the open card itself (`buyer_reply`), with the words recorded; if your own realtime model already
-  knows which card was answered, send `{ door: "voice", via: "speech", text, action }` and the engine runs the
-  action with the words as the heard evidence (no model call). Speak the agent's `line` when it comes, then the
-  newest card (`server/channels/say.ts` has spoken renderings of steps and orders). Never speak a number, product
-  or date that is not on a card.
+- **Voice:** `server/thread/voice-bridge.ts heardTurn` sends each final transcript as `{ door: "voice", via:
+  "speech", text }` and `nextSpoken` says what comes back (`voice-spoken.ts`). Never speak a number, product or date
+  that is not on a card or in the line.
 - **Photo:** read the image with the scan door (`/ui-api/scan/<kitchen>`), then send the text it read as
   `{ door: "photo", via: "photo", text }`; several lines are several items, split by code.
 - A door that is not a browser (a phone call) passes the kitchen slug: the turn then has no signed-in person and
@@ -355,16 +352,16 @@ Model and tool calls also go to the action stream (Aiven) as `agent.model` and `
 
 ## The voice call is a door of the thread
 
-The call keeps its realtime model, its recogniser primed with the kitchen's words, and its spoken read-back
-(`server/channels/voice/`). Every tool step of the call is also a turn of the kitchen's thread
-(`server/thread/voice-bridge.ts`, hooked in `voice/tools.ts runTool`): the heard words are the buyer turn (door
-`voice`), the read-back is the `understood` card with the read-back sentence as the agent's line, and the intake's
-answer is the same cards the typed store shows. When the intake's options come back for a routine request, the
-engine's rule places it alone and the voice model is told what was placed, so a routine spoken order is the
-request, the read-back and one "yes"; otherwise a spoken choice orders it, as a tap does. Speaking is a mode of the
-thread itself (`_channels/voice-mode.tsx`): the composer's microphone starts the call, the voice bar over the
-composer holds to talk or listens, the log shows the words being heard, and hanging up leaves the buyer typing in
-the same composer. There is no browser speech recognition. `DOCK_THREAD_VOICE=off` stops the mirroring.
+Talking is one mode, hands-free, in the conversation itself (docs/doors.md). The live voice model is the ears and the
+mouth: its one tool, `relay`, sends the buyer's words as the live transcript heard them to `submitTurn({ door:
+"voice", via: "speech", text })` (`server/thread/voice-bridge.ts`), so a spoken turn is exactly a typed one: the same
+reading, handlers, tools, subject, checks and gate. What the turn says is made speakable by plain code
+(`voice-spoken.ts`): an acknowledgement from the running step, milestones, the reply shortened with figures said as
+people say them, open options as one yes/no question about the first one. Where the agent would order alone on
+spoken words, it holds and the door reads the order back; the buyer's yes orders exactly that option
+(`pipeline.ts spokenHold`, `engine.ts`). The composer's microphone starts it; the buyer's words land as turns marked
+as spoken; hanging up leaves the buyer typing in the same composer. There is no browser speech recognition and no
+second agent. `voice-parity.test.ts` proves the same conversation typed and spoken reaches the same state.
 
 ## What runs where (as built)
 

@@ -49,10 +49,12 @@ export type Spoken = {
   why?: string;
   /** waiting: the named person whose OK the order waits for. */
   waitingFor?: string;
+  /** What the words were made from (the turn's cards): the facts the grounding check holds the voice model's speech to. */
+  facts?: unknown;
 };
 
 /** How long the first answer to an utterance waits for the engine before it says what the engine is doing. */
-const ACK_MS = Number(process.env.DOCK_VOICE_ACK_MS ?? 600);
+const ACK_MS = Number(process.env.DOCK_VOICE_ACK_MS ?? 250);
 /** Milestones of long work are said at most this often. */
 const PROGRESS_GAP_MS = 8_000;
 
@@ -215,12 +217,15 @@ export async function nextSpoken(k: Kitchen | string, call: Call, agentTurnId: s
         }
       }
       said(call, words);
+      const facts = { cards: a.cards, line: a.line ?? "" };
       if (a.status === "waiting_approver") {
         const gate = a.cards.find((c) => c.type === "gate" && c.outcome === "waiting");
-        return { state: "waiting", say: words, lang, agentTurnId, ...(gate?.type === "gate" && gate.approver ? { waitingFor: gate.approver.name } : {}) };
+        return { state: "waiting", say: words, lang, agentTurnId, facts, ...(gate?.type === "gate" && gate.approver ? { waitingFor: gate.approver.name } : {}) };
       }
-      return { state: "reply", say: words, lang, agentTurnId };
+      return { state: "reply", say: words, lang, agentTurnId, facts };
     }
+    // Already said, and nothing more will come (a turn waiting for a sign-off is followed until it lands).
+    if (a.status !== "working" && a.status === p.status && a.status !== "waiting_approver") return { state: "reply", say: "", lang, agentTurnId };
     if (a.status === "working" && !muted && !first) {
       const m = milestoneOf(a, new Set(p.keys), lang);
       if (m && Date.now() - p.at >= PROGRESS_GAP_MS) {

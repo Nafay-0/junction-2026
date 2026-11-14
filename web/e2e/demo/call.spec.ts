@@ -66,7 +66,7 @@ async function fakeLive(page: Page, opts: { dropAfterConnect?: boolean } = {}): 
       const m = JSON.parse(String(raw)) as Wire;
       if (m.setup) {
         send({ setupComplete: {} });
-        if (live.dropAfterConnect && n === 1) setTimeout(() => ws.close({ code: 1011, reason: "Internal error" }), 2500);
+        if (live.dropAfterConnect && n === 1) setTimeout(() => ws.close({ code: 1011, reason: "Internal error" }), 4000);
         return;
       }
       const t = m.realtimeInput?.text as string | undefined;

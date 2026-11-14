@@ -5,7 +5,7 @@ import type { CallStart } from "@/server/channels/voice/start";
 import type { Spoken } from "@/server/thread/voice-bridge";
 import { useLang } from "../_i18n/provider";
 import { CallAudio, micProblem, type MicProblem } from "./audio";
-import { addFacts, addWords, checkSpeech, correctionFor, emptyFacts, type Facts } from "./grounding";
+import { addFacts, checkSpeech, correctionFor, emptyFacts, type Facts } from "./grounding";
 import { LiveSocket, type FunctionCall, type SocketEvents, type VoiceSocket } from "./live-socket";
 import { RealtimeSocket } from "./realtime-socket";
 import { VOICE_MODE_TEXT } from "./voice-mode.text";
@@ -191,7 +191,7 @@ export function useCall(kitchen: string) {
   const utter = useCallback(
     (text: string) => {
       if (!text.trim()) return;
-      addWords(facts.current, text);
+      addFacts(facts.current, { say: text });
       lastAsk.current = /\?\s*$/.test(text.trim());
       queue.current.push(text);
       flush();
@@ -215,6 +215,7 @@ export function useCall(kitchen: string) {
             continue;
           }
           const s = r.data;
+          if (s.facts) addFacts(facts.current, s.facts);
           if (s.say) {
             if (s.state !== "working") replyFor.current = { turn: forTurn, at: Date.now() };
             utter(s.say);
@@ -273,7 +274,8 @@ export function useCall(kitchen: string) {
           continue;
         }
         const sp = r.data;
-        if (sp.say) addWords(facts.current, sp.say);
+        if (sp.facts) addFacts(facts.current, sp.facts);
+        if (sp.say) addFacts(facts.current, { say: sp.say });
         lastAsk.current = /\?\s*$/.test(sp.say.trim());
         responses.push({ id: fc.id, name: fc.name, response: { say: sp.say } });
         if (sp.state === "reply" || sp.state === "asked" || sp.state === "stopped" || sp.state === "goodbye") replyFor.current = { turn: t, at: Date.now() };
@@ -281,7 +283,8 @@ export function useCall(kitchen: string) {
         if ((sp.state === "working" || sp.state === "waiting") && sp.agentTurnId) void follow(sp.agentTurnId, t);
         else set({ working: false });
       }
-      modelTurnOpen.current = true;
+      // The voice model will speak what it was given (nothing is given to it meanwhile); an empty answer it will not.
+      modelTurnOpen.current = responses.some((x) => !!(x.response as { say?: string }).say);
       modelTurnAt.current = Date.now();
       sock.current?.toolResponse(responses);
     },
@@ -359,6 +362,8 @@ export function useCall(kitchen: string) {
       onTurnComplete: () => {
         checkSaid(true);
         said.current = { text: "", flagged: new Set() };
+        // Words heard that the model did not relay (it asked them to say it again): the next words are a new utterance.
+        if (heardOpen.current && Date.now() - lastHeardAt.current > 1500) heardOpen.current = false;
         modelTurnOpen.current = false;
         const last = timings.current.at(-1);
         if (last && last.replySound !== undefined && last.replyDone === undefined) timing(last.turn, { replyDone: Date.now() - lastHeardAt.current });
