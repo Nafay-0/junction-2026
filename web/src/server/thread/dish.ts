@@ -129,7 +129,7 @@ async function ideasFor(run: TurnRun, words: string, lang: Lang, frame: { covers
   const lines = r.ideas.slice(0, 4).map((d, i) => {
     const groups = [...new Set(d.missing.map((m) => (m.group ? m.group.split(":")[0].toLowerCase() : m.ingredient.toLowerCase())))];
     const can = d.buyable
-      ? { en: "you can buy it all", fi: "kaiken voi ostaa", sv: "allt går att köpa" }[lang]
+      ? { en: "your rules cover all of it", fi: "sääntönne kattavat kaiken", sv: "era regler täcker allt" }[lang]
       : { en: `needs ${groups.join(", ")}, which your rules don't cover`, fi: `tarvitsee: ${groups.join(", ")}, joita sääntönne eivät kata`, sv: `behöver ${groups.join(", ")}, som era regler inte omfattar` }[lang];
     const why = d.reason ? short(d.reason) : "";
     return `${i + 1}. ${nameL(d, lang)}${why ? `: ${why.charAt(0).toLowerCase()}${why.slice(1)}` : ""} (${can}).`;

@@ -342,7 +342,8 @@ export function englishDays(text: string): string {
     const rest = all.slice(offset + m.length);
     const mark = /^(\}\}|\*\*)/.exec(rest)?.[0] ?? "";
     const after = rest.slice(mark.length);
-    const ends = dot === "." && (/^\s*$/.test(after) || /^\s+[\p{Lu}"“]/u.test(after));
+    // "… Fri 20.11. I can get …": the pronoun I does not start a sentence after a date.
+    const ends = dot === "." && (/^\s*$/.test(after) || (/^\s+[\p{Lu}"“]/u.test(after) && !/^\s+I\b(?!')/.test(after)));
     return `${w}${sp}${Number(d)} ${MON[Number(mo) - 1]}${ends && !mark ? "." : ""}${ends && mark ? "" : ""}`;
   }).replace(/(\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec))(\}\}|\*\*)(?=\s+[\p{Lu}"“]|\s*$)/gu, "$1$2.");
 }

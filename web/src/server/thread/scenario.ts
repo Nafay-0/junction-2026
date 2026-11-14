@@ -82,8 +82,11 @@ async function eventShort(run: TurnRun, r: EventResult, lang: Lang, fallback: Th
   if (n > 1) parts.push(REST[lang](n - 1));
   // No stand-in for the one that matters most: the question is what to cook in its place (never a side line's pick).
   const ai = run.thread as unknown as { askInstead?: { planId: string; what: string } };
-  if (!best) ai.askInstead = { planId: r.planId, what: what(first) };
-  else if (ai.askInstead?.planId === r.planId) delete ai.askInstead;
+  // Remembered in the buyer's own language only (this runs once per language).
+  if (lang === (run.lang ?? "en")) {
+    if (!best) ai.askInstead = { planId: r.planId, what: what(first) };
+    else if (ai.askInstead?.planId === r.planId) delete ai.askInstead;
+  }
   const instead = { en: `What shall I plan in place of the ${what(first)}?`, fi: `Mitä suunnittelen tilalle (${what(first)})?`, sv: `Vad ska jag planera i stället för ${what(first)}?` }[lang];
   return { say: parts.join(" ").replace(/\.\.(?=\s|$)/g, "."), ask: best ? ASK[lang](optionName(best), n > 1) : instead };
 }

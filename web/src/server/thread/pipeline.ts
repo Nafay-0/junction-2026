@@ -595,6 +595,21 @@ export async function openNeed(run: TurnRun, need: NeedInput, words: string, opt
   // Words that set a latest day ("by Monday", "mennessä", "senast") keep it a latest day.
   const latest = opts.latest || /\b(by|before|at the latest|no later than|mennessä|viimeistään|ennen|senast|innan|före)\b/i.test(words);
   if (n.deliverBy && !n.deliverOn && !latest && n.deliverBy > new Date().toISOString().slice(0, 10)) need = { ...need, deliverOn: n.deliverBy } as NeedInput;
+  // A kind the kitchen's rules do not cover at all ("a case of red wine" in a café): refused with its group before the
+  // intake asks anything about the amount (the shelf most matches are on decides the kind, not a red wine vinegar).
+  {
+    const it = need as { item: { text: string; category?: string; productId?: string } };
+    const outside = !it.item.productId ? await outsideRules(run, it.item.text).catch(() => undefined) : undefined;
+    if (outside && (!it.item.category || !run.session.mandate.allowedCategories.includes(it.item.category))) {
+      const gid = groupIdOf(outside.category);
+      const draft = canDraft(run) && !!gid;
+      const refusal: NoticeCard = { type: "notice", cardId: cardId("notice", opts.ref), kind: "refused", ...worded((l) => ({ code: "out_of_mandate", what: outside.what, ...(groupOf(outside.category, l) ? { group: groupOf(outside.category, l) } : {}), groups: groupsOf(run.session.mandate.allowedCategories, l), ...(run.session.mandate.approvers?.[0]?.name ? { signer: run.session.mandate.approvers[0].name } : {}), ...(draft ? { draft: true } : {}) })), ...(draft && gid ? { addGroup: { id: gid, what: outside.what, words } } : {}) };
+      run.store.card(run.thread, run.turnId, refusal);
+      run.facts.push(refusal);
+      record(run, "rules_first", `"${outside.what}" is outside the kitchen's rules (${outside.category}): said before anything is asked.`, {});
+      return [{ words, notice: refusal }];
+    }
+  }
   const parsed = NeedSchema.parse(need) as StructuredNeed;
   const understood = understoodCard({ ref: opts.ref, words, need: parsed, ...(opts.basedOn ? { basedOn: opts.basedOn } : {}), alsoAsked: opts.alsoAsked ?? [], ...(opts.memoryLine ? { memoryUsed: [opts.memoryLine] } : {}) });
   run.store.card(run.thread, run.turnId, understood);
@@ -640,6 +655,18 @@ export async function openNeed(run: TurnRun, need: NeedInput, words: string, opt
 export async function afterStep(run: TurnRun, s: IntakeView, words: string): Promise<ItemOutcome> {
   run.facts.push(s);
   const out: ItemOutcome = { words, requestId: s.requestId, state: s.state };
+  // A kind the kitchen's rules do not cover at all ("a case of red wine" in a café): that is the answer, before any
+  // question about the amount, whose answer would change nothing.
+  if ((s.state === "needs_confirmation" || s.state === "needs_input") && s.family && !run.session.mandate.allowedCategories.includes(s.family) && groupIdOf(s.family)) {
+    const what = s.need.item.text;
+    const gid = groupIdOf(s.family)!;
+    const draft = canDraft(run);
+    const refusal: NoticeCard = { type: "notice", cardId: cardId("notice", s.requestId), requestId: s.requestId, kind: "refused", ...worded((l) => ({ code: "out_of_mandate", what, ...(groupOf(s.family!, l) ? { group: groupOf(s.family!, l) } : {}), groups: groupsOf(run.session.mandate.allowedCategories, l), ...(run.session.mandate.approvers?.[0]?.name ? { signer: run.session.mandate.approvers[0].name } : {}), ...(draft ? { draft: true } : {}) })), ...(draft ? { addGroup: { id: gid, what, words } } : {}) };
+    run.store.card(run.thread, run.turnId, refusal);
+    record(run, "rules_first", `"${what}" is outside the kitchen's rules (${s.family}): said before asking about the amount.`, {}, s.requestId);
+    out.notice = refusal;
+    return out;
+  }
   const anomaly = anomalyCard(s);
   if (anomaly && s.state === "needs_confirmation") {
     run.store.card(run.thread, run.turnId, anomaly);
