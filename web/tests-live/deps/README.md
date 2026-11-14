@@ -27,6 +27,15 @@ It prints a table and writes `tests-live/results/deps-<time>.json` (rows with ev
 Ports: app servers 4630-4633 (at most two at once), fakes 4690-4694. The runner refuses to start a server on a port
 that is in use, and kills only the process groups it started (also on Ctrl-C).
 
+A second engineer on the same machine moves the Aiven scenarios out of the way: `DEPS_APP_PORT` (app server),
+`DEPS_PROXY_PORT` (the fault proxy listens there, and the preload sends the app's connections to the service's
+host:port to it, instead of listening on the service's own port) and `DEPS_PG_SCHEMA` (`dock_testinfra` or
+`dock_limits`, nothing else; created by the app, dropped at the end only if this run created it):
+
+```bash
+DEPS_APP_PORT=4730 DEPS_PROXY_PORT=4731 DEPS_PG_SCHEMA=dock_limits pnpm exec tsx --env-file=.env.local tests-live/deps/run.ts --only pg
+```
+
 ## Files
 
 | File | What |
