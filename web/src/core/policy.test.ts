@@ -194,6 +194,21 @@ describe("policy: product rules", () => {
     expect(rule(d, "forbidden_allergens").reason).toMatch(/gluten/);
   });
 
+  it("reads the mandate's allergen words in one vocabulary: Finnish, Swedish, a tree nut, lactose, and refuses a word it cannot check", () => {
+    // PK-4001 contains gluten: "gluteeni" (fi) and "vete"-free style words map onto the catalogue's slugs.
+    expectRejectedBy(evaluatePolicy(mandate({ forbiddenAllergens: ["gluteeni"] }), draft(quote([{ productId: "PK-4001", quantity: 5 }])), ctx()), "forbidden_allergens");
+    // Ordinary milk (VA-1110: milk, no lactose-free claim) carries lactose, whether or not the maker lists it.
+    const lact = evaluatePolicy(mandate({ requiredAttributes: [], forbiddenAllergens: ["laktoosi"] }), draft(quote([{ productId: "VA-1110", quantity: 5 }])), ctx());
+    expectRejectedBy(lact, "forbidden_allergens");
+    expect(rule(lact, "forbidden_allergens").reason).toMatch(/lactose|laktoosi/);
+    // Lactose-free milk passes the same rule.
+    expect(rule(evaluatePolicy(mandate({ forbiddenAllergens: ["lactose"] }), draft(small()), ctx()), "forbidden_allergens").outcome).toBe("pass");
+    // A word nobody can map is never a pass.
+    const unknown = evaluatePolicy(mandate({ forbiddenAllergens: ["unicorn_dust"] }), draft(small()), ctx());
+    expectRejectedBy(unknown, "forbidden_allergens");
+    expect(rule(unknown, "forbidden_allergens").reason).toMatch(/cannot check/);
+  });
+
   it("rejects a product without a required certificate, and accepts one that has it", () => {
     const m = mandate({ requiredCertificates: ["eu_organic"] });
     expectRejectedBy(evaluatePolicy(m, draft(small()), ctx()), "required_certificates");

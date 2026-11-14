@@ -2,7 +2,7 @@ import type { Approver, Mandate } from "./mandate";
 import type { Quote, QuoteLine } from "./quote";
 import { latestDeliveryDay } from "./kitchen";
 import { formatEur } from "./util";
-import { isMaterialAttribute } from "./vocabulary";
+import { allergenOf, forbiddenPresent, isMaterialAttribute } from "./vocabulary";
 
 /**
  * The gate. A pure function: same mandate, draft and context in, same decision out. No I/O, no clock,
@@ -170,7 +170,11 @@ export function evaluatePolicy(mandate: Mandate, draft: OrderDraft, ctx: PolicyC
   lineCheck(
     "forbidden_allergens",
     (l) => {
-      const found = l.allergens.filter((a) => mandate.forbiddenAllergens.includes(a));
+      // One vocabulary with the intake and the knowledge map (core/vocabulary.ts): "tree nuts", "pähkinä" and a
+      // hazelnut are all nuts; milk without a lactose-free claim carries lactose; a word nobody can map is refused.
+      const unmapped = mandate.forbiddenAllergens.filter((a) => !allergenOf(a));
+      if (unmapped.length) return `the mandate forbids ${unmapped.join(", ")}, which Dock cannot check against product data, so nothing shows ${l.productId} is free of it.`;
+      const found = forbiddenPresent({ present: l.allergens, claims: l.attributes }, mandate.forbiddenAllergens);
       if (found.length) return `${l.productId} contains forbidden allergen(s): ${found.join(", ")}.`;
       if (mandate.forbiddenAllergens.length && l.allergensDeclared === false)
         return `${l.productId} has no allergen data from its maker, so nothing shows it is free of ${mandate.forbiddenAllergens.join(", ")}. Unknown is not safe: choose a product with declared allergens.`;
