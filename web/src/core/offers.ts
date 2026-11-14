@@ -1,6 +1,7 @@
 import { SignJWT, decodeProtectedHeader, errors, jwtVerify } from "jose";
 import type { LiveOffer, Product } from "./catalog";
 import { CLAIM_CTY, CLAIM_TYP, PRICE_CLAIM_MAX_HOURS, VC_CONTEXT, WHOLESALER_ISSUER, statedUntilMs, type ClaimRef } from "./claims";
+import { violation, type HardConstraints } from "./clarify";
 import { activeMemory, kitchenRulesFor, type KitchenProfile } from "./kitchen";
 import { SIGN_ALG, VERIFY_ALGS, type SigningKey, type VerifyingKey } from "./keys";
 import type { Mandate } from "./mandate";
@@ -74,6 +75,8 @@ export type OfferProduct = {
   attributes: string[];
   allergens: string[];
   allergensDeclared: boolean;
+  /** Fresh, whole produce without the maker's allergen data: what it contains by its nature (core/catalog/nature.ts). */
+  allergensByNature?: { allergens: string[]; basis: string };
   certificates: string[];
 };
 
@@ -113,7 +116,7 @@ export type OfferStatus = "offered" | "accepted" | "declined" | "muted" | "expir
 /** What the selling agent sent this kitchen before (and what came of it). */
 export type PastOffer = { offerId: string; productId: string; family: string; at: string; status: OfferStatus };
 
-export type MandateRules = Pick<Mandate, "allowedCategories" | "requiredAttributes" | "forbiddenAllergens" | "requiredCertificates">;
+export type MandateRules = Pick<Mandate, "allowedCategories" | "requiredAttributes" | "forbiddenAllergens" | "requiredCertificates"> & Partial<Pick<Mandate, "allergenEvidence">>;
 
 export type KitchenView = {
   orgId: string;
@@ -141,18 +144,17 @@ export type GuardResult = { ok: true } | { ok: false; rule: GuardRule; reason: s
 
 const DAY = 86_400_000;
 
-/** Why the kitchen's rules forbid this product, or undefined when they allow it. The mandate, stated rules, memory. */
-export function forbiddenBy(p: Pick<Product, "id" | "name" | "brand" | "category" | "attributes" | "allergens" | "certificates" | "allergenInfo">, k: Pick<KitchenView, "mandate" | "profile">, now: Date): string | undefined {
+/**
+ * Why the kitchen's rules forbid this product, or undefined when they allow it: the core's own hard-rule check
+ * (clarify.ts violation: the mandate's groups, claims, allergens with the same evidence rule, certificates) over the
+ * mandate plus every rule its people stated and its memory's safety rules, then what its memory says to avoid.
+ */
+export function forbiddenBy(p: Product, k: Pick<KitchenView, "mandate" | "profile">, now: Date): string | undefined {
   const m = k.mandate;
-  if (!m.allowedCategories.includes(p.category)) return `the kitchen's mandate does not cover ${p.category.replaceAll("_", " ")}`;
   const rules = kitchenRulesFor(k.profile, { requiredAttributes: m.requiredAttributes, forbiddenAllergens: m.forbiddenAllergens }, p.category, now);
-  const missing = rules.requiredClaims.filter((c) => !p.attributes.includes(c));
-  if (missing.length) return `the kitchen requires ${missing.map((c) => c.replaceAll("_", "-")).join(", ")}`;
-  const bad = rules.forbiddenAllergens.filter((a) => p.allergens.includes(a));
-  if (bad.length) return `it contains ${bad.join(", ")}, which the kitchen never buys`;
-  if (rules.forbiddenAllergens.length && p.allergenInfo && !p.allergenInfo.declared) return "its maker declares no allergens, and the kitchen rules some out: unknown is not safe";
-  const certs = m.requiredCertificates.filter((c) => !p.certificates.includes(c));
-  if (certs.length) return `the kitchen requires ${certs.join(", ")}`;
+  const c: HardConstraints = { categories: [...m.allowedCategories], requiredAttributes: rules.requiredClaims, excludedAttributes: [], forbiddenAllergens: rules.forbiddenAllergens, requiredCertificates: [...m.requiredCertificates], sources: [], ...(m.allergenEvidence ? { allergenEvidence: m.allergenEvidence } : {}) };
+  const why = violation(p, c);
+  if (why) return why.startsWith("category ") ? `the kitchen's mandate does not cover ${p.category.replaceAll("_", " ")}` : `the kitchen's rules: ${why}`;
   for (const item of k.profile ? activeMemory(k.profile, { family: p.category, now }) : []) {
     if (item.scope) continue;
     const f = item.fact;
@@ -416,6 +418,7 @@ export function offerProduct(p: Product): OfferProduct {
     attributes: [...p.attributes],
     allergens: [...p.allergens],
     allergensDeclared: p.allergenInfo ? p.allergenInfo.declared : true,
+    ...(p.allergenInfo?.byNature ? { allergensByNature: p.allergenInfo.byNature } : {}),
     certificates: [...p.certificates],
   };
 }
@@ -500,7 +503,7 @@ export function buyerCheck(offer: OfferBody, k: Pick<KitchenView, "mandate" | "p
   if (Date.parse(offer.validUntil) <= now.getTime()) return { show: false, why: "expired" };
   if (k.prefs.off) return { show: false, why: "offers are off" };
   const p = offer.product;
-  const forbidden = forbiddenBy({ id: p.productId, name: p.name, brand: p.brand ?? "unknown", category: p.category, attributes: p.attributes, allergens: p.allergens, certificates: p.certificates, allergenInfo: { declared: p.allergensDeclared, contains: p.allergens, mayContain: [], freeFrom: [] } }, k, now);
+  const forbidden = forbiddenBy({ id: p.productId, name: p.name, brand: p.brand ?? "unknown", category: p.category, unit: p.unit, packSize: p.packSize, attributes: p.attributes, allergens: p.allergens, certificates: p.certificates, deliveryReliability: 0, carbonKgPerUnit: 0, allergenInfo: { declared: p.allergensDeclared, contains: p.allergens, mayContain: [], freeFrom: [], ...(p.allergensByNature ? { byNature: p.allergensByNature } : {}) } }, k, now);
   if (forbidden) return { show: false, why: forbidden };
   const mute = muteFor(k.prefs, { productId: p.productId, category: p.category }, offer.reasons.map((r) => r.kind));
   if (mute) return { show: false, why: "muted" };

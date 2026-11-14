@@ -220,14 +220,32 @@ async function liveFor(rt: Runtime, ids: string[]): Promise<Map<string, LiveOffe
   return out;
 }
 
+/**
+ * The products worth looking at for this kitchen, through the one product search (server/search findProducts, no
+ * relevance judge: recall only, so a run costs no model call): per family it buys, like-for-likes of its usual product
+ * (the same material claims) and the family at large (new and seasonal products in it); then what the wholesaler
+ * listed as new and a campaign's product, by id. Recalled products never.
+ */
 async function productsFor(rt: Runtime, view: KitchenView, extra: string[]): Promise<Product[]> {
-  const families = [...new Set((view.profile?.history ?? []).map((h) => h.family))].filter((f) => view.mandate.allowedCategories.includes(f));
-  const lists = await Promise.all(families.map((category) => rt.catalog.searchProducts({ category, limit: 100 })));
+  const { findProducts } = await import("../search/service");
+  const history = view.profile?.history ?? [];
+  const families = [...new Set(history.map((h) => h.family))].filter((f) => view.mandate.allowedCategories.includes(f));
+  const queries = families.flatMap((family) => {
+    const last = history.filter((h) => h.family === family).at(-1)?.lines[0];
+    const text = family.startsWith("cat_") ? (last?.name ?? family) : family.replaceAll("_", " ");
+    const claims = (last?.attributes ?? []).filter((a) => /^(lactose_free|low_lactose|gluten_free|milk_free|vegan|organic|fat_.*)$/.test(a));
+    return [
+      { text, category: family, ...(claims.length ? { requiredClaims: claims } : {}), limit: 50, noJudge: true },
+      { text, category: family, limit: 50, noJudge: true },
+    ];
+  });
+  const found = await Promise.all(queries.map((q) => findProducts(rt.catalog, q).then((r) => r.hits.map((h) => h.product)).catch(() => [] as Product[])));
   const listed = [...stateOf(rt).listings.keys(), ...extra];
   const named = listed.length ? await rt.catalog.searchProducts({ ids: [...new Set(listed)], limit: 100 }) : [];
+  const usual = history.length ? await rt.catalog.searchProducts({ ids: [...new Set(history.flatMap((h) => h.lines.map((l) => l.productId)))].slice(0, 100), limit: 100 }) : [];
   const held = recalled(rt);
   const seen = new Set<string>();
-  return [...lists.flat(), ...named].filter((p) => !held.has(p.id) && !seen.has(p.id) && (seen.add(p.id), true));
+  return [...usual, ...found.flat(), ...named].filter((p) => !held.has(p.id) && !seen.has(p.id) && (seen.add(p.id), true));
 }
 
 /** Run the selling agent for one kitchen: at most the weekly cap of signed offers, and what it held back. */

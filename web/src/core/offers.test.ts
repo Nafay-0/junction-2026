@@ -96,7 +96,7 @@ describe("guardrails", () => {
     expect(g).toMatchObject({ ok: false, rule: "forbidden_by_rule" });
     expect(guardOffer({ product: P.oat, reasons: [{ kind: "in_season", season: "x", label: "x", months: [11], why: "x", source: { title: "x", url: "https://x" } }] }, k(), [], ctx({ live: L() }))).toMatchObject({ ok: false, rule: "forbidden_by_rule", reason: expect.stringMatching(/mandate does not cover plant drink/) });
     const strict = k({ profile: kitchen(k().profile!.history, [statedPref({ kind: "require_claim", claim: "lactose_free", text: "Always lactose-free" })]) });
-    expect(guardOffer({ product: plainCream, reasons: reasonsFor(plainCream, strict, [], ctx()) }, strict, [], ctx({ live: L() }))).toMatchObject({ ok: false, rule: "forbidden_by_rule", reason: expect.stringMatching(/requires lactose-free/) });
+    expect(guardOffer({ product: plainCream, reasons: reasonsFor(plainCream, strict, [], ctx()) }, strict, [], ctx({ live: L() }))).toMatchObject({ ok: false, rule: "forbidden_by_rule", reason: expect.stringMatching(/not lactose_free/) });
     // and the selection never even prices it
     expect(shortlist(strict, PRODUCTS, ctx()).priceIds).not.toContain("P-CREAM");
   });
