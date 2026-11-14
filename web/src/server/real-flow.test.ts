@@ -41,7 +41,7 @@ let ledger: Ledger;
 
 async function setup(opts: { status?: number; allowance?: LiveLookupAllowance } = {}) {
   api = fakeValioApi(SCENARIOS, { timeNow: "2026-11-13T22:00:00+0200", status: opts.status });
-  const live = new ValioLiveClient({ baseUrl: "http://valio.test", apiKey: "test-key", fetch: api.fetch, now: () => NOW, sleep: async () => {}, maxRetries: 1 });
+  const live = new ValioLiveClient({ baseUrl: "http://valio.test", apiKey: "test-key", fetch: api.fetch, now: () => NOW, sleep: async () => {}, gate: null, maxRetries: 1 });
   const buyer = await generateEd25519KeyPair("hotel-key");
   wholesaler = await generateEd25519KeyPair("dock-wholesaler-test");
   ledger = new Ledger(undefined, () => NOW);
@@ -150,7 +150,7 @@ describe("1,000 litres of lactose-free milk by Monday, on the real catalogue's s
     const step = await dock.intake.open(session, milk());
     const { explanation, entries } = auditFor("wholesaler", ledger.entries({ requestId: step.requestId }));
     expect(explanation.join("\n")).toMatch(/\[asked\] agent:agent_buyer_1 asked: "I need 1,000 litres/);
-    expect(explanation.join("\n")).toMatch(/\[claimed\] Live lookup for 2 product\(s\) for delivery by 2026-11-16 .*900001 not quotable: stock_unknown, cutoff_passed/);
+    expect(explanation.join("\n")).toMatch(/\[claimed\] Live lookup for 2 product\(s\) for delivery by 2026-11-16 .*900001 not quotable: cutoff_passed\./);
     expect(explanation.join("\n")).toMatch(/\[quoted\] Quote qt_\w+ for €1,400.00/);
     expect(entries.every((e) => "hash" in e && typeof e.seq === "number")).toBe(true);
     expect(JSON.stringify(entries)).not.toMatch(/fromMemory|usually|Pre-selected from history/);

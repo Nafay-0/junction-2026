@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { PlatformOverview, ServiceCard } from "@/server/aiven/showcase/platform";
 import type { AlertState } from "@/server/ops/alerts";
 import type { RecallRouterStats } from "@/server/search/recall-router";
+import type { PartnerGateState } from "@/server/valio/partner-gate";
 import { whenSeconds } from "../../_ui/format";
 import { buttonClass } from "../../../_ui/kit";
 import { Details, LiveMark, LoadError, Loading, PageHead, Panel, Section, useOps } from "../../_ui/kit";
@@ -31,7 +32,34 @@ export function Story() {
   );
 }
 
-type Overview = PlatformOverview & { alerts?: AlertState; recall?: (RecallRouterStats & { index?: string }) | null };
+type Overview = PlatformOverview & { alerts?: AlertState; recall?: (RecallRouterStats & { index?: string }) | null; partner?: PartnerGateState };
+
+/**
+ * The wholesaler's price and availability service: the pace this server keeps (Valio: over 10 calls a second is not
+ * ok, a 429 blocks the key for 30 s) and whether it is waiting out a block now.
+ */
+function PartnerPace({ p }: { p: PartnerGateState }) {
+  return (
+    <Panel className={`px-5 py-4 ${p.blockedUntil ? "ring-1 ring-inset ring-safety/60" : ""}`}>
+      <p className="text-[0.84rem] font-medium text-ink-soft">
+        The wholesaler&apos;s price service: at most {p.perSecond} calls a second and {p.perMinute} a minute from this server
+      </p>
+      <p className="mt-1 text-[0.95rem]">
+        {p.blockedUntil ? (
+          <>
+            <b>Waiting:</b> it answered 429, so no calls until {whenSeconds(p.blockedUntil)} ({p.blockSeconds} s or its Retry-After).{" "}
+          </>
+        ) : (
+          <>
+            <b>Calling normally.</b>{" "}
+          </>
+        )}
+        {p.callsLastMinute} in the last minute, {p.calls} since start; {p.queued} waited their turn{p.refusedBusy ? `, ${p.refusedBusy} refused as busy` : ""}
+        {p.blocks ? `; ${p.blocks} block${p.blocks === 1 ? "" : "s"} (last 429 ${whenSeconds(p.last429At!)}), ${p.refusedWhileBlocked} call${p.refusedWhileBlocked === 1 ? "" : "s"} held back during one` : "; no 429 so far"}.
+      </p>
+    </Panel>
+  );
+}
 
 /** The app's own alert table and how smart search's recall was answered: what is breaching and since when. */
 function Watch({ o }: { o: Overview }) {
@@ -61,6 +89,7 @@ function Watch({ o }: { o: Overview }) {
           </Link>
         </Panel>
       )}
+      {o.partner && <PartnerPace p={o.partner} />}
       <Panel className="px-5 py-4">
         <p className="text-[0.84rem] font-medium text-ink-soft">Smart search&apos;s recall: who answered since this server started</p>
         {r ? (

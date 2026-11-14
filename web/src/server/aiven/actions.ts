@@ -15,7 +15,7 @@ import type { LedgerEntry, LedgerStore } from "@/core/ledger";
  *   kind       request.opened | intake.step | lookup.search | lookup.live | quote.issued
  *              | gate.allowed | gate.escalated | gate.refused | approval.requested | approval.granted
  *              | approval.denied | order.committed | partner_api.call | partner_api.cache_hit | budget.refused
- *              | turn.started | turn.done | turn.correction | turn.model_fallback | turn.grounding_refusal | turn.paused
+ *              | turn.started | turn.done | turn.failed | turn.correction | turn.model_fallback | turn.grounding_refusal | turn.paused
  *              | search.done (smart search, server/search/telemetry.ts)
  *   facts      (attrs.facts) counts, codes and milliseconds of a conversation turn or a search: never words
  *   key        the partition key above
@@ -106,6 +106,7 @@ export function languageOf(words: string): "fi" | "sv" | "en" | "other" {
 const TURN_KINDS: Record<string, string> = {
   turn: "turn.started",
   turn_done: "turn.done",
+  turn_failed: "turn.failed",
   sheet_edit: "turn.correction",
   model_fallback: "turn.model_fallback",
   grounding_refusal: "turn.grounding_refusal",
@@ -156,11 +157,14 @@ export class LedgerToActions {
       const gates = requests.map((r) => this.gateByRequest.get(r)).filter(Boolean) as { kind: string; rule?: string }[];
       const refused = gates.find((g) => g.kind === "refused");
       const status = String(d.status ?? "done");
-      const outcome = refused ? "refused" : status === "waiting_approver" || gates.some((g) => g.kind === "escalated") ? "sign_off" : orders > 0 || gates.some((g) => g.kind === "allowed") ? "ordered" : status === "waiting_buyer" ? "asked" : status === "failed" ? "failed" : "answered";
+      // The engine's own outcome code when it wrote one (thread/outcome.ts), else read from the gate's decisions.
+      const inferred = refused ? "refused" : status === "waiting_approver" || gates.some((g) => g.kind === "escalated") ? "sent_for_signoff" : orders > 0 || gates.some((g) => g.kind === "allowed") ? "ordered" : status === "waiting_buyer" ? "asked" : status === "failed" ? "failed" : "answered";
+      const outcome = typeof d.outcome === "string" ? d.outcome : inferred;
+      const rule = typeof d.rule === "string" ? d.rule : refused?.rule;
       return {
         status,
         outcome,
-        ...(refused?.rule ? { rule: refused.rule } : {}),
+        ...(rule ? { rule } : {}),
         first_ms: num(marks.line) ?? num(marks.first_step),
         end_ms: num(marks.done),
         requests: requests.length,
@@ -168,6 +172,7 @@ export class LedgerToActions {
         cards: Array.isArray(d.cards) ? (d.cards as unknown[]).filter((c) => typeof c === "string").slice(0, 12) : [],
       };
     }
+    if (kind === "turn.failed") return { code: typeof d.code === "string" ? d.code : "engine_error", ms: num(d.ms) };
     if (kind === "turn.correction") return { edit: (d.edit as { kind?: string } | undefined)?.kind ?? null, verified: d.verified === true };
     return {};
   }
@@ -250,6 +255,8 @@ function turnSummary(kind: string, d: Record<string, unknown>): string {
       return "The buyer spoke or tapped; the agent's turn started.";
     case "turn.done":
       return `The agent's turn finished (${String(d.status ?? "done")}).`;
+    case "turn.failed":
+      return `The agent's turn failed (${String(d.code ?? "engine_error")}).`;
     case "turn.correction":
       return `The buyer changed the agent's proposal on the order sheet (${String((d.edit as { kind?: string } | undefined)?.kind ?? "edit")}).`;
     case "turn.model_fallback":

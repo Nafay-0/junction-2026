@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { fakeValioApi } from "./fake-api";
 import { ValioApiError, ValioLiveClient, helsinkiDate, validFromMs, validUntilMs } from "./live-client";
+import { PartnerGate } from "./partner-gate";
 
 const NOW = new Date("2026-11-13T10:00:00.000Z");
 
@@ -15,6 +16,7 @@ function client(api: ReturnType<typeof fakeValioApi>, over: Partial<ConstructorP
     sleep: async (ms) => {
       sleeps.push(ms);
     },
+    gate: new PartnerGate({ now: () => t, sleep: async (ms) => void (t += ms) }),
     ...over,
   });
   return { c, sleeps, advance: (ms: number) => (t += ms) };
@@ -98,14 +100,13 @@ describe("ValioLiveClient", () => {
     expect(api.calls.filter((x) => x.path === "/api/price")).toHaveLength(2);
   });
 
-  it("retries 429 and 5xx with backoff, honouring Retry-After", async () => {
-    const api = fakeValioApi({ "1": { price: 1 } }, { failFirst: [429, 503] });
+  it("retries 5xx with backoff, and never a 429", async () => {
+    const api = fakeValioApi({ "1": { price: 1 } }, { failFirst: [503] });
     const { c, sleeps } = client(api);
     const [r] = await c.lookup(["1"], "2026-11-16");
     expect(r.price?.ok).toBe(true);
-    expect(sleeps[0]).toBe(1000); // Retry-After: 1
-    expect(sleeps).toHaveLength(2);
-    expect(c.upstreamStats()).toMatchObject({ retries: 2, failures: 0 });
+    expect(sleeps).toHaveLength(1);
+    expect(c.upstreamStats()).toMatchObject({ retries: 1, failures: 0 });
   });
 
   it("gives up after the retries and says why", async () => {
@@ -127,7 +128,7 @@ describe("ValioLiveClient", () => {
       n += 1;
       return new Promise<Response>((_, reject) => init?.signal?.addEventListener("abort", () => reject(Object.assign(new Error("timeout"), { name: "TimeoutError" }))));
     }) as typeof fetch;
-    const c = new ValioLiveClient({ baseUrl: "https://valio.test", apiKey: "k", fetch: hanging, timeoutMs: 20, maxRetries: 1, sleep: async () => {} });
+    const c = new ValioLiveClient({ baseUrl: "https://valio.test", apiKey: "k", fetch: hanging, timeoutMs: 20, maxRetries: 1, sleep: async () => {}, gate: null });
     await expect(c.ping()).rejects.toMatchObject({ code: "timeout" });
     expect(n).toBe(2);
   });
@@ -146,19 +147,18 @@ describe("ValioLiveClient", () => {
       n += 1;
       return new Promise<Response>((_, reject) => init?.signal?.addEventListener("abort", () => reject(Object.assign(new Error("timeout"), { name: "TimeoutError" }))));
     }) as typeof fetch;
-    const c = new ValioLiveClient({ baseUrl: "https://valio.test", apiKey: "k", fetch: hanging, timeoutMs: 5000, deadlineMs: 300, maxRetries: 3 });
+    const c = new ValioLiveClient({ baseUrl: "https://valio.test", apiKey: "k", fetch: hanging, timeoutMs: 5000, deadlineMs: 300, maxRetries: 3, gate: null });
     const t0 = Date.now();
     await expect(c.lookup(["1"], "2026-11-16")).rejects.toMatchObject({ code: "timeout", retryAfterSeconds: 30 });
     expect(Date.now() - t0).toBeLessThan(1500);
     expect(n).toBe(2); // one call each for price and availability, cut at the deadline; no retry past it
   });
 
-  it("still retries short waits within the deadline", async () => {
+  it("does not retry a 429 even with a short Retry-After: the block is 30 s at least", async () => {
     const api = fakeValioApi({ "1": { price: 1 } }, { failFirst: [429] });
     const { c, sleeps } = client(api, { deadlineMs: 8000 });
-    const [r] = await c.lookup(["1"], "2026-11-16");
-    expect(r.price?.ok).toBe(true);
-    expect(sleeps).toEqual([1000]);
+    await expect(c.lookup(["1"], "2026-11-16")).rejects.toMatchObject({ code: "rate_limited", status: 429, retryAfterSeconds: 30 });
+    expect(sleeps).toEqual([]);
   });
 
   it("checks inputs and needs a key", () => {

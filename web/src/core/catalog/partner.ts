@@ -596,7 +596,7 @@ export function indexProduct(p: RawProduct, side: { reliability?: Map<string, nu
     salesUnit: p.salesUnit,
     baseUnit: p.baseUnit,
     units: p.units.map((u) => ({ unit: u.unitId, baseUnits: u.sizeInBaseUnits })),
-    lotSize: p.allowedLotSize ?? 0.01,
+    lotSize: lotOf(p.allowedLotSize),
     pack,
     claims: [...claims].sort(),
     allergens: { declared: allergenValues.length > 0, contains: containsAll, mayContain: mayAll, freeFrom: freeAll },
@@ -611,6 +611,15 @@ export function indexProduct(p: RawProduct, side: { reliability?: Map<string, nu
     gtins: gtinsOf(p),
     ...depthOf(p),
   };
+}
+
+/**
+ * The order step in sales units, as the partner means it: 0.01 is a technical default that means 1 ("0.01 crates is
+ * not possible"), and so does a missing value; a real lot (1.5 kg, 2.5 kg, 3) is kept. Applied to every lot read
+ * from the partner's data, so an index built before this rule reads the same.
+ */
+export function lotOf(raw: number | null | undefined): number {
+  return typeof raw === "number" && Number.isFinite(raw) && raw > 0.01 + 1e-9 ? raw : 1;
 }
 
 /** GS1 check digit for GTIN-8, -12, -13 and -14. */
@@ -873,7 +882,7 @@ export function decodeIndex(file: IndexFile): CatalogIndex {
         const [unit, size] = u.split(":");
         return { unit, baseUnits: Number(size) };
       }),
-      lotSize: num(lot) ?? 0.01,
+      lotSize: lotOf(num(lot) ?? undefined),
       pack: {
         salesUnit: String(salesUnit),
         baseUnit: String(baseUnit),
