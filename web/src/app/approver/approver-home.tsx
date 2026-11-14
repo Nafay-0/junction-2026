@@ -24,6 +24,29 @@ type Home = {
   recent: { approvalId?: string; status: string; total: string; delivery?: string; atText: string }[];
 };
 
+const POLL_MS = 5000;
+const OPENED_KEY = "dock.approver.opened";
+
+function openedIds(): string[] {
+  try {
+    const v: unknown = JSON.parse(sessionStorage.getItem(OPENED_KEY) ?? "[]");
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+/** Kept in memory as well, so a browser without session storage (private mode) still opens each request only once. */
+const openedHere = new Set<string>();
+const wasOpened = (approvalId: string) => openedHere.has(approvalId) || openedIds().includes(approvalId);
+function markOpened(approvalId: string): void {
+  openedHere.add(approvalId);
+  try {
+    sessionStorage.setItem(OPENED_KEY, JSON.stringify([...openedIds().filter((id) => id !== approvalId), approvalId].slice(-50)));
+  } catch {
+    // private mode: remembered for this page only
+  }
+}
+
 export function ApproverHome() {
   const router = useRouter();
   const { lang } = useLang();
@@ -51,6 +74,7 @@ export function ApproverHome() {
     state === "ready" ? "/api/v1/events?scope=mine" : null,
     (e) => {
       if (e.type === "approval_requested" && e.approvalId) {
+        markOpened(e.approvalId);
         navigator.vibrate?.([120, 60, 120]);
         router.push(`/approve/${e.approvalId}`);
         return;
@@ -59,6 +83,26 @@ export function ApproverHome() {
     },
     () => void refresh(),
   );
+
+  // The live stream is the fast path, not the only one: some venue networks buffer or block it, and then nothing
+  // would ever open on this phone. So the page also asks again every few seconds while it is in front.
+  useEffect(() => {
+    if (state !== "ready") return;
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") void refresh();
+    }, POLL_MS);
+    return () => clearInterval(timer);
+  }, [state, refresh]);
+
+  // A request this phone has not opened yet opens by itself, once, however the page learnt of it. Going back
+  // from the sign-off screen does not reopen it; it stays in the list below.
+  useEffect(() => {
+    const next = home?.pending.find((p) => !wasOpened(p.approvalId));
+    if (!next) return;
+    markOpened(next.approvalId);
+    navigator.vibrate?.([120, 60, 120]);
+    router.push(`/approve/${next.approvalId}`);
+  }, [home, router]);
 
   async function askAgent() {
     setAsking(true);
