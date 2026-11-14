@@ -1,0 +1,8 @@
+# The demo video's Remotion project: built and rendered on one machine, not part of the repo.
+video/
+
+# Agent skills installed for making the video (Remotion, Hyperframes). Put back with:
+#   npx skills add remotion-dev/skills --agent claude-code --yes
+#   npx skills add heygen-com/hyperframes --agent claude-code --yes
+.claude/skills/
+skills-lock.json
