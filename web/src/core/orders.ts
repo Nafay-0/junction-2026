@@ -16,7 +16,7 @@ import {
 import type { AlternativesSource } from "./alternatives";
 import type { EventPublisher } from "./events";
 import { CatalogError, ProductQuerySchema, scheduledOn, usableOffer, type LiveOffer, type LiveStatus, type MeteredCatalog, type Product } from "./catalog";
-import { ClaimStore, availabilityClaimInput, issueClaim, originClaimInput, priceClaimInput, refOf, type IssuedClaim } from "./claims";
+import { ClaimStore, availabilityClaimInput, cutoffMs, issueClaim, originClaimInput, priceClaimInput, refOf, type IssuedClaim } from "./claims";
 import { DockError, isDockError, parse } from "./errors";
 import { concernsOfOrder, unaskedNote, type OrderConcern } from "./order-check";
 import { qualifiersOf, wordsNotCarried } from "./qualifiers";
@@ -219,6 +219,20 @@ export type ApprovalContext = {
   quoteExpiresAt: string;
   mandate: Mandate;
 };
+
+/**
+ * The order cut-off each quote promises (the earliest of its lines' order-by times), kept in this process only: a
+ * committed order can be taken back until it (withdrawOrder with `takeBack`). Nothing here reaches a response, a
+ * signature or the ledger; after a restart an order simply has no take-back, which errs on the safe side.
+ */
+const quoteCutoffs = new Map<string, string>();
+
+/** Until when the kitchen may still take back this committed order, if the wholesaler's cut-off is known. */
+export function takeBackUntil(o: Pick<Order, "quoteId" | "status">, at: Date = new Date()): string | undefined {
+  if (o.status !== "committed") return undefined;
+  const until = quoteCutoffs.get(o.quoteId);
+  return until && Date.parse(until) > at.getTime() ? until : undefined;
+}
 
 export function toPublicOrder(o: Order): PublicOrder {
   return structuredClone(stripOrder(o));
@@ -1120,6 +1134,7 @@ export function createDock(deps: DockDeps) {
       const ids = [...new Set(lines.flatMap((l) => (l.substituteFor ? [l.productId, l.substituteFor] : [l.productId])))];
       let quote: Quote;
       let claims: IssuedClaim[] = [];
+      let cutoff: number | undefined;
       try {
         const products = await catalog.searchProducts({ ids, limit: 100 });
         let live: LiveLookupResult;
@@ -1133,6 +1148,7 @@ export function createDock(deps: DockDeps) {
           throw err;
         }
         const offers = live.offers.map((o) => scheduledOn(o, request.deliverOn));
+        cutoff = offers.filter((o) => lines.some((l) => l.productId === o.productId)).map((o) => cutoffMs(o.orderBy)).filter((x): x is number => x !== undefined).sort((a, b) => a - b)[0];
         // Say why a line cannot be quoted, in the partner's terms (a passed cut-off, a sales block, no price).
         for (const l of lines) {
           const st = live.statuses.find((x) => x.productId === l.productId);
@@ -1166,6 +1182,7 @@ export function createDock(deps: DockDeps) {
         throw err;
       }
       const quoteToken = await signQuote(quote, wholesalerKey);
+      if (cutoff !== undefined) quoteCutoffs.set(quote.quoteId, new Date(cutoff).toISOString());
       const subs = quote.lines.filter((l) => l.substituteFor).length;
       ledger.append({
         type: "quote",
@@ -1510,7 +1527,7 @@ export function createDock(deps: DockDeps) {
      * approver's phone shows it as withdrawn, and the ledger says who asked (relayed by the agent). Only the
      * organisation's own pending orders; anything decided stays as it is.
      */
-    async withdrawOrder(session: AgentSession, orderId: string, input: z.input<typeof WithdrawInput> = {}): Promise<PublicOrder> {
+    async withdrawOrder(session: AgentSession, orderId: string, input: z.input<typeof WithdrawInput> = {}, internal: { takeBack?: { by: string } } = {}): Promise<PublicOrder> {
       const { reason, by } = parse(WithdrawInput, input ?? {});
       const orgId = session.mandate.issuer.orgId;
       const found = await repo.getOrder(orderId);
@@ -1518,6 +1535,25 @@ export function createDock(deps: DockDeps) {
       return serialize(orgId, async () => {
         await expireStale(orgId);
         const order = (await repo.getOrder(orderId))!;
+        // `takeBack`: server code only (the kitchen's own signed-in person in the thread), never a request body. A
+        // committed order goes back before the wholesaler's order cut-off; the signed confirmation is void from then.
+        const until = internal.takeBack ? takeBackUntil(order, now()) : undefined;
+        if (until && internal.takeBack) {
+          const at = now().toISOString();
+          order.status = "withdrawn";
+          order.updatedAt = at;
+          await repo.saveOrder(order);
+          ledger.append({
+            type: "order",
+            actor: agentActor(session),
+            requestId: order.requestId,
+            orderId,
+            summary: `Committed order ${orderId} (${formatEur(order.totalCents)}) taken back by ${internal.takeBack.by} (signed in) before the order cut-off ${until.slice(0, 16).replace("T", " ")} UTC; the wholesaler's confirmation no longer holds and it no longer counts against the weekly budget.`,
+            data: { decision: "taken_back", by: internal.takeBack.by, verified: true, cutoff: until, reason },
+          });
+          publish({ type: "order_withdrawn", at, orgId, orderId, totalCents: order.totalCents, summary: `${order.orgName}: a ${formatEur(order.totalCents)} order was taken back before the cut-off.` });
+          return toPublicOrder(order);
+        }
         if (order.status !== "pending_approval") {
           throw refuse(new DockError(409, "order_not_pending", `Order ${orderId} is ${order.status}; only an order waiting for sign-off can be withdrawn.`, "intake_sequence", { status: order.status }), agentActor(session), { requestId: order.requestId, orderId });
         }

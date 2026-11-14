@@ -14,7 +14,8 @@ export type DockEventType =
   | "approval_withdrawn" // the buyer (or its agent) took back an order that waited for sign-off
   | "approval_expired" // the quote's fixed price ran out before anyone signed
   | "order_committed"
-  | "order_rejected";
+  | "order_rejected"
+  | "order_withdrawn"; // the kitchen's person took back a committed order before the order cut-off
 
 export type DockEvent = {
   id: number; // monotonically increasing per bus; doubles as the SSE event id

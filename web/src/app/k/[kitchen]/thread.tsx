@@ -34,6 +34,8 @@ import { MenuCardView } from "./thread-menu";
 import { HomeCardView, OrderInPlace, PriceProof } from "./thread-home";
 import { RulesCardView } from "./thread-rules";
 import { OptionsDecision } from "./thread-options";
+import { PickerView, SheetView, isQuiet, sheetOrders, whenText } from "./thread-sheet";
+import { THREAD_SHEET_TEXT } from "./thread-sheet.text";
 import { THREAD_WORDS } from "./thread-words.text";
 import { concernText, correctionLabel, fmtFor, gateReasons, memoryKey, memoryText, stepLabel } from "./thread-words";
 import { callOn, useVoiceMode } from "../../_channels/voice-mode";
@@ -73,14 +75,17 @@ export function ThreadLog({ className = "" }: { className?: string }) {
   }, [lastCards]);
   const gatedRequests = new Set(turns.flatMap((x) => (x.role === "agent" ? x.cards.flatMap((c) => (c.type === "gate" && c.requestId ? [c.requestId] : [])) : [])));
   const memory = memoryOnce(t);
+  // Edits made in place on a card (a stepper, a day, a swap) change the card; they are not bubbles of their own.
+  const quiet = new Set(turns.flatMap((x) => (x.role === "buyer" && isQuiet(x) ? [x.turnId] : [])));
+  const shown = turns.filter((x) => (x.role === "buyer" ? !quiet.has(x.turnId) : !(quiet.has(x.replyTo) && x.cards.length === 0 && x.status !== "failed")));
 
   return (
     <Thread label={tx.log} className={className}>
       {turns.length === 0 && api.pending.length === 0 && <Intro />}
-      {turns.map((x) =>
+      {shown.map((x) =>
         x.role === "buyer" ? <Buyer key={x.turnId} turn={x} /> : <Agent key={x.turnId} turn={x} tap={tap} busy={api.posting} gated={gatedRequests} base={base} thread={t!} memory={memory} />,
       )}
-      {api.pending.map((p) => (
+      {api.pending.filter((p) => !isQuiet(p)).map((p) => (
         <PendingTurn key={p.turnId} turn={p} />
       ))}
       {liveYou && (
@@ -191,6 +196,7 @@ function Agent({ turn, tap, busy, gated, base, thread, memory }: { turn: AgentTu
 
 function CardView({ card, tap, busy, gated, base, turn, thread, memory }: { card: Card; tap: Tap; busy: boolean; gated: Set<string>; base: string; turn: AgentTurnT; thread: ThreadT; memory: (MemoryLine | string)[] }) {
   const tx = useText(THREAD_PAGE_TEXT);
+  const sx = useText(THREAD_SHEET_TEXT);
   const w = useText(THREAD_WORDS);
   const f = useFormat();
   const wf = fmtFor(f.lang);
@@ -276,6 +282,7 @@ function CardView({ card, tap, busy, gated, base, turn, thread, memory }: { card
       );
     }
     case "gate": {
+      if (card.orderId && card.outcome === "placed_alone" && sheetOrders(thread).has(card.orderId)) return null;
       const name = card.approver?.name ?? "";
       const g = tx.gate;
       const title = { waiting: g.waiting(name), approved: g.approved(name), refused: g.refused(f.ruleTitle(card.rule)), placed_alone: g.placed_alone, declined: g.declined, withdrawn: g.withdrawn, expired: g.expired }[card.outcome];
@@ -294,6 +301,8 @@ function CardView({ card, tap, busy, gated, base, turn, thread, memory }: { card
       );
     }
     case "order": {
+      // An order from the order sheet: the sheet already shows its lines, total and what happened; only the details stay.
+      if (sheetOrders(thread).has(card.orderId)) return <OrderInPlace card={card} />;
       const tone = card.status === "committed" ? "good" : card.status === "pending_approval" ? "waiting" : card.status === "rejected" ? "refused" : "neutral";
       const who = card.authorised.by === "agent" ? tx.byAgent : card.authorised.by === "person" ? tx.byPerson(card.authorised.name) : tx.waitingFor(card.authorised.name);
       return (
@@ -308,6 +317,13 @@ function CardView({ card, tap, busy, gated, base, turn, thread, memory }: { card
             href={`${base}/orders/${card.orderId}`}
             linkLabel={tx.seeOrder}
           />
+          {card.status === "committed" && card.takeBackUntil && (
+            <p className="px-1">
+              <button type="button" disabled={busy} className={buttonClass("secondary", "sm")} onClick={() => tap({ type: "withdraw", orderId: card.orderId }, sx.takeBackWords)}>
+                {sx.takeBack(whenText(card.takeBackUntil, f.day))}
+              </button>
+            </p>
+          )}
           <OrderInPlace card={card} />
           {card.passedOver.length > 0 && (
             <ul className="space-y-1 px-1 text-[0.84rem] leading-snug text-ink-soft">
@@ -364,6 +380,10 @@ function CardView({ card, tap, busy, gated, base, turn, thread, memory }: { card
       );
     case "menu":
       return <MenuCardView card={card} busy={busy} tap={tap} />;
+    case "sheet":
+      return <SheetView card={card} tap={tap} busy={busy} />;
+    case "alternatives":
+      return <PickerView card={card} tap={tap} busy={busy} thread={thread} />;
     case "rules":
       return <RulesCardView card={card} busy={busy} tap={tap} />;
     case "notice": {

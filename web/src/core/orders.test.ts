@@ -263,6 +263,22 @@ describe("orders", () => {
     await expect(d2.withdrawOrder(mine, committed.orderId)).rejects.toMatchObject({ status: 409, code: "order_not_pending" });
   });
 
+  it("a committed order can be taken back before the order cut-off, by the thread's signed-in person only", async () => {
+    inner.setStock("VA-1001", { orderBy: "2026-11-13T16:00" }); // Helsinki: 14:00 UTC
+    const { order } = await smallOrder();
+    expect(order.status).toBe("committed");
+    // The published withdraw (any agent, MCP, REST) still takes back only an order waiting for sign-off.
+    await expect(dock.withdrawOrder(session, order.orderId)).rejects.toMatchObject({ status: 409, code: "order_not_pending" });
+    const back = await dock.withdrawOrder(session, order.orderId, {}, { takeBack: { by: "Aino Virtanen" } });
+    expect(back.status).toBe("withdrawn");
+    expect(ledger.entries().at(-1)).toMatchObject({ type: "order", data: { decision: "taken_back", by: "Aino Virtanen" } });
+
+    // After the cut-off it stays ordered.
+    const late = await smallOrder();
+    now = new Date("2026-11-13T14:00:01.000Z");
+    await expect(dock.withdrawOrder(session, late.order.orderId, {}, { takeBack: { by: "Aino Virtanen" } })).rejects.toMatchObject({ code: "order_not_pending" });
+  });
+
   it("works out substitutes from what the request asked for, whatever the agent declares (F-SUBST-SELF-DECLARED)", async () => {
     const strict = await dock.authenticate(await signMandate({ ...mandate, mandateId: "mnd_strict", substitution: { rule: "none", maxPriceIncreasePct: 0 } }, buyer), mandate.agentId);
     const req = await dock.openRequest(strict, { text: "20 x VA-1010 (200 L), no substitutes" });

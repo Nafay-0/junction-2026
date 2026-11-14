@@ -28,6 +28,8 @@ type SheetRecord = {
   deliveryDate: string;
   lines: (SheetLineInput & { lineId: string })[];
   placed?: string;
+  /** What the last edit removed (cleared by the next edit), for the one-tap undo. */
+  removed?: { productId: string; packs: number };
   /** The last live offers, by product: prices, stock, days, cut-offs. */
   offers: Record<string, LiveOffer>;
   /**
@@ -91,7 +93,7 @@ const confirmedBy = (run: TurnRun) => run.person?.name;
 
 /** The card as it stands: prices from the last lookup, and the gate's own preview of exactly these lines. */
 async function render(run: TurnRun, s: SheetRecord, changed?: string[]): Promise<SheetCard> {
-  const products = await productsOf(run, s.lines.flatMap((l) => [l.productId, ...(l.substituteFor ? [l.substituteFor] : [])]));
+  const products = await productsOf(run, [...s.lines.flatMap((l) => [l.productId, ...(l.substituteFor ? [l.substituteFor] : [])]), ...(s.removed ? [s.removed.productId] : [])]);
   const decision = await run.rt.dock.previewDecision(run.session, s.requestId, s.lines.map(({ productId, packs, substituteFor }) => ({ productId, quantity: packs, ...(substituteFor ? { substituteFor } : {}) })), Object.values(s.offers), confirmedBy(run) ? { confirmedBy: confirmedBy(run) } : {}).catch(() => undefined);
   const gate = gateOf(decision);
   const lines = s.lines.map((l) => {
@@ -137,6 +139,7 @@ async function render(run: TurnRun, s: SheetRecord, changed?: string[]): Promise
     gate,
     ...(changed?.length ? { changed } : {}),
     ...(s.placed ? { orderId: s.placed } : {}),
+    ...(s.removed && !s.placed ? { removed: { ...s.removed, name: products.get(s.removed.productId)?.name ?? s.removed.productId } } : {}),
   };
   run.store.card(run.thread, s.turnId === run.turnId ? run.turnId : s.turnId, card);
   run.facts.push(card);
@@ -200,6 +203,7 @@ export async function editSheet(run: TurnRun, sheetId: string, version: number |
   run = on(run, s);
   const changed: string[] = [];
   let reprice = false;
+  s.removed = undefined;
   switch (edit.kind) {
     case "packs": {
       if (!Number.isInteger(edit.packs) || edit.packs < 1 || edit.packs > 9999) throw new DockError(400, "sheet_packs", "Whole packs, at least one.");
@@ -229,7 +233,9 @@ export async function editSheet(run: TurnRun, sheetId: string, version: number |
     }
     case "remove": {
       if (s.lines.length === 1) throw new DockError(409, "sheet_last_line", "This is the last line: take the order back instead, or add another line first.");
+      const gone = line(s, edit.lineId);
       s.lines = s.lines.filter((x) => x.lineId !== edit.lineId);
+      s.removed = { productId: gone.productId, packs: gone.packs };
       changed.push("removed");
       break;
     }
@@ -386,6 +392,10 @@ export async function pickAlternative(run: TurnRun, pickerId: string, productId:
   const [now] = await run.rt.catalog.searchProducts({ ids: [productId], limit: 1 });
   const [was] = await run.rt.catalog.searchProducts({ ids: [l.productId], limit: 1 });
   const card = await editSheet(run, p.sheetId, undefined, { kind: "swap", lineId: p.lineId, productId });
+  // The picker says what was taken, so it folds to one line.
+  for (const x of run.thread.turns)
+    if (x.role === "agent")
+      for (const c of x.cards) if (c.type === "alternatives" && c.pickerId === pickerId) run.store.card(run.thread, x.turnId, { ...c, picked: productId });
   // The same amount in the new product's packs.
   if (now && was && now.packSize !== was.packSize) {
     const packs = Math.max(1, Math.ceil((l.packs * was.packSize) / now.packSize - 1e-9));

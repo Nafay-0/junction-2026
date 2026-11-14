@@ -451,7 +451,8 @@ export async function runAction(run: TurnRun, a: ThreadAction, words?: string): 
     }
     case "withdraw": {
       const st = step(run, "gate", "Taking the order back");
-      const o = await dock.withdrawOrder(run.session, a.orderId, {});
+      // Waiting for sign-off: withdrawn. Already placed: taken back before the cut-off, by the kitchen's signed-in person only.
+      const o = await dock.withdrawOrder(run.session, a.orderId, run.person ? { by: run.person.name } : {}, run.person ? { takeBack: { by: run.person.name } } : {});
       st.done(o.status);
       run.store.card(run.thread, run.turnId, gateCard(o));
       run.store.card(run.thread, run.turnId, orderCard(o));

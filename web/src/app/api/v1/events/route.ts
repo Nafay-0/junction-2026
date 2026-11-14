@@ -29,6 +29,7 @@ const PUBLIC_SUMMARY: Record<DockEvent["type"], string> = {
   approval_expired: "An order waiting for sign-off expired unsigned.",
   order_committed: "An order was placed with the wholesaler.",
   order_rejected: "The gate refused an order.",
+  order_withdrawn: "A kitchen took back an order before the cut-off.",
 };
 const publicEvent = (e: DockEvent) => ({ id: e.id, type: e.type, at: e.at, totalCents: e.totalCents, summary: PUBLIC_SUMMARY[e.type] });
 

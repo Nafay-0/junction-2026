@@ -306,6 +306,8 @@ export type OrderCard = CardBase & {
   authorised: { by: "agent" } | { by: "person"; name: string; role: string; verified: boolean } | { by: "waiting"; name: string; role: string };
   /** The compact JWS the wholesaler signed (committed orders only): verifiable offline. */
   confirmation?: string;
+  /** A committed order the kitchen's signed-in person may still take back (a `withdraw` tap), until the order cut-off. */
+  takeBackUntil?: string;
   /** What the agent passed over when it chose alone, so the buyer sees the trade-off without asking. */
   passedOver: { title: string; totalCents: number; why: string }[];
 };
@@ -398,6 +400,8 @@ export type SheetCard = CardBase & {
   changed?: string[];
   /** Set once placed. */
   orderId?: string;
+  /** The line the last edit removed, so one tap puts it back (a `sheet_add` of the same product and packs). */
+  removed?: { productId: string; name: string; packs: number };
 };
 
 /**
