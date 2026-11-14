@@ -37,11 +37,15 @@ function speech(text: string): string {
   return fs.readFileSync(f).toString("base64");
 }
 
-/** The fake microphone: a WebAudio destination's stream; `__mic.say(b64wav)` plays into it, resolving when done. */
-const FAKE_MIC = () => {
-  const w = window as unknown as { __mic: { ctx?: AudioContext; dest?: MediaStreamAudioDestinationNode; say: (b64: string) => Promise<number> } };
+/**
+ * The fake microphone: a WebAudio destination's stream; `__mic.say(b64wav)` plays into it, resolving when done. A
+ * string, not a function: tsx's helpers do not exist in the page.
+ */
+const FAKE_MIC = `
+(() => {
+  const w = window;
   w.__mic = {
-    say: async (b64: string) => {
+    say: async (b64) => {
       const m = w.__mic;
       if (!m.ctx || !m.dest) throw new Error("microphone not open");
       const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
@@ -57,17 +61,17 @@ const FAKE_MIC = () => {
   navigator.mediaDevices.getUserMedia = async () => {
     const ctx = new AudioContext();
     const dest = ctx.createMediaStreamDestination();
-    // A faint hum, as a real microphone never gives exact silence.
     const osc = ctx.createOscillator();
     const g = ctx.createGain();
-    g.gain.value = 0.002;
+    g.gain.value = 0.002; // a faint hum: a real microphone never gives exact silence
     osc.connect(g).connect(dest);
     osc.start();
     w.__mic.ctx = ctx;
     w.__mic.dest = dest;
     return dest.stream;
   };
-};
+})();
+`;
 
 const status = (page: Page) => page.locator("[data-voice-status]").first().getAttribute("data-voice-status").catch(() => null);
 async function until(page: Page, want: (s: string | null) => boolean, ms: number): Promise<number | undefined> {
@@ -78,7 +82,7 @@ async function until(page: Page, want: (s: string | null) => boolean, ms: number
   }
   return undefined;
 }
-const say = (page: Page, text: string) => page.evaluate((b) => (window as unknown as { __mic: { say: (b: string) => Promise<number> } }).__mic.say(b), speech(text));
+const say = (page: Page, text: string): Promise<number> => page.evaluate(`window.__mic.say(${JSON.stringify(speech(text))})`) as Promise<number>;
 const shot = (page: Page, name: string) => page.screenshot({ path: path.join(out, `${name}.png`), fullPage: false });
 const lastTurns = async (page: Page, n = 4) => (await page.getByRole("log").first().locator(":scope > li").allInnerTexts()).slice(-n).map((x) => x.replace(/\s+/g, " ").slice(0, 220));
 
@@ -105,7 +109,7 @@ async function turn(page: Page, text: string, opts: { replyMs?: number } = {}) {
 (async () => {
   const browser = await chromium.launch({ args: ["--use-fake-ui-for-media-stream", "--autoplay-policy=no-user-gesture-required"] });
   const ctx = await browser.newContext({ ...devices["Pixel 7"], permissions: ["microphone"] });
-  await ctx.addInitScript(FAKE_MIC);
+  await ctx.addInitScript({ content: FAKE_MIC });
   const page = await ctx.newPage();
   page.on("console", (m) => m.type() === "error" && log(`console: ${m.text().slice(0, 200)}`));
   const cdp = await ctx.newCDPSession(page);
@@ -153,22 +157,23 @@ async function turn(page: Page, text: string, opts: { replyMs?: number } = {}) {
 
   // Over the limit: waiting for the OK, signed with the passkey, and the agent says so.
   results.over = await turn(page, "Six hundred litres of lactose-free milk for Thursday.");
-  results.choose = await turn(page, "Yes, the first one.");
+  // Whatever the engine asks on the way (a repeat check, which option), the buyer says yes, at most three times.
+  const waitingGate = async () => {
+    const th = await page.request.get(`${base}/ui-api/kitchens/${kitchen}/thread`);
+    return (((await th.json()).thread?.turns ?? []) as { cards?: { type: string; outcome?: string; approvalId?: string }[] }[]).flatMap((t) => t.cards ?? []).filter((c) => c.type === "gate" && c.outcome === "waiting").at(-1)?.approvalId;
+  };
+  for (let i = 0; i < 3 && !(await waitingGate()); i++) results[`yes${i}`] = await turn(page, "Yes, order the first one.");
   await shot(page, "5-waiting");
-  const th = await page.request.get(`${base}/ui-api/kitchens/${kitchen}/thread`);
-  const cards = ((await th.json()).thread?.turns ?? []).flatMap((t: { cards?: unknown[] }) => t.cards ?? []) as { type: string; outcome?: string; approvalId?: string }[];
-  const approvalId = cards.filter((c) => c.type === "gate" && c.outcome === "waiting").at(-1)?.approvalId;
+  const approvalId = await waitingGate();
   if (approvalId) {
-    const signer = await ctx.newPage();
-    await signer.goto(`${base}/approve/${approvalId}`);
+    // Signed here, in the conversation, with this phone's passkey (the virtual authenticator belongs to this page).
+    const sign = page.getByRole("button", { name: /^(OK with|Sign with this device|Sign now|Add this device and sign|Approve \d)/ }).last();
+    await sign.click({ timeout: 20_000 });
     const signedAt = Date.now();
-    await signer.getByRole("button", { name: /^Approve \d/ }).click({ timeout: 20_000 });
-    await signer.waitForTimeout(1500);
-    await signer.close();
-    await page.bringToFront();
-    const back = await until(page, (s) => s === "speaking", 20_000);
+    const back = await until(page, (s) => s === "speaking", 30_000);
     log(`signed: the agent spoke ${back ? back - signedAt : "-"} ms after the OK`);
-    await until(page, (s) => s === "listening", 20_000);
+    await until(page, (s) => s === "listening", 30_000);
+    await page.waitForTimeout(1500);
     for (const t of await lastTurns(page, 1)) log(`  thread: ${t}`);
   } else log("no order waiting for an OK (nothing to sign)");
   await shot(page, "6-signed");
@@ -177,7 +182,7 @@ async function turn(page: Page, text: string, opts: { replyMs?: number } = {}) {
   await page.getByRole("button", { name: "End", exact: true }).click();
   await page.waitForTimeout(800);
   log(`ended: voice bar ${await page.locator("[data-voice-mode]").count() ? "still there" : "gone"}, composer ${await page.getByRole("textbox").first().isEnabled() ? "ready" : "disabled"}`);
-  const timings = await page.evaluate(() => (window as unknown as { __dockVoiceTimings?: unknown }).__dockVoiceTimings);
+  const timings = await page.evaluate("window.__dockVoiceTimings");
   fs.writeFileSync(path.join(out, "drive.json"), JSON.stringify({ kitchen, results, timings, thread: await lastTurns(page, 30) }, null, 2));
   await shot(page, "7-ended");
   await browser.close();
