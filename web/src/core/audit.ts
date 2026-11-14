@@ -39,6 +39,13 @@ function intakeForWholesaler(e: LedgerEntry): Omit<WholesalerAuditEntry, "seq" |
   }
   if (d.step === "choice") return { kind: "asked", summary: `Option ${String(d.optionId)} chosen (${(d.labels as string[] | undefined)?.join(", ") || "no label"}).`, data: pick(d, ["optionId", "labels", "lines"]) };
   if (d.step === "compromise") return { kind: "asked", summary: "The buyer accepted a later delivery date.", data: pick(d, ["optionId", "givesUp"]) };
+  // The menu scenarios' decisions: what is in season, what could not arrive and why, the options shown and the one
+  // chosen, by whom. On hand: only that a shortfall was bought and how much, never the history behind the estimate.
+  if (d.step === "seasonal_anchor") return { kind: "asked", summary: e.summary, data: pick(d, ["anchor", "products", "source"]) };
+  if (d.step === "cannot_arrive") return { kind: "asked", summary: e.summary, data: pick(d, ["deliverBy", "lines"]) };
+  if (d.step === "substitution_options") return { kind: "asked", summary: "Substitutes by recipe logic offered for what cannot arrive.", data: pick(d, ["options"]) };
+  if (d.step === "substitution_chosen") return { kind: "asked", summary: e.summary, data: pick(d, ["lineId", "optionId", "rank", "kind", "by", "signOff"]) };
+  if (d.step === "on_hand") return { kind: "asked", summary: "Some lines are bought short: the kitchen has part of them on hand (its own estimate, kept with the buyer).", data: { lines: ((d.lines as Record<string, unknown>[] | undefined) ?? []).map((l) => pick(l, ["lineId", "toBuy", "estimate"])) } };
   if (d.step === "needed_by") return { kind: "asked", summary: `Need-by date changed from ${String(d.from ?? "the earliest possible")} to ${String(d.to ?? "the earliest possible")}.`, data: pick(d, ["from", "to"]) };
   return { kind: "private", summary: "Buyer-side intake step, kept with the buyer." };
 }

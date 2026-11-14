@@ -3,6 +3,7 @@ import { MAX_LIVE_IDS_PER_CALL } from "@/core/catalog";
 import { AnswersInput, ChoiceInput, ConcernResponseInput, OpenIntakeInput } from "@/core/intake";
 import { InterpretBody, InterpretResponse } from "@/server/agent/interpret";
 import { AlternativesInput, ListOrdersInput, LookupInput } from "@/server/lookup";
+import { EventInput, OrderMenuInput, SeasonalInput } from "@/server/mcp/menu-tools";
 import { AvailabilityInput, OpenRequestInput, PlaceOrderInput, QuoteInput, SearchInput } from "@/core/orders";
 import {
   ApprovalViewSchema,
@@ -237,6 +238,13 @@ const AutoRenewOut = named("AutoRenew", z.object({ autoRenew: z.looseObject({ fa
 const OfferAccepted = named("OfferAccepted", z.object({ offerId: z.string() }).loose());
 const OfferDeclined = named("OfferDeclined", z.object({ offer: z.looseObject({ offerId: z.string(), status: z.string() }) }).loose());
 const OfferPrefsOut = named("OfferPrefsReply", z.object({ prefs: OfferPrefsSchema }).loose());
+// The menu scenarios (server/agent/menu/scenarios.ts, mcp/menu-tools.ts).
+const planIdParam: Param = { name: "planId", in: "path", schema: z.string(), required: true, description: "planId from POST /api/v1/menus/seasonal or /event." };
+const MenuSeasonalBody = named("MenuSeasonalBody", SeasonalInput);
+const MenuEventBody = named("MenuEventBody", EventInput);
+const MenuOrderBody = named("MenuOrderBody", OrderMenuInput.omit({ planId: true }));
+const MenuPlanOut = named("MenuPlan", z.object({ result: z.looseObject({ scenario: z.enum(["seasonal", "event"]), planId: z.string(), requestId: z.string().nullable(), lines: z.array(z.looseObject({ lineId: z.string(), ingredient: z.string() })) }), nextStep: z.string() }).loose());
+const MenuOrderOut = named("MenuOrdered", z.object({ sheet: z.looseObject({ lines: z.array(z.looseObject({ productId: z.string(), packs: z.number() })) }), order: OrderSchema, nextStep: z.string() }).loose());
 const ApiIndex = named("ApiIndex", z.object({ name: z.string(), version: z.string(), endpoints: z.record(z.string(), z.string()) }));
 const OpenApiDocument = named("OpenApiDocument", z.object({ openapi: z.string() }));
 
@@ -673,6 +681,37 @@ export const API: Operation[] = [
     auth: true,
     body: OfferMuteBody,
     responses: { 200: { description: "What the kitchen muted now.", schema: OfferPrefsOut }, 400: err("Invalid body, or nothing to mute."), 404: err("No such offer for this organisation."), ...AUTH_ERRORS },
+  },
+  {
+    method: "post",
+    path: "/api/v1/menus/seasonal",
+    operationId: "planSeasonalMenu",
+    summary: "Plan a menu around what is in season",
+    description: "Two or three dishes built on an ingredient in season in Finland now that the assortment has (a public season calendar, with its source; searched in master data). Per ingredient: the need for the covers, what the kitchen has on hand (an estimate from its own order history, or what its person said; each figure with its source; nothing assumed when nothing is known), what is bought (the shortfall, in the smallest pack that covers it, with what is left over), and the gate's preview of the whole menu. Buys nothing; order with POST /api/v1/menus/{planId}/order.",
+    auth: true,
+    body: MenuSeasonalBody,
+    responses: { 200: { description: "The plan: anchor, dishes, lines (need, onHand, toBuy, product, leftover), gate preview.", schema: MenuPlanOut }, 400: err("Invalid body."), ...AUTH_ERRORS },
+  },
+  {
+    method: "post",
+    path: "/api/v1/menus/event",
+    operationId: "planEventMenu",
+    summary: "Plan a booking at short notice",
+    description: "A menu for a booking (for example tomorrow). Every ingredient is checked with the wholesaler for the day, for the dishes' products only: `cannotArrive` says which, why (an order cut-off passed at a time, out of stock, no delivery that day) and the earliest day. `options[lineId]` are substitutes through recipe logic (another ingredient doing the same job in the dish at an adjusted amount, a change of technique, a replacement dish), each verified (in the assortment, arrives by the day, the kitchen's rules and nutrition rules, the mandate), ranked best, better, good, with its trade-off and the gate's word on it (`signOff`). Buys nothing.",
+    auth: true,
+    body: MenuEventBody,
+    responses: { 200: { description: "The plan, what cannot arrive, the verified options.", schema: MenuPlanOut }, 400: err("Invalid body."), 422: err("Not a request to plan food (code not_a_menu)."), ...AUTH_ERRORS },
+  },
+  {
+    method: "post",
+    path: "/api/v1/menus/{planId}/order",
+    operationId: "orderMenu",
+    summary: "Order a planned menu",
+    description: "Every line being bought on one signed fixed-price quote, placed through the mandate gate: committed, or pending_approval for a named person. An ingredient that cannot arrive is replaced by the option in `choices` (the buyer's pick), its main product declared as a substitute so the gate judges it; without choices, only an option inside the kitchen's preferences is taken. Only on the buyer's own yes.",
+    auth: true,
+    params: [planIdParam],
+    body: MenuOrderBody,
+    responses: { 201: { description: "The sheet's lines and the order.", schema: MenuOrderOut }, 400: err("Invalid body."), 404: err("No such plan for this agent, or no such option (codes plan_not_found, option_not_found)."), 409: err("Nothing on the plan can be ordered (code menu_nothing_to_order)."), 422: err("Refused by the gate; the error names the rule."), ...AUTH_ERRORS },
   },
   {
     method: "get",

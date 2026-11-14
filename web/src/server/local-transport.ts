@@ -10,6 +10,9 @@ import * as offers from "@/app/api/v1/offers/route";
 import * as offerAccept from "@/app/api/v1/offers/[offerId]/accept/route";
 import * as offerDecline from "@/app/api/v1/offers/[offerId]/decline/route";
 import * as offerMute from "@/app/api/v1/offers/mute/route";
+import * as menuSeasonal from "@/app/api/v1/menus/seasonal/route";
+import * as menuEvent from "@/app/api/v1/menus/event/route";
+import * as menuOrder from "@/app/api/v1/menus/[planId]/order/route";
 import * as watch from "@/app/api/v1/watch/route";
 import * as watchAnswer from "@/app/api/v1/watch/answer/route";
 import * as watchAuto from "@/app/api/v1/watch/auto-renew/route";
@@ -78,6 +81,9 @@ const routes: [RegExp, string[], RouteModule][] = [
   [/^\/api\/v1\/watch\/auto-renew$/, [], watchAuto],
   [/^\/api\/v1\/offers\/([^/]+)\/accept$/, ["offerId"], offerAccept as RouteModule],
   [/^\/api\/v1\/offers\/([^/]+)\/decline$/, ["offerId"], offerDecline as RouteModule],
+  [/^\/api\/v1\/menus\/seasonal$/, [], menuSeasonal],
+  [/^\/api\/v1\/menus\/event$/, [], menuEvent],
+  [/^\/api\/v1\/menus\/([^/]+)\/order$/, ["planId"], menuOrder as RouteModule],
   [/^\/api\/v1\/agent\/interpret$/, [], interpret],
 ];
 
