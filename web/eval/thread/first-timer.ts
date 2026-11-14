@@ -72,7 +72,7 @@ const L = {
     fifty: "50 litraa laktoositonta maitoa perjantaiksi",
     lunch: "Suunnittele lounas 40 hengelle perjantaiksi",
     big: "Tarvitsen 1 000 litraa laktoositonta maitoa maanantaiksi",
-    order: /^(Tilaa|Lähetä hyväksyttäväksi)/,
+    order: /^(Tilaa(,| tämä)|Lähetä hyväksyttäväksi)/,
     adjust: /^Muuta määrää, päivää tai tuotetta$/,
     sheetChange: /^Muuta määrää, päivää tai tuotetta$/,
     yes: /^(Kyllä, tämä on oikein|Pidä)/,

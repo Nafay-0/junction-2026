@@ -130,6 +130,19 @@ sentence the buyer has to type or another page. The design lead builds the widge
 - Sending: a busy store (`503 store_unavailable`, `429`) or a dropped connection is tried again by itself with the same
   `clientTurnId`; only then the buyer is told, in words, and their words stay in the box.
 
+**What was asked, precisely** (agent-thread-4)
+- Several items in one message are one order: each item's lead option goes on one order sheet, previewed and
+  confirmed once (`combineItems` in pipeline.ts); none is placed alone, and the intake's "you also asked for" note is
+  dropped in the thread. Items still waiting on a question keep their own card.
+- When the kind asked for cannot be offered though the assortment has it, the options card says so first with the
+  reason (`insteadOf`: your rules, the day, stock) and every option is "instead", never "best". A product its maker
+  declares free from milk counts as lactose-free (core/catalog/partner.ts `impliedClaims`), so oat drinks reach
+  kitchens whose rules require lactose-free.
+- A day the kitchen names is the delivery day (`deliverOn`) unless the words make it a latest day ("by", "mennessä",
+  "senast"); an option arriving earlier says "arrives Monday, earlier than the Thursday you asked for".
+- Nothing spins without an end: a turn that stops closes its running steps (store.ts), and a turn still working after
+  150 s ends with a plain notice (engine.ts).
+
 ### The home: the agent is where the kitchen starts (agent-thread-4, live)
 
 A signed-in kitchen lands on its agent (`/k/<kitchen>`, and `/order` is the same page): the thread full width, the
