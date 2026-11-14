@@ -1,6 +1,7 @@
 import { isDockError } from "@/core/errors";
 import type { AgentSession, Dock } from "@/core/orders";
 import { doorLog, type DoorCall } from "./door";
+import { licenceGate } from "./licence-gate";
 import { SUSPENSION_RULE, suspensions } from "./suspensions";
 
 /**
@@ -10,7 +11,8 @@ import { SUSPENSION_RULE, suspensions } from "./suspensions";
  * (core/orders.ts DockDeps.admit; wired in server/runtime.ts). So a door cannot verify a mandate and forget to
  * ask whether staff suspended the agent: REST, MCP, the on-site console, the voice call, the photo door, the menu
  * planner and the scripted buyer all get their session from the same function, and a suspended agent gets none.
- * A refusal carries the rule `operator_suspension` and is written to the ledger (ops/suspensions.ts).
+ * A refusal carries the rule `operator_suspension` and is written to the ledger (ops/suspensions.ts). The same
+ * step applies the agent's crash-test licence when that is enforced (ops/licence-gate.ts): no session without it.
  *
  * What a caller passes as the entrance only says where the call came from, for the door log and the refusal's
  * record. One entrance is let through while suspended, and it has to say so: STORE_PAGE_READ, the kitchen's own
@@ -27,10 +29,10 @@ export const STORE_PAGE_READ: Entrance = { via: "onsite", transport: "direct", p
 const isEntrance = (e: unknown): e is Entrance => typeof e === "object" && e !== null && typeof (e as Entrance).path === "string" && typeof (e as Entrance).via === "string";
 
 /** The function the runtime hands to createDock as `admit`. `dock` is read when a call arrives. */
-export function admission(dock: () => Dock): (session: AgentSession, entrance?: unknown) => void {
+export function admission(dock: () => Dock): (session: AgentSession, entrance?: unknown) => AgentSession | undefined {
   return (session, given) => {
     const entrance = isEntrance(given) ? given : IN_PROCESS;
-    if (entrance.readOnly) return;
+    if (entrance.readOnly) return undefined;
     const d = dock();
     const { via, transport, path } = entrance;
     const record = { at: new Date().toISOString(), agentId: session.agentId, orgId: session.mandate.issuer.orgId, orgName: session.mandate.issuer.name, via, transport, path };
@@ -41,6 +43,9 @@ export function admission(dock: () => Dock): (session: AgentSession, entrance?: 
       throw err;
     }
     doorLog(d).record({ ...record, ok: true }, session.mandate);
+    // The crash-test licence (DOCK_LICENCE_ENFORCE=on, ops/licence-gate.ts): the core sees the stricter of the
+    // mandate and the licence. Applied here, not in one door's code, so it binds on every door like the suspension.
+    return licenceGate(d).apply(session);
   };
 }
 

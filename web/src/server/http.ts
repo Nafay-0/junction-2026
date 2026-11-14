@@ -3,7 +3,6 @@ import { DockError, isDockError } from "@/core/errors";
 import type { AgentSession, Dock } from "@/core/orders";
 import { consoleContextOf } from "./console-context";
 import { doorLog, interfaceOf } from "./ops/door";
-import { licenceGate } from "./ops/licence-gate";
 import { isAdmissionRefusal } from "./ops/onsite";
 import { getRuntime, type Runtime } from "./runtime";
 
@@ -47,14 +46,12 @@ export async function authenticate(req: Request, dock: Dock): Promise<AgentSessi
   let session: AgentSession;
   try {
     // The core verifies the mandate and then asks the operations layer (ops/onsite.ts admission): a suspended agent
-    // gets no session. Admission writes its own door-log line; a mandate that does not verify is logged here.
+    // gets no session, and with the crash-test licence enforced the session carries the stricter terms. Admission writes its own door-log line; a mandate that does not verify is logged here.
     session = await dock.authenticate(match?.[1], agentId, { ...door, method: req.method });
   } catch (err) {
     if (isDockError(err) && !isAdmissionRefusal(err)) doorLog(dock).record({ at: new Date().toISOString(), agentId: agentId ?? "unknown", ...door, ok: false, code: err.code, rule: err.rule });
     throw err;
   }
-  // The crash-test licence (DOCK_LICENCE_ENFORCE=on): the core sees the stricter of the mandate and the licence.
-  session = licenceGate(dock).apply(session);
   // The on-site console's browser session gets its own share of the live-lookup allowance (set in-process only).
   const consoleCtx = consoleContextOf(req);
   if (consoleCtx) session.share = `console:${consoleCtx.session}`;

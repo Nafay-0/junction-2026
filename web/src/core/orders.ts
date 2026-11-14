@@ -309,10 +309,11 @@ export type DockDeps = {
    * Admission: called with every session right after its mandate verified, before the session is handed out, and
    * again for a session held across calls (admit below). Throwing a DockError refuses the agent. The server's
    * operations layer plugs in here (a suspended agent or organisation), so no door can verify a mandate and
-   * forget to ask: there is no way to a session that does not pass this. `entrance` is whatever the caller says
+   * forget to ask: there is no way to a session that does not pass this. It may return the session with tighter terms
+   * (never wider: the gate still checks the signed quote and the order against whatever mandate the session carries). `entrance` is whatever the caller says
    * about where the call came from; the core only passes it on.
    */
-  admit?: (session: AgentSession, entrance?: unknown) => void | Promise<void>;
+  admit?: (session: AgentSession, entrance?: unknown) => void | AgentSession | Promise<void | AgentSession>;
   /**
    * The kitchens' reissued mandates (mandate.ts): the gate accepts only a kitchen's current mandate. Checked when a
    * mandate is presented, when a held session is used again, and on every decision (rule mandate_window), so an
@@ -796,15 +797,14 @@ export function createDock(deps: DockDeps) {
       }
       const session: AgentSession = { mandate, agentId, mandateIssuedAt };
       refuseSuperseded(session, actor);
-      await deps.admit?.(session, entrance);
-      return session;
+      // Admission may hand back the session with tighter terms (the server's licence gate): that is the session.
+      return (await deps.admit?.(session, entrance)) ?? session;
     },
 
     /** Admission for a session that was verified earlier and is used again later (a link that outlives the call that made it). */
     async admit(session: AgentSession, entrance?: unknown): Promise<AgentSession> {
       refuseSuperseded(session, agentActor(session));
-      await deps.admit?.(session, entrance);
-      return session;
+      return (await deps.admit?.(session, entrance)) ?? session;
     },
 
     async openRequest(session: AgentSession, input: z.input<typeof OpenRequestInput>): Promise<PurchaseRequest> {
