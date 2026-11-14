@@ -133,7 +133,6 @@ function pendingView(call: Call): Pending | undefined {
   const p = call.desk.pending;
   if (!p) return undefined;
   const parsed = NeedSchema.safeParse(p.need);
-  const q = parsed.success ? parsed.data.quantity : undefined;
   return { need: p.need, summary: parsed.success ? describeNeed(parsed.data) : "", reason: p.reason, say: p.say };
 }
 

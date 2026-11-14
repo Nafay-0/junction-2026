@@ -33,6 +33,7 @@ async function fakeGemini(page: Page, fake: Fake) {
       send({ serverContent: { turnComplete: true } });
     };
     ws.onMessage((raw) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the provider's wire messages, read loosely
       const m = JSON.parse(String(raw)) as Record<string, any>;
       fake.sent.push(m);
       if (m.setup) {
@@ -63,6 +64,7 @@ async function fakeOpenAI(page: Page, fake: Fake) {
     const send = (m: unknown) => ws.send(JSON.stringify(m));
     send({ type: "session.created", session: {} });
     ws.onMessage((raw) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the provider's wire messages, read loosely
       const m = JSON.parse(String(raw)) as Record<string, any>;
       fake.sent.push(m);
       if (m.type === "response.create") {

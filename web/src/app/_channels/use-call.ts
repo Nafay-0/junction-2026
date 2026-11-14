@@ -123,6 +123,8 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
   const wake = useRef<{ release: () => Promise<void> } | null>(null);
   const stopRing = useRef<(() => void) | null>(null);
   const reconnects = useRef(0);
+  /** `dial` calls itself (another provider, a reconnect); through a ref, since it is declared with useCallback. */
+  const dialRef = useRef<(mode: Mode, carryFrom: string | undefined, a: CallAudio, why: { avoid?: string; reconnect?: boolean }) => Promise<void>>(async () => {});
   const warned = useRef(false);
   const onStep = useRef(opts.onStep);
   const onOrder = useRef(opts.onOrder);
@@ -399,7 +401,7 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
           cleanup(true);
           void post(`${base}/call/${start.callId}`, { op: "end", reason: `refused ${code}` });
           set({ notice: say().switching });
-          void dial(mode, start.callId, a, { avoid: start.live!.provider, reconnect: why.reconnect });
+          void dialRef.current(mode, start.callId, a, { avoid: start.live!.provider, reconnect: why.reconnect });
           return;
         }
         void post(`${base}/call/${start.callId}`, { op: "end", reason: `lost ${code}` });
@@ -409,7 +411,7 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
           reconnects.current += 1;
           cleanup(true);
           set({ phase: "recovering", talking: false, latched: false, agentSpeaking: false, thinking: false, notice: say().recovering });
-          window.setTimeout(() => void dial(mode, start.callId, a, { reconnect: true }), 800 * reconnects.current);
+          window.setTimeout(() => void dialRef.current(mode, start.callId, a, { reconnect: true }), 800 * reconnects.current);
           return;
         }
         cleanup();
@@ -422,7 +424,7 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
           cleanup(true);
           void post(`${base}/call/${start.callId}`, { op: "end", reason: "slow start" });
           set({ notice: say().switching });
-          void dial(mode, start.callId, a, { avoid: start.live!.provider, reconnect: why.reconnect });
+          void dialRef.current(mode, start.callId, a, { avoid: start.live!.provider, reconnect: why.reconnect });
         }
       }, 6_000);
       window.setTimeout(() => {
@@ -435,6 +437,10 @@ export function useCall(kitchen: string, opts: { onStep?: (s: IntakeView) => voi
     },
     [base, cleanup, connect, set, shown, say, startTyped],
   );
+
+  useEffect(() => {
+    dialRef.current = dial;
+  }, [dial]);
 
   /** Must run inside the tap on "Call": iOS opens the microphone and plays audio only from a user gesture. */
   const call = useCallback(

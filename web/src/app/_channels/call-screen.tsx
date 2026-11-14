@@ -75,7 +75,8 @@ export function CallScreen({ kitchen, signOffHref, renderSignOff, onStep, onOrde
   const [mode, setMode] = useState<Mode>(defaultMode);
   const [draft, setDraft] = useState("");
   const [elapsed, setElapsed] = useState(0);
-  const [ios, setIos] = useState(false);
+  // iOS (an iPhone, or an iPad reporting as a Mac): the silent switch mutes web audio, so the call says so.
+  const [ios] = useState(() => typeof navigator !== "undefined" && (/iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)));
   const started = useRef(0);
   const end = useRef<HTMLDivElement>(null);
 
@@ -88,7 +89,6 @@ export function CallScreen({ kitchen, signOffHref, renderSignOff, onStep, onOrde
   useEffect(() => {
     end.current?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
   }, [v.lines, v.pending, v.step, v.order]);
-  useEffect(() => setIos(/iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)), []);
 
   const live = v.phase === "connected";
   const recovering = v.phase === "recovering";
