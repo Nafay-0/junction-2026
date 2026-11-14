@@ -83,7 +83,7 @@ export type PlanSettings = { covers: number | null; deliverBy: string | null };
 export type PlanInput = {
   draft: MenuDraft;
   specs: LineSpec[];
-  candidates: Record<string, { candidates: Candidate[]; rejected: Rejected[]; searched: string[] }>;
+  candidates: Record<string, { candidates: Candidate[]; rejected: Rejected[]; searched: string[]; judged?: boolean }>;
   live: LiveData;
   edits: Record<string, LineEdits>;
   acceptances: Acceptance[];

@@ -2,6 +2,8 @@ import type { InMemoryCatalog, Product } from "@/core/catalog";
 import { piecesPerSalesUnit, toDockProduct } from "@/core/catalog/product";
 import { fold } from "@/core/catalog/search";
 import type { ValioCatalog } from "../../valio/valio-catalog";
+import type { MatchLabel } from "@/core/catalog/finder";
+import { smartSearchFor } from "../../search/service";
 import type { DraftIngredient } from "./draft";
 import { checkSafety, familyOf, type DietRules, type Safety } from "./safety";
 
@@ -12,13 +14,21 @@ import { checkSafety, familyOf, type DietRules, type Safety } from "./safety";
  * fit the ingredient's role. The live price check then sees only the top of this list.
  */
 
-export type Hit = { product: Product; score: number };
+export type Hit = { product: Product; score: number; label?: MatchLabel };
 
 /** Master-data search the planner needs. ValioCatalog has ranked hits; the seed catalogue a plain search. */
 export interface MenuCatalog {
   search(text: string, limit: number): Promise<Hit[]>;
   get(ids: string[]): Promise<Product[]>;
+  /**
+   * One smart search for the ingredient (server/search: recall over the whole assortment, then the relevance judge),
+   * when the catalogue has it. `judged`: the judge answered, so the model's name check (pick.ts) is not needed.
+   */
+  find?(ing: DraftIngredient, limit: number): Promise<{ hits: Hit[]; judged: boolean } | undefined>;
 }
+
+/** How a judged hit scores for the role fit below: the kind asked first, a variant next, a stand-in last. */
+const LABEL_SCORE: Record<MatchLabel, number> = { exact: 1, variant: 0.8, standin: 0.45, other: 0 };
 
 export function menuCatalogOf(c: InMemoryCatalog | ValioCatalog): MenuCatalog {
   if ("search" in c && typeof c.search === "function") {
@@ -26,6 +36,14 @@ export function menuCatalogOf(c: InMemoryCatalog | ValioCatalog): MenuCatalog {
     return {
       search: async (text, limit) => v.search({ text, limit }).map((h) => ({ product: toDockProduct(h.product), score: h.score })),
       get: (ids) => v.searchProducts({ ids, limit: 100 }),
+      find: async (ing, limit) => {
+        const smart = await smartSearchFor(v);
+        if (!smart) return undefined;
+        const terms = [...new Set(ing.searchTerms.slice(0, 3).filter((t) => fold(t) !== fold(ing.name)))];
+        const r = await smart.find({ text: [ing.name, ...terms].join(" / "), need: { itemText: `${ing.name}${ing.form && ing.form !== "any" ? ` (${ing.form.replace(/_/g, " ")})` : ""}, ${ing.role}` }, limit });
+        const hits = r.hits.map((h, i) => ({ product: h.product, score: h.label ? Math.round(LABEL_SCORE[h.label] * (0.7 + 0.3 * (h.confidence ?? 0.5)) * 1000) / 1000 : Math.round((1 / (1 + i * 0.1)) * 1000) / 1000, ...(h.label ? { label: h.label } : {}) }));
+        return { hits, judged: r.path === "judge" };
+      },
     };
   }
   return {
@@ -44,7 +62,8 @@ export type Candidate = {
 
 export type Rejected = { productId: string; name: string; reason: string };
 
-export type CandidateSet = { candidates: Candidate[]; rejected: Rejected[]; searched: string[] };
+/** `judged`: smart search's relevance judge already checked which products are the ingredient (pick.ts is skipped). */
+export type CandidateSet = { candidates: Candidate[]; rejected: Rejected[]; searched: string[]; judged?: boolean };
 
 /** Words in names that make a product a ready dish or a mix, not an ingredient. */
 const PREPARED = ["valmis", "ateria", "laatikko", "piiras", "piirakka", "pasteija", "rieska", "terriini", "salaatti", "keitto", "sekoitus", "mix", "flammkuchen", "pizza", "muffinssi", "kakku", "leivos", "pyorykka", "pihvi", "annos", "lastenateria", "sose", "keksi", "cracker", "sipsi", "lastu", "crisps", "chips", "karkki", "dragee", "pastilli", "patukka", "valipala"];
@@ -115,8 +134,12 @@ export function usableMeasure(ing: DraftIngredient, p: Product): boolean {
  */
 export async function findCandidates(catalog: MenuCatalog, ing: DraftIngredient, rules: DietRules, allowed: (p: Product) => boolean, limit = 6): Promise<CandidateSet> {
   const byId = new Map<string, Hit>();
-  for (const term of ing.searchTerms.slice(0, 4)) {
-    for (const h of await catalog.search(term, 25)) {
+  // Smart search first: one recall and one judgement for the ingredient; the term-by-term search when it is not there.
+  const smart = catalog.find ? await catalog.find(ing, 40).catch(() => undefined) : undefined;
+  if (smart?.hits.length) for (const h of smart.hits) byId.set(h.product.id, h);
+  else {
+    const lists = await Promise.all(ing.searchTerms.slice(0, 4).map((term) => catalog.search(term, 25)));
+    for (const h of lists.flat()) {
       const prev = byId.get(h.product.id);
       if (!prev || prev.score < h.score) byId.set(h.product.id, h);
     }
@@ -170,11 +193,13 @@ export async function findCandidates(catalog: MenuCatalog, ing: DraftIngredient,
     }
     let score = h.score;
     const why: string[] = [];
-    if (family && familyOf(p) !== family) {
+    if (h.label === "standin") why.push("judged a stand-in, not the ingredient itself");
+    // The judge's verdict already says whether it is the ingredient; the word heuristics are for unjudged hits.
+    if (!h.label && family && familyOf(p) !== family) {
       score *= 0.55;
       why.push("another product group than the best matches");
     }
-    if (head.length && !head.some((t) => n.includes(t))) {
+    if (!h.label && head.length && !head.some((t) => n.includes(t))) {
       score *= 0.7;
       why.push(`name does not say "${ing.searchTerms[0]}"`);
     }
@@ -214,5 +239,5 @@ export async function findCandidates(catalog: MenuCatalog, ing: DraftIngredient,
     out.push({ product: p, score: Math.round(score * 1000) / 1000, safety, why });
   }
   out.sort((a, b) => b.score - a.score || a.product.name.length - b.product.name.length || a.product.id.localeCompare(b.product.id));
-  return { candidates: out.slice(0, limit), rejected: rejected.slice(0, 12), searched: ing.searchTerms.slice(0, 4) };
+  return { candidates: out.slice(0, limit), rejected: rejected.slice(0, 12), searched: ing.searchTerms.slice(0, 4), ...(smart?.judged && smart.hits.length ? { judged: true } : {}) };
 }

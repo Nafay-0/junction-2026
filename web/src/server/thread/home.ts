@@ -1,3 +1,4 @@
+import { findProducts } from "@/server/search/service";
 import { DockError } from "@/core/errors";
 import { localNow, updateKitchenProfile } from "@/core/kitchen";
 import type { Product } from "@/core/catalog";
@@ -113,15 +114,30 @@ function allowed(run: TurnRun, p: Product): boolean {
   return m.allowedCategories.includes(p.category) && m.requiredAttributes.every((a) => p.attributes.includes(a)) && !p.allergens.some((a) => m.forbiddenAllergens.includes(a));
 }
 
-/** A grid from master data: no live call until a product goes on the sheet; nothing the gate would refuse outright. */
+/**
+ * A grid from master data: no live call until a product goes on the sheet; nothing the gate would refuse outright.
+ * Words go through smart search (server/search/service.ts), with the mandate's claims and allergens as hard rules.
+ */
 export async function productsCard(run: TurnRun, query: string, category?: string): Promise<ProductsCard> {
   const q = query.trim().slice(0, 120);
-  const hits = await run.rt.catalog.searchProducts({ ...(q ? { text: q } : {}), ...(category ? { category } : {}), limit: 100 });
+  const m = run.session.mandate;
+  const found = q ? await findProducts(run.rt.catalog, { text: q, ...(category ? { category } : {}), requiredClaims: m.requiredAttributes, forbiddenAllergens: m.forbiddenAllergens, limit: 100 }) : undefined;
+  const hits = found ? found.hits.map((h) => h.product) : await run.rt.catalog.searchProducts({ ...(category ? { category } : {}), limit: 100 });
+  const match = new Map((found?.hits ?? []).flatMap((h) => (h.label && h.label !== "other" ? [[h.product.id, h.label] as const] : [])));
   const ok = hits.filter((p) => allowed(run, p));
-  const card: ProductsCard = { type: "products", cardId: cardId("products", `${run.turnId}:${q}:${category ?? ""}`), query: q, ...(category ? { category } : {}), total: ok.length, products: ok.slice(0, 24).map(tile) };
+  const card: ProductsCard = {
+    type: "products",
+    cardId: cardId("products", `${run.turnId}:${q}:${category ?? ""}`),
+    query: q,
+    ...(category ? { category } : {}),
+    total: ok.length,
+    products: ok.slice(0, 24).map((p) => ({ ...tile(p), ...(match.get(p.id) ? { match: match.get(p.id) } : {}) })),
+    ...(found && found.path !== "lexical" ? { search: { path: found.path, onlyStandins: found.onlyStandins, notSold: found.notSold, unsure: found.unsure, notes: found.notes } } : {}),
+  };
   run.store.card(run.thread, run.turnId, card);
   run.facts.push(card);
-  record(run, "products", `Products for "${q}"${category ? ` in ${category}` : ""}: ${ok.length} the mandate allows (master data, no live call).`, { query: q, category, shown: card.products.map((p) => p.productId) });
+  const said = found?.onlyStandins ? " Nothing is the kind asked for; these could stand in." : found?.notSold ? " Nothing in the assortment is the kind asked for." : "";
+  record(run, "products", `Products for "${q}"${category ? ` in ${category}` : ""}: ${ok.length} the mandate allows (master data, no live call; ${found?.path === "judge" ? "ranked by the relevance judge" : found?.path === "ranked" ? `fused ranking${found.reason ? `, ${found.reason}` : ""}` : "lexical search"}).${said}`, { query: q, category, shown: card.products.map((p) => p.productId), ...(found ? { search: { path: found.path, reason: found.reason, candidates: found.stats.candidates, ms: found.stats.ms, costUsd: found.stats.costUsd, notes: found.notes } } : {}) });
   return card;
 }
 
