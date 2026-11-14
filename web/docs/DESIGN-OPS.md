@@ -148,6 +148,7 @@ In `src/app/ops/_ui/` unless noted. All use the tokens unchanged.
 | `LiveMark` | `kit.tsx` | "Live, updated 14.05.32" with a breathing petrol square. |
 | `fi()` additions, `stamp()`, `country()` | `format.ts` | ISO stamps and dates to Helsinki words, unit codes (ST, KI, PAL…) to words, placeholder stock (999999…) to "an unreported amount", leftover codes to words. Worth moving into `_ui/plain.ts` so the store gets the same. |
 | `CrashMatrix`, `crashBoard()` | `_wall/crash-matrix.tsx`, `_wall/crash-board.ts` | The crash-test leaderboard (dark and light). |
+| Time rail | `(desk)/time-machine/time-machine.tsx` | The time machine's slider: a mark per moment a rule changed, shaped by kind (petrol mandate, lavender kitchen rule, hazard hold, safety suspension, hairline spend), the order as a pointer, the lime thumb as the one action. |
 | Wall motion | `_wall/wall.module.css` | The gate post's scan light, a row wash on change, the barrier arms; all off under reduced motion. |
 
 Two gaps in the system the operations side worked around: a *dark-ground* `Tag`/`Field` (the wall and rail
