@@ -35,7 +35,7 @@ jobs:
     timeout-minutes: 45
     defaults:
       run:
-        working-directory: web
+        working-directory: valio-aimo/web
     steps:
       - uses: cracicorp/setup@v1
         with:
@@ -53,13 +53,13 @@ jobs:
 
       - uses: pnpm/action-setup@v4
         with:
-          package_json_file: web/package.json
+          package_json_file: valio-aimo/web/package.json
 
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
+          cache-dependency-path: valio-aimo/web/pnpm-lock.yaml
 
       - run: pnpm install --frozen-lockfile
 
@@ -108,8 +108,8 @@ jobs:
         with:
           name: crash-model-suite
           path: |
-            web/crash-results/ci
-            web/crash-results/ci-export/summary.json
-            web/crash-results/ci-export/licences.json
-            web/crash-results/ci-export/LEADERBOARD.md
+            valio-aimo/web/crash-results/ci
+            valio-aimo/web/crash-results/ci-export/summary.json
+            valio-aimo/web/crash-results/ci-export/licences.json
+            valio-aimo/web/crash-results/ci-export/LEADERBOARD.md
           retention-days: 30

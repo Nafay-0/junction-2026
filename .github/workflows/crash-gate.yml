@@ -1,12 +1,15 @@
 name: Crash-test gate
 
 # On every push: reproduce the crash test's scripted results and fail the build when the reference agent's score
-# drops, a baseline rises above its ceiling, or an exploit probe starts scoring (web/src/crash/gate.ts).
+# drops, a baseline rises above its ceiling, or an exploit probe starts scoring (valio-aimo/web/src/crash/gate.ts).
 # Runs on a CRACI runner with outbound network limited to GitHub and npm; a second job reads CRACI's record of the
 # gate job (CycloneDX SBOM and network trace, through the CRACI API) into build-record.json.
 
 on:
   push:
+    paths:
+      - "valio-aimo/**"
+      - ".github/workflows/crash-gate.yml"
   workflow_dispatch:
 
 concurrency:
@@ -26,7 +29,7 @@ jobs:
       job-id: ${{ steps.record.outputs.job-id }}
     defaults:
       run:
-        working-directory: web
+        working-directory: valio-aimo/web
     steps:
       - uses: cracicorp/setup@v1
         with:
@@ -41,13 +44,13 @@ jobs:
 
       - uses: pnpm/action-setup@v4
         with:
-          package_json_file: web/package.json
+          package_json_file: valio-aimo/web/package.json
 
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
+          cache-dependency-path: valio-aimo/web/pnpm-lock.yaml
 
       - run: pnpm install --frozen-lockfile
 
@@ -77,10 +80,10 @@ jobs:
         with:
           name: crash-reproduce
           path: |
-            web/crash-results/reproduce/summary.json
-            web/crash-results/reproduce/trajectories.jsonl
-            web/crash-results/gate.json
-            web/crash-results/build-record.json
+            valio-aimo/web/crash-results/reproduce/summary.json
+            valio-aimo/web/crash-results/reproduce/trajectories.jsonl
+            valio-aimo/web/crash-results/gate.json
+            valio-aimo/web/crash-results/build-record.json
           retention-days: 30
 
   record:
@@ -91,7 +94,7 @@ jobs:
     timeout-minutes: 6
     defaults:
       run:
-        working-directory: web
+        working-directory: valio-aimo/web
     steps:
       - uses: actions/checkout@v4
 
@@ -102,7 +105,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: crash-reproduce
-          path: web/crash-results
+          path: valio-aimo/web/crash-results
 
       - name: Fetch the gate job's SBOM and network trace from CRACI
         env:
@@ -138,8 +141,8 @@ jobs:
         with:
           name: craci-build-record
           path: |
-            web/crash-results/build-record.json
-            web/crash-results/sbom.json
-            web/crash-results/network-trace.json
+            valio-aimo/web/crash-results/build-record.json
+            valio-aimo/web/crash-results/sbom.json
+            valio-aimo/web/crash-results/network-trace.json
           if-no-files-found: warn
           retention-days: 30

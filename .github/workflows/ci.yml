@@ -1,9 +1,16 @@
 name: CI
 
+# Only when AimoPilot's own folder (or this workflow) changes: the repository also holds the Exa project in exa/.
 on:
   push:
     branches: [main, "claude/**"]
+    paths:
+      - "valio-aimo/**"
+      - ".github/workflows/ci.yml"
   pull_request:
+    paths:
+      - "valio-aimo/**"
+      - ".github/workflows/ci.yml"
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -21,19 +28,19 @@ jobs:
     timeout-minutes: 15
     defaults:
       run:
-        working-directory: web
+        working-directory: valio-aimo/web
     steps:
       - uses: actions/checkout@v4
 
       - uses: pnpm/action-setup@v4
         with:
-          package_json_file: web/package.json
+          package_json_file: valio-aimo/web/package.json
 
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
+          cache-dependency-path: valio-aimo/web/pnpm-lock.yaml
 
       - run: pnpm install --frozen-lockfile
 

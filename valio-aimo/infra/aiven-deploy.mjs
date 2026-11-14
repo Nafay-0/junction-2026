@@ -51,6 +51,23 @@ function fail(msg) {
 const log = (s = "") => console.log(s);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const git = (...a) => execFileSync("git", a, { cwd: repo, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim();
+const gitRoot = () => git("rev-parse", "--show-toplevel");
+/**
+ * Where the app lives in a given commit, from the repository's top level: `valio-aimo/web` since 15 Nov (the
+ * repository also holds the Exa project in exa/), `web` in commits before the move. Runtime builds that folder with
+ * its Dockerfile, so a deploy or a rollback to either layout sets the matching build path.
+ */
+function webPathIn(sha) {
+  for (const p of ["valio-aimo/web", "web"]) {
+    try {
+      git("cat-file", "-e", `${sha}:${p}/Dockerfile`);
+      return p;
+    } catch {
+      /* not this layout */
+    }
+  }
+  fail(`${sha.slice(0, 12)} has no web/Dockerfile in a known place`);
+}
 
 async function api(method, path, body) {
   const res = await fetch(`https://api.aiven.io/v1/project/${project}${path}`, {
@@ -178,14 +195,16 @@ function deployCommit(sha, previous) {
   const dir = mkdtempSync(join(tmpdir(), "dock-deploy-"));
   const indexFile = join(dir, "index");
   const genv = { ...process.env, GIT_INDEX_FILE: indexFile };
-  const run = (a, input) => execFileSync("git", a, { cwd: repo, env: genv, encoding: "utf8", input }).trim();
+  // Plumbing runs from the repository's top level: the index path below is relative to it.
+  const run = (a, input) => execFileSync("git", a, { cwd: gitRoot(), env: genv, encoding: "utf8", input }).trim();
+  const app = webPathIn(sha);
   try {
     run(["read-tree", sha]);
     const info = JSON.stringify({ commit: sha, ref, deployedAt: new Date().toISOString() }, null, 2) + "\n";
     const blob = run(["hash-object", "-w", "--stdin"], info);
-    run(["update-index", "--add", "--cacheinfo", `100644,${blob},web/.build-info.json`]);
+    run(["update-index", "--add", "--cacheinfo", `100644,${blob},${app}/.build-info.json`]);
     const tree = run(["write-tree"]);
-    return run(["commit-tree", tree, "-p", sha, "-m", `Deploy ${sha.slice(0, 12)} (${ref}) to Aiven Runtime\n\nAdds web/.build-info.json only.\nPrevious: ${previous ?? "unknown"}`]);
+    return run(["commit-tree", tree, "-p", sha, "-m", `Deploy ${sha.slice(0, 12)} (${ref}) to Aiven Runtime\n\nAdds ${app}/.build-info.json only.\nPrevious: ${previous ?? "unknown"}`]);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -285,30 +304,34 @@ if (!has("--config-only")) {
   log(`  deploy commit ${commit.slice(0, 12)} -> branch ${DEPLOY_BRANCH}`);
 }
 const branchChanged = !has("--config-only") && app.source.branch !== DEPLOY_BRANCH;
+// The folder Runtime builds: follows the layout of the commit being deployed.
+const buildPath = sha ? webPathIn(sha) : app.source.build_path;
+const pathChanged = !!sha && (app.source.build_path !== buildPath || app.source.containerfile_path !== `${buildPath}/Dockerfile`);
+if (pathChanged) log(`build path: ${app.source.build_path} -> ${buildPath}`);
 const httpPort = (app.ports ?? []).find((p) => p.name === "http") ?? app.ports?.[0];
 const domainsChanged = !!customDomain && !!httpPort && !(httpPort.custom_domains ?? []).includes(customDomain);
 if (customDomain) log(`custom domain on the http port: ${domainsChanged ? "to add" : "already there"}`);
 
 if (dryRun) {
-  log(`\nDry run: ${domainsChanged ? `custom domain ${customDomain} would be added; ` : ""}${envChanged ? "environment would change; " : ""}${branchChanged ? `source branch ${app.source.branch} -> ${DEPLOY_BRANCH}; ` : ""}nothing changed.`);
+  log(`\nDry run: ${pathChanged ? `build path ${app.source.build_path} -> ${buildPath}; ` : ""}${domainsChanged ? `custom domain ${customDomain} would be added; ` : ""}${envChanged ? "environment would change; " : ""}${branchChanged ? `source branch ${app.source.branch} -> ${DEPLOY_BRANCH}; ` : ""}nothing changed.`);
   process.exit(0);
 }
 
 if (commit) execFileSync("git", ["push", "--quiet", "--force", "origin", `${commit}:refs/heads/${DEPLOY_BRANCH}`], { cwd: repo, stdio: "inherit" });
 
-if (envChanged || branchChanged || domainsChanged) {
+if (envChanged || branchChanged || domainsChanged || pathChanged) {
   // The whole application object goes back (deploy key included), or the PUT would drop what it omits.
   const ports = domainsChanged ? app.ports.map((p) => (p === httpPort ? { ...p, custom_domains: [...(p.custom_domains ?? []), customDomain] } : p)) : app.ports;
-  const next = { ...app, ports, source: { ...app.source, ...(branchChanged ? { branch: DEPLOY_BRANCH } : {}) }, environment_variables: desiredEnv };
+  const next = { ...app, ports, source: { ...app.source, ...(branchChanged ? { branch: DEPLOY_BRANCH } : {}), ...(pathChanged ? { build_path: buildPath, containerfile_path: `${buildPath}/Dockerfile` } : {}) }, environment_variables: desiredEnv };
   delete next.source.commit_sha;
   await api("PUT", `/service/${SERVICE}`, { user_config: { application: next } });
-  log(`\nUpdated ${SERVICE}: ${[envChanged && "environment", branchChanged && `branch ${DEPLOY_BRANCH}`, domainsChanged && `custom domain ${customDomain}`].filter(Boolean).join(", ")}.`);
+  log(`\nUpdated ${SERVICE}: ${[envChanged && "environment", branchChanged && `branch ${DEPLOY_BRANCH}`, domainsChanged && `custom domain ${customDomain}`, pathChanged && `build path ${buildPath}`].filter(Boolean).join(", ")}.`);
 }
 
 if (!has("--config-only") || envChanged) {
   // A settings change starts a deployment by itself; if none starts within 30 s, ask for one.
   let started = false;
-  if (envChanged || branchChanged) {
+  if (envChanged || branchChanged || pathChanged) {
     for (let i = 0; i < 6 && !started; i++) {
       await sleep(5_000);
       const s = (await api("GET", `/service/${SERVICE}`)).service.metadata?.application_deployment_status;

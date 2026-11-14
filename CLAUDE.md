@@ -29,7 +29,7 @@ Two separate projects share this repo. Each person owns one, and its Claude Code
 
 | Project | Challenge | Folders | Owner |
 |---|---|---|---|
-| Dock | Valio Aimo, "Trusted Trade Agents" | `web/`, `infra/`, `.github/workflows/` | Nafay (`Nafay-0`) |
+| Dock (AimoPilot) | Valio Aimo, "Trusted Trade Agents" | `valio-aimo/` (the app in `valio-aimo/web/`, plus `infra/`, `docs/`, `examples/`, `modal/`, `qa/`, `video/`), and the workflows `ci`, `crash-gate`, `crash-models`, `demo-suite` in `.github/workflows/` | Nafay (`Nafay-0`) |
 | Exa project (name to come) | Exa, "The Internet Butler" | `exa/` (rules in `exa/CLAUDE.md`) | Asadullah (`Asadullah378`) |
 | Shared | | `CLAUDE.md`, `README.md`, `research/`, `.claude/`, `.env.example`, `.gitignore` | Both: small edits only, named in the commit message |
 
@@ -64,7 +64,7 @@ The next section describes Dock. The Exa project's brief and plan are in `exa/RE
 
 **Main-prize judging:** assigned peer reviewers score Innovation, Impact, Implementation at our table on Sunday 10:30; top 5 pitch for 3 minutes plus 3 minutes of questions. Final submission Sunday 10:00 with a video of at most 2:00.
 
-**Code layout:** the app lives in `web/` (Next.js, TypeScript, pnpm). Framework-free logic lives in `web/src/core/` and is covered by tests; nothing in `core/` may call an LLM.
+**Code layout:** everything of this project lives under `valio-aimo/` (moved there on 15 Nov, next to the Exa project's `exa/`). The app is `valio-aimo/web/` (Next.js, TypeScript, pnpm). Framework-free logic lives in `valio-aimo/web/src/core/` and is covered by tests; nothing in `core/` may call an LLM. Paths in this file such as `research/…` are from the repository root; the project's own workflows run only when `valio-aimo/**` changes.
 
 ## Team workflow (two people, one repo)
 

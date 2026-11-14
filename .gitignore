@@ -11,3 +11,4 @@ __pycache__/
 .claude/worktrees/
 # partner data files: restricted to the challenge, never commit (see research/06-valio-api.md)
 /data/
+/valio-aimo/data/

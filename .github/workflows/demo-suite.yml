@@ -4,11 +4,14 @@ name: Demo suite
 # and desktop size (plus the room, accessibility and visual projects), the QA harness's invariant probes, the
 # scripted demos and the model/partner failure scenarios. Every server is hermetic (seed catalogue, no model, no
 # partner, no Aiven, no secrets), so this needs no repository secrets and never touches the public deployment.
-# Same commands locally: `cd web && pnpm test:full` (see web/e2e/README.md).
+# Same commands locally: `cd valio-aimo/web && pnpm test:full` (see valio-aimo/web/e2e/README.md).
 
 on:
   push:
     branches: [main]
+    paths:
+      - "valio-aimo/**"
+      - ".github/workflows/demo-suite.yml"
   schedule:
     - cron: "17 */3 * * *" # every three hours through the weekend: catches drift in dependencies and time-dependent bugs
   workflow_dispatch:
@@ -27,7 +30,7 @@ jobs:
     timeout-minutes: 30
     defaults:
       run:
-        working-directory: web
+        working-directory: valio-aimo/web
     steps:
       - uses: cracicorp/setup@v1
         with:
@@ -37,13 +40,13 @@ jobs:
 
       - uses: pnpm/action-setup@v4
         with:
-          package_json_file: web/package.json
+          package_json_file: valio-aimo/web/package.json
 
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
+          cache-dependency-path: valio-aimo/web/pnpm-lock.yaml
 
       - run: pnpm install --frozen-lockfile
 
@@ -72,10 +75,10 @@ jobs:
         with:
           name: checks-logs
           path: |
-            web/test-results/
-            web/qa/results/
-            web/tests-live/results/
-            web/crash-results/reproduce/summary.json
+            valio-aimo/web/test-results/
+            valio-aimo/web/qa/results/
+            valio-aimo/web/tests-live/results/
+            valio-aimo/web/crash-results/reproduce/summary.json
           if-no-files-found: ignore
           retention-days: 14
 
@@ -85,7 +88,7 @@ jobs:
     timeout-minutes: 60
     defaults:
       run:
-        working-directory: web
+        working-directory: valio-aimo/web
     steps:
       - uses: cracicorp/setup@v1
         with:
@@ -95,13 +98,13 @@ jobs:
 
       - uses: pnpm/action-setup@v4
         with:
-          package_json_file: web/package.json
+          package_json_file: valio-aimo/web/package.json
 
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
+          cache-dependency-path: valio-aimo/web/pnpm-lock.yaml
 
       - run: pnpm install --frozen-lockfile
 
@@ -128,7 +131,7 @@ jobs:
           node e2e/support/summary.mjs test-results/results.json
           if ls e2e/visual/__screenshots__/linux >/dev/null 2>&1 && [ -n "$(git status --porcelain e2e/visual/__screenshots__/linux)" ]; then
             echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "New Linux visual baselines were written: download the **visual-baselines-linux** artifact and commit it under web/e2e/visual/__screenshots__/linux/." >> "$GITHUB_STEP_SUMMARY"
+            echo "New Linux visual baselines were written: download the **visual-baselines-linux** artifact and commit it under valio-aimo/web/e2e/visual/__screenshots__/linux/." >> "$GITHUB_STEP_SUMMARY"
           fi
           exit "${{ steps.e2e.outputs.rc || 1 }}"
 
@@ -138,8 +141,8 @@ jobs:
         with:
           name: browser-report
           path: |
-            web/playwright-report/
-            web/test-results/
+            valio-aimo/web/playwright-report/
+            valio-aimo/web/test-results/
           if-no-files-found: ignore
           retention-days: 14
 
@@ -147,6 +150,6 @@ jobs:
         if: always()
         with:
           name: visual-baselines-linux
-          path: web/e2e/visual/__screenshots__/linux/
+          path: valio-aimo/web/e2e/visual/__screenshots__/linux/
           if-no-files-found: ignore
           retention-days: 30
