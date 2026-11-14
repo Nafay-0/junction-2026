@@ -96,11 +96,11 @@ describe("reissuing a built-in kitchen's mandate with a remembered rule", () => 
     await expect(reissueKitchenMandate(rt, now.info, offer.patch, BY)).rejects.toMatchObject({ status: 409, code: "rule_already_in_mandate" });
   });
 
-  it("only the kitchen's own signed-in person can do it: an open demo console cannot", async () => {
+  it("only the kitchen's own signed-in account can do it: a stranger cannot", async () => {
     const { offer, k } = await lactoseFreeOffer();
     const res = await memoryPost(new Request("http://dock.test/ui-api/memory/kitchens/kaari", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "mandate", itemId: offer.itemId, decision: "added" }) }), { params: Promise.resolve({ kitchen: "kaari" }) } as never);
     expect(res.status).toBe(401);
-    expect((await res.json()).error.code).toBe("kitchen_person_required");
+    expect((await res.json()).error.code).toBe("not_signed_in");
     const { dock } = await getRuntime();
     await expect(dock.authenticate(k.mandateToken, k.agentId)).resolves.toBeDefined(); // nothing was reissued
   });

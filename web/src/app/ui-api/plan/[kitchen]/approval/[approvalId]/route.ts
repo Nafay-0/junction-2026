@@ -1,4 +1,5 @@
 import { demoApprovalQr } from "@/server/presenter";
+import { accountApprovalQr } from "@/server/accounts/approval-qr";
 import { errorBody, handle } from "@/server/http";
 import { withKitchen } from "../../../_shared";
 
@@ -13,9 +14,13 @@ export async function GET(req: Request, ctx: RouteContext<"/ui-api/plan/[kitchen
   return handle(async (rt) => {
     const { dock } = rt;
     const { kitchen: slug, approvalId } = await ctx.params;
-    const { kitchen } = await withKitchen(slug);
+    const { kitchen } = await withKitchen(slug, req);
     const c = await dock.approvalContext(approvalId);
     if (c.order.orgId !== kitchen.mandate.issuer.orgId) return Response.json(errorBody("approval_not_found", "No such sign-off for this kitchen."), { status: 404 });
+    if (slug !== "kaari" && slug !== "laakso") {
+      const base = { approver: { name: c.approval.approver.name, role: c.approval.approver.role }, status: c.approval.status, orderId: c.order.orderId };
+      return Response.json(await accountApprovalQr(rt, req, { orgId: c.order.orgId, role: c.approval.approver.role, ...base }, approvalId));
+    }
     return Response.json(await demoApprovalQr(rt, req, slug, approvalId));
   });
 }

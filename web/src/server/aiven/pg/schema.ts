@@ -132,6 +132,16 @@ create table if not exists ${S}.account_sessions (
 );
 create index if not exists account_sessions_user_idx   on ${S}.account_sessions (username);
 create index if not exists account_sessions_expiry_idx on ${S}.account_sessions (expires_at);
+create table if not exists ${S}.account_links (
+  token_hash text        primary key check (token_hash ~ '^[0-9a-f]{64}$'),
+  username   text        not null references ${S}.accounts (username) on delete cascade,
+  purpose    text        not null check (purpose in ('device', 'session')),
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists account_links_expiry_idx on ${S}.account_links (expires_at);
+comment on table ${S}.account_links is 'One-time links an account shows as a QR code (add a signing device, continue on a phone): SHA-256 of the token only; deleted on use.';
+
 comment on table ${S}.account_sessions is 'Signed-in browsers: SHA-256 of the session cookie, never the cookie itself. Ended by signing out.';
 
 -- Read-only access for Grafana (role created in infra/telemetry.sql); skipped where the role does not exist.
@@ -140,7 +150,7 @@ do $$ begin
     execute 'grant usage on schema ${S} to grafana_reader';
     execute 'grant select on all tables in schema ${S} to grafana_reader';
     -- but never the accounts: password hashes, sessions and the kitchens' keys stay with the app
-    execute 'revoke all on ${S}.accounts, ${S}.account_sessions from grafana_reader';
+    execute 'revoke all on ${S}.accounts, ${S}.account_sessions, ${S}.account_links from grafana_reader';
   end if;
 end $$;
 

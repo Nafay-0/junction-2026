@@ -1,3 +1,6 @@
+import { redirect } from "next/navigation";
+import { ACCOUNT_COOKIE } from "@/server/accounts/http";
+import { USERNAME_RE } from "@/server/accounts/names";
 import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
 import { connection } from "next/server";
@@ -19,7 +22,7 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1, view
 /**
  * /call: what the call QR code opens on a phone. A visitor who has joined calls their own kitchen's agent;
  * one who has not joins first (one passkey tap), then lands here again in the call.
- * /call?k=kaari or ?k=laakso calls a demo kitchen (the console preview), under the same caps.
+ * /call?k=<kitchen> calls an account's kitchen (a stage kitchen's too) on a phone signed in to that account.
  */
 export default function Call(props: PageProps<"/call">) {
   return (
@@ -51,8 +54,14 @@ async function Resolve(props: PageProps<"/call">) {
 async function Which({ searchParams }: PageProps<"/call">) {
   await connection();
   const k = (await searchParams).k;
-  if (k === "kaari" || k === "laakso") return <CallPage kitchen={k} visitor={false} />;
   const rt = await getRuntime();
+  if (typeof k === "string" && USERNAME_RE.test(k)) {
+    // An account's kitchen (the stage kitchens too): this phone must be signed in to that account, which the call
+    // QR code does for it (a one-time link, /k/handoff). Anyone else is sent to sign in.
+    const signedIn = await rt.accounts.session((await cookies()).get(ACCOUNT_COOKIE)?.value);
+    if (signedIn?.account.username !== k) redirect(`/k?as=${encodeURIComponent(k)}`);
+    return <CallPage kitchen={k} visitor />;
+  }
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   const account = await rt.passkeys.sessionApprover(token);
   const sandbox = account ? await rt.sandboxes.forApprover(account.approverId) : undefined;

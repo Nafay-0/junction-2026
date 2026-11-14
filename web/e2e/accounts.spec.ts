@@ -35,6 +35,21 @@ async function signUp(page: Page, username: string, restaurant: string) {
   await expect(page.getByTestId("signed-in-as")).toContainText(`Signed in as ${username}, for ${restaurant}.`);
 }
 
+/**
+ * A milk product the live answer says can be ordered for the next delivery now (price known, no cut-off passed, no
+ * problem), with its price per pack; undefined when none of a dozen is.
+ */
+async function orderableNow(page: Page, kitchen: string): Promise<{ productId: string; unitPriceCents: number } | undefined> {
+  const list = (await (await page.request.get(`/ui-api/kitchens/${kitchen}/catalog?q=maito&limit=12`)).json()) as { products: { id: string }[] };
+  const ids = list.products.map((p) => p.id);
+  for (let i = 0; i < ids.length; i += 5) {
+    const r = (await (await page.request.post(`/ui-api/kitchens/${kitchen}/catalog/live`, { data: { productIds: ids.slice(i, i + 5) } })).json()) as { results?: { productId: string; offer?: { unitPriceCents: number }; problems: unknown[] }[] };
+    const ok = r.results?.find((x) => x.offer && x.problems.length === 0);
+    if (ok) return { productId: ok.productId, unitPriceCents: ok.offer!.unitPriceCents };
+  }
+  return undefined;
+}
+
 async function signOut(page: Page) {
   await page.getByRole("button", { name: "Sign out" }).first().click();
   await page.waitForURL("**/k");
@@ -52,17 +67,21 @@ async function signIn(page: Page, username: string) {
 
 test("a restaurant signs up, orders within its limit, comes back to its order and memory; nobody else sees them", async ({ page, browser }) => {
   test.setTimeout(180_000);
-  // The order step needs a product that can be ordered for the next delivery right now. On the partner's live test
-  // catalogue that depends on the hour (order cut-offs, unknown stock), so this runs on the seed: DOCK_CATALOG=seed.
   const health = (await (await page.request.get("/api/health")).json()) as { catalog?: { source?: string } };
-  test.skip(health.catalog?.source === "valio", "run with DOCK_CATALOG=seed: the live catalogue's cut-offs decide whether anything is orderable now");
+  const live = health.catalog?.source === "valio";
   const a = `e2e-a-${stamp}`;
   await signUp(page, a, `Ravintola E2E ${stamp}`);
   await shot(page, "05-shop-home");
 
-  // An order within the €300 limit through the basket: a live price, then the same gate as the agent.
-  await page.goto(`/k/${a}/catalogue?q=milk`);
-  const add = page.getByRole("button", { name: /^Add a / }).first();
+  // An order within the €300 limit through the basket: a live price, then the same gate as the agent. On the
+  // partner's live catalogue, whether a product can be ordered for the next delivery depends on the hour (order
+  // cut-offs, stock the partner does not confirm), so the test asks the live answer first and orders a product it
+  // says is orderable now; if none of a dozen milk products is, it says so and skips rather than guessing.
+  const pick = live ? await orderableNow(page, a) : undefined;
+  test.skip(live && !pick, "the live answer says no milk product can be ordered for the next delivery right now (order cut-offs, unconfirmed stock)");
+  const productId = pick?.productId;
+  await page.goto(productId ? `/k/${a}/catalogue/${productId}` : `/k/${a}/catalogue?q=milk`);
+  const add = page.getByRole("button", { name: /^Add (a |to basket|\d)/ }).first();
   await expect(add).toBeVisible({ timeout: 30_000 });
   await add.click();
   await page.goto(`/k/${a}/basket`);
@@ -122,7 +141,7 @@ test("a restaurant signs up, orders within its limit, comes back to its order an
 test("an order above the limit waits for a signing device, then is signed with this device's passkey", async ({ page }) => {
   test.setTimeout(180_000);
   const health = (await (await page.request.get("/api/health")).json()) as { catalog?: { source?: string } };
-  test.skip(health.catalog?.source === "valio", "run with DOCK_CATALOG=seed");
+  const live = health.catalog?.source === "valio";
   const cdp = await page.context().newCDPSession(page);
   await cdp.send("WebAuthn.enable");
   await cdp.send("WebAuthn.addVirtualAuthenticator", {
@@ -131,11 +150,15 @@ test("an order above the limit waits for a signing device, then is signed with t
   const user = `e2e-s-${stamp}`;
   await signUp(page, user, `Signer E2E ${stamp}`);
 
-  // 30 packs is over the €300 limit: the gate holds it for the signer, and there is no device yet.
-  await page.goto(`/k/${user}/catalogue?q=milk`);
-  await page.getByRole("button", { name: /^Add a / }).first().click();
+  // Over the €300 limit: the gate holds it for the signer, and there is no device yet. On the live catalogue, a product
+  // the live answer says is orderable now, in enough packs to pass the limit (see the first test).
+  const pick = live ? await orderableNow(page, user) : undefined;
+  test.skip(live && !pick, "the live answer says no milk product can be ordered for the next delivery right now");
+  const packs = pick ? Math.ceil(40_000 / Math.max(1, pick.unitPriceCents)) : 30;
+  await page.goto(pick ? `/k/${user}/catalogue/${pick.productId}` : `/k/${user}/catalogue?q=milk`);
+  await page.getByRole("button", { name: /^Add (a |to basket|\d)/ }).first().click();
   await page.goto(`/k/${user}/basket`);
-  await page.getByRole("textbox", { name: /^Quantity in / }).fill("30");
+  await page.getByRole("textbox", { name: /^Quantity in / }).fill(String(packs));
   await page.getByRole("button", { name: "Get a fixed price" }).click();
   await page.getByRole("button", { name: "Place the order" }).click();
   await expect(page.getByText(/no signing device yet/).first()).toBeVisible({ timeout: 30_000 });

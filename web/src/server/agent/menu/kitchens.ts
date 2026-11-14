@@ -23,7 +23,8 @@ import type { DietRules } from "./safety";
  */
 
 export type MenuKitchenInfo = {
-  slug: "kaari" | "laakso";
+  /** kaari, laakso, or a restaurant account's kitchen (its username). */
+  slug: string;
   name: string;
   kind: string;
   city: string;
@@ -54,7 +55,9 @@ const PANTRY = ["salt", "black pepper", "white pepper", "sugar", "wheat flour", 
 
 type Def = Omit<MenuKitchenInfo, "mandate"> & { orgId: string; orgName: string; agentId: string; mandate: (now: Date, categories: string[]) => Mandate; diet: DietRules };
 
-const DEFS: Record<MenuKitchenInfo["slug"], Def> = {
+type DemoMenuSlug = "kaari" | "laakso";
+
+const DEFS: Record<DemoMenuSlug, Def> = {
   kaari: {
     slug: "kaari",
     name: "Ravintola Kaari",
@@ -146,13 +149,13 @@ const DEFS: Record<MenuKitchenInfo["slug"], Def> = {
   },
 };
 
-export const MENU_KITCHENS = Object.keys(DEFS) as MenuKitchenInfo["slug"][];
+export const MENU_KITCHENS = Object.keys(DEFS) as DemoMenuSlug[];
 
 const TOKEN_TTL_MS = 60 * 60 * 1000;
 const g = globalThis as typeof globalThis & { __dockMenuTokens?: Map<string, { token: string; mandate: Mandate; at: number }> };
 
 /** The buyer console's own mandate of each kitchen: what the organisation signed for its purchasing agent. */
-const CONSOLE_MANDATE: Record<MenuKitchenInfo["slug"], (now: Date) => Mandate> = { kaari: (now) => demoKitchenMandate(now), laakso: (now) => demoMandate(now) };
+const CONSOLE_MANDATE: Record<DemoMenuSlug, (now: Date) => Mandate> = { kaari: (now) => demoKitchenMandate(now), laakso: (now) => demoMandate(now) };
 
 /** Required claims a gate can enforce on every food line as a forbidden allergen (milk without the claim carries lactose). */
 const CLAIM_AS_ALLERGEN: Record<string, string> = { lactose_free: "lactose", gluten_free: "gluten" };
@@ -198,12 +201,12 @@ export function menuRules(def: Pick<Def, "diet" | "rules">, consoleMandate: Pick
   };
 }
 
-export async function resolveMenuKitchen(slug: string, rt: Pick<Runtime, "catalog"> & Partial<Pick<Runtime, "kitchens" | "mandates">>, now = new Date()): Promise<MenuKitchen | undefined> {
-  const def = DEFS[slug as MenuKitchenInfo["slug"]];
-  if (!def) return undefined;
+export async function resolveMenuKitchen(slug: string, rt: Pick<Runtime, "catalog"> & Partial<Pick<Runtime, "kitchens" | "mandates" | "accounts">>, now = new Date()): Promise<MenuKitchen | undefined> {
+  const def = DEFS[slug as DemoMenuSlug];
+  if (!def) return rt.accounts ? accountMenuKitchen(slug, rt as Pick<Runtime, "kitchens" | "accounts">, now) : undefined;
   const profile = await rt.kitchens?.getProfile(def.orgId);
   // The console mandate as it stands now: with what the kitchen added by reissuing it (server/mandates.ts).
-  const consoleMandate = rt.mandates ? rt.mandates.restrict(CONSOLE_MANDATE[def.slug](now)) : CONSOLE_MANDATE[def.slug](now);
+  const consoleMandate = rt.mandates ? rt.mandates.restrict(CONSOLE_MANDATE[def.slug as DemoMenuSlug](now)) : CONSOLE_MANDATE[def.slug as DemoMenuSlug](now);
   const derived = menuRules(def, consoleMandate, profile, now);
   g.__dockMenuTokens ??= new Map();
   const cacheKey = `${slug}|${derived.diet.mandateAllergens.join(",")}`;
@@ -240,5 +243,55 @@ export async function resolveMenuKitchen(slug: string, rt: Pick<Runtime, "catalo
     agentId,
     mandate: m,
     diet,
+  };
+}
+
+/**
+ * A restaurant account's kitchen in the menu planner. Its menu agent carries a second mandate signed with the
+ * kitchen's own key (held for it, accounts/service.ts) and never wider than the kitchen's buyer mandate: the same
+ * product groups, limits, budget and signer, and every allergen and diet rule the kitchen holds (the mandate, stated
+ * rules, memory rules), with a required lactose-free or gluten-free as a forbidden allergen, as for the stage kitchens.
+ */
+async function accountMenuKitchen(slug: string, rt: Pick<Runtime, "kitchens" | "accounts">, now: Date): Promise<MenuKitchen | undefined> {
+  const found = await rt.accounts.kitchenOf(slug);
+  if (!found) return undefined;
+  const { account: a, kitchen: k } = found;
+  const buyer = k.mandate;
+  const profile = await rt.kitchens.getProfile(k.orgId);
+  const derived = menuRules({ diet: { forbiddenAllergens: [], requiredClaims: [], mandateAllergens: [] }, rules: [] }, buyer, profile, now);
+  const agentId = `${k.agentId}_menu`;
+  const mandate: Mandate = {
+    ...buyer,
+    mandateId: `${buyer.mandateId}_menu`,
+    agentId,
+    validFrom: new Date(now.getTime() - 60_000).toISOString(),
+    requiredAttributes: [],
+    forbiddenAllergens: derived.diet.mandateAllergens,
+  };
+  return {
+    info: {
+      slug,
+      name: a.restaurant,
+      kind: "professional kitchen",
+      city: "",
+      agentName: `${a.restaurant}'s menu agent`,
+      by: `${a.restaurant} (signed in as ${a.username})`,
+      rules: derived.rules,
+      pantry: PANTRY,
+      mandate: {
+        perOrderLimitCents: mandate.perOrderLimitCents,
+        weeklyBudgetCents: mandate.weeklyBudgetCents,
+        forbiddenAllergens: mandate.forbiddenAllergens,
+        maxLeadDays: mandate.delivery.maxLeadDays,
+        substitution: mandate.substitution,
+        approvers: mandate.approvers.map((x) => ({ name: x.name, role: x.role, maxApprovalCents: x.maxApprovalCents })),
+        categories: mandate.allowedCategories.length,
+      },
+      examples: ["Salmon soup for 120 on Friday", "Lunch for 80 tomorrow: chicken and rice, lactose-free", "Lohikeitto 100 annosta perjantaiksi"],
+    },
+    mandateToken: await rt.accounts.signForKitchen(slug, mandate),
+    agentId,
+    mandate,
+    diet: derived.diet,
   };
 }

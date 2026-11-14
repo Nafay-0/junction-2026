@@ -10,26 +10,35 @@ import { presenterRoles } from "@/server/presenter";
 import { resetMemoryService } from "./runtime";
 import { enterOps } from "@/server/ops/access";
 import { OPS_COOKIE } from "./staff";
+import { sessionCookieFor } from "@/server/accounts/test-session";
 
 /** The routes the kitchen portal and the operations portal call, end to end on the in-process runtime. */
 
 process.env.DOCK_MEMORY_LLM = "off"; // no model calls in tests: taps and statements only
 let STAFF: { cookie: string };
+/** The stage kitchens' own signed-in accounts: their stores are closed to anyone else (server/authz.ts). */
+let OWN: Record<string, string> = {};
 
-beforeEach(() => {
+beforeEach(async () => {
   resetRuntime();
   resetMemoryService();
+  const rt = await getRuntime();
+  OWN = { kaari: await sessionCookieFor(rt, "kaari"), laakso: await sessionCookieFor(rt, "laakso") };
   STAFF = { cookie: `${OPS_COOKIE}=${encodeURIComponent(enterOps({ name: "Pirjo (customer service)", passcode: process.env.DOCK_OPS_PASSCODE }).token)}` };
 });
 
 const params = (kitchen: string) => ({ params: Promise.resolve({ kitchen }) }) as never;
-const req = (path: string, body?: unknown, headers: Record<string, string> = {}) =>
-  new Request(`http://dock.test${path}`, { method: body === undefined ? "GET" : "POST", headers: { "content-type": "application/json", ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
+/** As the kitchen's own account unless a cookie is given, or `anonymous` (a stranger). */
+const req = (path: string, body?: unknown, headers: Record<string, string> = {}, anonymous = false) => {
+  const own = OWN[/^\/ui-api\/memory\/kitchens\/([^/]+)/.exec(path)?.[1] ?? ""];
+  const cookie = headers.cookie ?? (anonymous ? undefined : own);
+  return new Request(`http://dock.test${path}`, { method: body === undefined ? "GET" : "POST", headers: { "content-type": "application/json", ...headers, ...(cookie ? { cookie } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
+};
 const json = async (r: Response) => ({ status: r.status, body: await r.json() });
 
 const view = async (k: string) => json(await kitchenMemory.GET(req(`/ui-api/memory/kitchens/${k}`), params(k)));
 
-/** The presenter enrolled as a demo kitchen's approver: that kitchen's own signed-in person (server/authz.ts). */
+/** A presenter enrolled as a demo kitchen's approver (their phone's cookie): not the kitchen's account. */
 async function presenterCookie(slug: string): Promise<string> {
   const rt = await getRuntime();
   const role = presenterRoles(slug)![0];
@@ -38,8 +47,8 @@ async function presenterCookie(slug: string): Promise<string> {
   await rt.passkeys.enrol({ approverId, orgId: role.orgId, role: role.role, name: role.name, userHandle: "", createdAt: new Date().toISOString(), expiresAt: expiresAt.toISOString() });
   return `dock_approver=${encodeURIComponent(await rt.passkeys.newSession(approverId, expiresAt))}`;
 }
-const act = async (k: string, b: unknown) => json(await kitchenMemory.POST(req(`/ui-api/memory/kitchens/${k}`, b, { cookie: await presenterCookie(k) }), params(k)));
-const actAnon = async (k: string, b: unknown) => json(await kitchenMemory.POST(req(`/ui-api/memory/kitchens/${k}`, b), params(k)));
+const act = async (k: string, b: unknown) => json(await kitchenMemory.POST(req(`/ui-api/memory/kitchens/${k}`, b), params(k)));
+const actAnon = async (k: string, b: unknown) => json(await kitchenMemory.POST(req(`/ui-api/memory/kitchens/${k}`, b, {}, true), params(k)));
 
 describe("kitchen memory routes", () => {
   it("lists what the demo kitchen remembers, including the rule its head chef stated", async () => {
@@ -49,13 +58,16 @@ describe("kitchen memory routes", () => {
     expect(body.items.some((i: { kind: string }) => i.kind === "standing_order")).toBe(true); // Monday and Thursday milk, from six weeks of history
   });
 
-  it("a stranger at a demo kitchen's open console can read its rules but not forget, correct or state one (QA F-PORTAL-MEMORY-OPEN)", async () => {
+  it("a stranger can neither read nor change a stage kitchen's memory; a presenter's phone is not its account (QA F-PORTAL-MEMORY-OPEN)", async () => {
     const before = await view("kaari");
     const rule = before.body.items.find((i: { text: string }) => i.text === "Always lactose-free");
+    expect((await json(await kitchenMemory.GET(req("/ui-api/memory/kitchens/kaari", undefined, {}, true), params("kaari")))).status).toBe(401);
+    const presenter = await presenterCookie("kaari");
     for (const b of [{ action: "forget", itemId: rule.id }, { action: "correct", itemId: rule.id, text: "Any milk" }, { action: "state", fact: { kind: "goal", goal: "price" } }, { action: "audience", itemId: rule.id, audience: "private" }]) {
       const r = await actAnon("kaari", b);
       expect(r.status).toBe(401);
-      expect(r.body.error.code).toBe("kitchen_person_required");
+      expect(r.body.error.code).toBe("not_signed_in");
+      expect((await kitchenMemory.POST(req("/ui-api/memory/kitchens/kaari", b, { cookie: presenter }), params("kaari"))).status).toBe(401);
     }
     expect((await view("kaari")).body.items.some((i: { id: string }) => i.id === rule.id)).toBe(true);
   });
