@@ -12,9 +12,8 @@ export async function GET(req: Request, ctx: RouteContext<"/ui-api/kitchens/[kit
   return portalRoute(req, ctx.params, async (k) => {
     const orderId = new URL(req.url).searchParams.get("order") ?? "";
     if (!/^ord_[A-Za-z0-9]{1,40}$/.test(orderId)) throw new DockError(400, "invalid_request", "Name the order: ?order=ord_…");
+    // Read only, and only this kitchen's: kitchenRulesThen answers nothing for an order of another organisation.
     const { dock } = await getRuntime();
-    const session = await dock.authenticate(k.mandateToken, k.agentId);
-    await dock.getOrder(session, orderId); // 404 unless it is this kitchen's own order
-    return Response.json(await kitchenRulesThen(dock, session.mandate.issuer.orgId, orderId), noStore);
+    return Response.json(await kitchenRulesThen(dock, k.info.orgId, orderId), noStore);
   });
 }

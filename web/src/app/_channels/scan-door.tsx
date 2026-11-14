@@ -7,6 +7,7 @@ import type { PublicOrder } from "@/core/orders";
 import type { LineStatus, ScanLine } from "@/server/channels/scan/lines";
 import type { ScanResult } from "@/server/channels/scan/read";
 import type { StepReply } from "@/server/channels/scan/door";
+import { MenuPlanner, type MenuPlannerProps } from "../_plan/menu-planner";
 import { useFormat, useText } from "../_i18n/provider";
 import { OrderCard, StepCards, type Act } from "./cards";
 import { SCAN_TEXT } from "./scan-door.text";
@@ -81,6 +82,12 @@ export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorPr
   const [error, setError] = useState<ReadError | null>(null);
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [busy, setBusy] = useState(false);
+  // A kitchen with a menu planner takes a list of two or more lines as one plan: one quote, one order, one sign-off.
+  const [planner, setPlanner] = useState(false);
+  const [listed, setListed] = useState<NonNullable<MenuPlannerProps["items"]>>();
+  useEffect(() => {
+    void fetch(`/ui-api/plan/${encodeURIComponent(kitchen)}`, { cache: "no-store" }).then((r) => setPlanner(r.ok), () => setPlanner(false));
+  }, [kitchen]);
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
 
@@ -169,7 +176,14 @@ export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorPr
   );
 
   function start() {
-    const q: QueueItem[] = sendable.map((row) => ({ row, state: "waiting" }));
+    // Litres, kilos and pieces plan as written; a pack count depends on the product's pack, so it goes on its own.
+    const plannable = planner ? sendable.filter((r) => r.unit !== "pack") : [];
+    if (plannable.length >= 2) {
+      setListed({ list: plannable.map((r) => ({ item: r.item!, amount: r.amount!, unit: r.unit! })), deliverBy: deliverBy.trim() || undefined, source: result?.kind });
+    }
+    const rest = plannable.length >= 2 ? sendable.filter((r) => !plannable.includes(r)) : sendable;
+    if (!rest.length) return;
+    const q: QueueItem[] = rest.map((row) => ({ row, state: "waiting" }));
     setQueue(q);
     void run(q, 0);
   }
@@ -351,7 +365,7 @@ export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorPr
                 );
               })}
             </ul>
-            {queue.length === 0 && (
+            {queue.length === 0 && !listed && (
               <div className="flex flex-wrap gap-2">
                 <button type="button" disabled={!sendable.length} onClick={start} className="min-h-12 bg-petrol px-4 font-semibold text-paper disabled:opacity-40">
                   {tx.send(sendable.length)}
@@ -371,6 +385,12 @@ export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorPr
             {focused?.box && <p className="sr-only">{tx.highlighted(focused.read)}</p>}
           </div>
         </div>
+      )}
+
+      {listed && (
+        <section className="space-y-3" aria-label="The list as one order">
+          <MenuPlanner kitchen={kitchen} items={listed} />
+        </section>
       )}
 
       {queue.length > 0 && (

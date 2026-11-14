@@ -40,7 +40,7 @@ export type TimeMachineView = {
   now: string;
   kitchens: { orgId: string; name: string; scenario: boolean }[];
   orders: OrderListItem[];
-  order?: OrderListItem & { body: Pick<OrderBody, "createdAt" | "lines" | "requestId" | "agentId" | "request" | "recorded"> };
+  order?: OrderListItem & { body: Pick<OrderBody, "createdAt" | "lines" | "requestId" | "agentId" | "request" | "recorded" | "door"> };
   rulesAt: Described[];
   rulesNow: Described[];
   changes: ReturnType<typeof describeChange>[];
@@ -126,7 +126,7 @@ export async function timeMachineView(db: Maria, q: Query): Promise<TimeMachineV
     now,
     kitchens: ks,
     orders: list.rows,
-    order: orderItem && body ? { ...orderItem, body: { createdAt: body.createdAt, lines: body.lines, requestId: body.requestId, agentId: body.agentId, request: body.request, recorded: body.recorded } } : undefined,
+    order: orderItem && body ? { ...orderItem, body: { createdAt: body.createdAt, lines: body.lines, requestId: body.requestId, agentId: body.agentId, request: body.request, recorded: body.recorded, door: body.door } } : undefined,
     rulesAt: describe(rulesAt.rows),
     rulesNow: describe(rulesNow.rows),
     changes: raw.map(describeChange),

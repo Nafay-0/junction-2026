@@ -64,6 +64,9 @@ describe.skipIf(!url)("the audit time machine on a real MariaDB", () => {
     expect(B.replay!.thenVsNow.map((d) => d.rule).sort()).toEqual(["per_order_limit", "weekly_budget"]);
     expect(B.replay!.termsDisagree).toEqual([]);
     expect(B.changes.some((c) => c.what.includes("€400 to €1,000"))).toBe(true);
+    // The door the request came through is recorded with the order and shown with it.
+    expect(B.order!.body.door).toBe("mcp");
+    expect(B.orders.find((o) => o.orderId === sc.orders.B)?.doorText).toBe("an outside agent over MCP");
   });
 
   it("slides an order to the recall drill and to the night the agent was suspended", async () => {
@@ -72,6 +75,9 @@ describe.skipIf(!url)("the audit time machine on a real MariaDB", () => {
     const atHold = await timeMachineView(db, { orderId: sc.orders.D, at: new Date(Date.parse(hold) + 3_600_000).toISOString() });
     expect(atHold.replay!.at.outcome).toBe("reject");
     expect(atHold.replay!.atVsNow.map((d) => d.rule)).toContain("recall_hold");
+    // The gate's own rule, not a check beside it: it appears once, in the gate's rule list, with the drill's reason.
+    expect(atHold.replay!.at.rules.filter((r) => r.rule === "recall_hold")).toMatchObject([{ outcome: "fail" }]);
+    expect(atHold.replay!.at.rules.find((r) => r.rule === "recall_hold")!.reason).toContain("Recall drill");
     const atSus = await timeMachineView(db, { orderId: sc.orders.D, at: new Date(Date.parse(sus) + 1_800_000).toISOString() });
     expect(atSus.replay!.at.outcome).toBe("refused_at_door");
     expect(atSus.rulesAt.some((r) => r.area === "suspension")).toBe(true);
@@ -113,6 +119,7 @@ describe.skipIf(!url)("the audit time machine on a real MariaDB", () => {
     const [q] = await fake.embed([docs.find((d) => d.orderId === sc.orders.B)!.explanation]);
     const like = await similarTo(db, q, 3);
     expect(like.rows[0].orderId).toBe(sc.orders.B);
+    expect(like.rows[0].doorText).toBe("an outside agent over MCP");
     expect(like.rows[0].termsThen?.perOrderLimitCents).toBe(40_000); // the limit as it stood at B's moment, not today's €1,000
     expect(like.sql).toContain("FOR SYSTEM_TIME ALL");
     expect(like.sql).toContain("VEC_DISTANCE_COSINE");

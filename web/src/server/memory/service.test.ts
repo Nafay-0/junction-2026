@@ -126,7 +126,9 @@ describe("what the wholesaler's staff can see", () => {
     const shown = v.kitchens[0].items;
     expect(shown.map((i) => i.kind)).toEqual(["allergen"]);
     expect(shown[0]).toMatchObject({ audience: "shared", confirmedBy: { by: "Leena Aho" }, sources: [expect.objectContaining({ quote: expect.stringContaining("nut") })] });
-    expect(JSON.stringify(v)).not.toMatch(/wedding|900/);
+    // The private note and budget must not leak. Match their content, not a bare "900": random hex ids
+    // (item, interaction and source ids) contain "900" in about one run in fifty, which made this test flaky.
+    expect(JSON.stringify(v)).not.toMatch(/wedding|90_?000|€\s?900\b|\b900\s?€|weeklyCents/i);
     const kitchenSide = await svc.view(A);
     expect(kitchenSide.staffReads).toEqual([{ by: "Pirjo (customer service)", at: NOW.toISOString(), items: 1 }]);
     expect(kitchenSide.sharedWithWholesaler).toEqual([shown[0].id]);

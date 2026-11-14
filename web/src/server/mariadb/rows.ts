@@ -1,6 +1,6 @@
 import type { KitchenProfile } from "@/core/kitchen";
 import type { Mandate } from "@/core/mandate";
-import type { Order, PurchaseRequest } from "@/core/orders";
+import type { Door, Order, PurchaseRequest } from "@/core/orders";
 import type { RuleOutcome } from "@/core/policy";
 import { addDays, canonicalJson } from "@/core/util";
 import type { Hold } from "../radar/types";
@@ -67,7 +67,9 @@ export type OrderBody = {
   draftLines: Order["draftLines"];
   /** The mandate the agent presented with this order (its own snapshot, kept to cross-check the mirror's). */
   mandate: Mandate;
-  request?: { text?: string; neededBy?: string; asked?: PurchaseRequest["asked"] };
+  request?: { text?: string; neededBy?: string; asked?: PurchaseRequest["asked"]; deliverOn?: string };
+  /** Which door the request came through (server-set; core/orders.ts Door). Absent on requests made before doors were recorded. */
+  door?: Door;
   unverified?: { code: string; message: string; by: string }[];
   /** What the gate decided when the order arrived, as the ledger has it. */
   recorded: { outcome: Order["decision"]["outcome"]; rules: { rule: string; outcome: RuleOutcome; reason: string }[]; approver?: string };
@@ -189,7 +191,8 @@ export function orderBody(o: Order, request?: PurchaseRequest, unverified?: { co
     quote: o.quote,
     draftLines: o.draftLines,
     mandate: o.mandate,
-    request: request ? { text: request.text, neededBy: request.neededBy, asked: request.asked } : undefined,
+    request: request ? { text: request.text, neededBy: request.neededBy, asked: request.asked, ...(request.deliverOn ? { deliverOn: request.deliverOn } : {}) } : undefined,
+    ...(request?.door ? { door: request.door } : {}),
     unverified: unverified?.length ? unverified : undefined,
     // The order's decision as it stands (a refusal at the re-check before sign-off replaces the first one; both are in the ledger).
     recorded: {
@@ -308,3 +311,4 @@ export const allColumns = (table: TableName) => {
   const s = SPECS[table];
   return [...s.key, ...s.versioned, ...s.quiet, ...s.meta];
 };
+

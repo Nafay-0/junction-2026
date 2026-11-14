@@ -132,6 +132,35 @@ describe("ValioLiveClient", () => {
     expect(n).toBe(2);
   });
 
+  // QA F-SLOW-PARTNER-WAIT: a partner answering 429 with Retry-After: 30, or hanging, kept the buyer 30 to 36 s.
+  it("does not sleep on a Retry-After longer than the lookup's deadline: it fails at once, saying when to retry", async () => {
+    const limited = (async () => new Response("{}", { status: 429, headers: { "retry-after": "30" } })) as unknown as typeof fetch;
+    const { c, sleeps } = client(fakeValioApi({}), { fetch: limited });
+    await expect(c.lookup(["1"], "2026-11-16")).rejects.toMatchObject({ code: "rate_limited", status: 429, retryAfterSeconds: 30 });
+    expect(sleeps).toHaveLength(0);
+  });
+
+  it("gives a hanging partner the deadline in all, not a timeout per retry", async () => {
+    let n = 0;
+    const hanging = (async (_u: unknown, init?: RequestInit) => {
+      n += 1;
+      return new Promise<Response>((_, reject) => init?.signal?.addEventListener("abort", () => reject(Object.assign(new Error("timeout"), { name: "TimeoutError" }))));
+    }) as typeof fetch;
+    const c = new ValioLiveClient({ baseUrl: "https://valio.test", apiKey: "k", fetch: hanging, timeoutMs: 5000, deadlineMs: 300, maxRetries: 3 });
+    const t0 = Date.now();
+    await expect(c.lookup(["1"], "2026-11-16")).rejects.toMatchObject({ code: "timeout", retryAfterSeconds: 30 });
+    expect(Date.now() - t0).toBeLessThan(1500);
+    expect(n).toBe(2); // one call each for price and availability, cut at the deadline; no retry past it
+  });
+
+  it("still retries short waits within the deadline", async () => {
+    const api = fakeValioApi({ "1": { price: 1 } }, { failFirst: [429] });
+    const { c, sleeps } = client(api, { deadlineMs: 8000 });
+    const [r] = await c.lookup(["1"], "2026-11-16");
+    expect(r.price?.ok).toBe(true);
+    expect(sleeps).toEqual([1000]);
+  });
+
   it("checks inputs and needs a key", () => {
     expect(() => new ValioLiveClient({ baseUrl: "x", apiKey: "" })).toThrow(ValioApiError);
     const { c } = client(fakeValioApi({}));

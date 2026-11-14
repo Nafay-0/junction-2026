@@ -40,8 +40,14 @@ that `init/01-test-databases.sql` lets the `dock` user create.
 | `gate_budget` | kitchen: committed and held spend of the last 7 days | the orders, as the gate counts them |
 | `gate_order` | order: status, outcome, who authorised it | the order store |
 
-`gate_order_body` keeps each order as it was put to the gate (quote, lines, request); `gate_decision` keeps the
-ledger's plain-language decisions with their embeddings. Neither changes, so neither is versioned.
+`gate_order_body` keeps each order as it was put to the gate (quote, lines, request, and the door it came through:
+the store, the assistant, voice, a photo, the menu planner, MCP, a connector address or REST); `gate_decision` keeps
+the ledger's plain-language decisions with their embeddings and door. Neither changes, so neither is versioned.
+
+Recall holds are judged by the gate's own rule `recall_hold`: the replay hands the holds in force at the chosen moment
+to `evaluatePolicy` exactly as `createDock`'s `ProductHolds` does. Suspensions are checked at the door, in front of the
+gate, as the app does; they are read from the ledger's `control` entries until the core persists them (the switch point
+is marked in `web/src/server/mariadb/attach.ts`).
 
 The application writes nothing but `INSERT`, `UPDATE` and `DELETE` on current rows (`web/src/server/mariadb/mirror.ts`);
 MariaDB keeps every earlier version with its `ROW_START` and `ROW_END`. The mirror is told "something may have
@@ -74,7 +80,7 @@ mandate v1 (€400 per order alone, €3,000 a week, lactose-free only); order A
 B, 500 L of milk for €645, signed off by the kitchen manager; a week later the kitchen manager adds "Never gluten" and
 the mandate is reissued to forbid gluten; a recall drill holds the 10 L milk box for two days; order D buys that box
 after the hold is lifted; operations suspend the agent for a night; the limit is raised to €1,000; in the last week
-the budget fills. Two other kitchens order in the background. 78 orders in all, every one through the real gate.
+the budget fills. Two other kitchens order in the background. Each kitchen's agent comes through one door (Aurinko over MCP, the hotel over REST, the café through a connector address), recorded with every request. 78 orders in all, every one through the real gate.
 
 ## The answers it prints
 
@@ -97,22 +103,23 @@ Saturday 14 Nov 2026, an Apple M3 Pro laptop (18 GB), MariaDB 12.3.3 in Docker D
 container cap), Node 25, the official `mariadb` connector 3.5.4. Times are measured in Node around `pool.query`, so
 they include the round trip to the container; 200 runs after 5 warm-up runs; median and 95th percentile. The full
 output is in [`results-2026-11-14.txt`](results-2026-11-14.txt). Other agents were building on the same machine, so
-expect noise: across three runs the 100,000-version single lookup measured 0.45 to 2.4 ms.
+expect noise: across four runs the 100,000-version single lookup measured 0.45 to 2.4 ms. This is the run after
+merging the integration branch (holds as a gate rule, doors recorded); the replay answers are the same as before it.
 
 **Rows** after the scenario: 89 current rows and 92 history versions in the six versioned tables (181 in all); every
 table is one or two 16 KiB InnoDB pages.
 
 | Query | Median | p95 |
 |---|---|---|
-| The rules `AS OF` a past moment (view over five versioned tables) | 0.62 ms | 1.45 ms |
-| The rules `AS OF` now | 0.64 ms | 1.47 ms |
-| Every version `FROM` then `TO` now (the changes) | 0.95 ms | 1.81 ms |
-| The whole page answer for one order (8 statements and 3 gate runs, 50 runs) | 6.69 ms | 8.83 ms |
-| Combined: vector nearest neighbours joined to `FOR SYSTEM_TIME ALL` (78 decisions) | 1.71 ms | 2.76 ms |
-| One agent's terms `AS OF` 200 days back, table with 100,000 history versions | 0.45 ms | 0.75 ms |
-| All 100 agents `AS OF` that moment, same table (scan) | 13.43 ms | 14.21 ms |
+| The rules `AS OF` a past moment (view over five versioned tables) | 0.96 ms | 2.21 ms |
+| The rules `AS OF` now | 0.63 ms | 1.40 ms |
+| Every version `FROM` then `TO` now (the changes) | 1.34 ms | 3.13 ms |
+| The whole page answer for one order (8 statements and 3 gate runs, 50 runs) | 5.99 ms | 10.65 ms |
+| Combined: vector nearest neighbours joined to `FOR SYSTEM_TIME ALL` (78 decisions) | 4.00 ms | 8.87 ms |
+| One agent's terms `AS OF` 200 days back, table with 100,000 history versions | 1.78 ms | 3.64 ms |
+| All 100 agents `AS OF` that moment, same table (scan) | 15.57 ms | 23.17 ms |
 
-The 100,000-version table (100 agents, 1,000 versions each, loaded in 10.5 s, 9.5 MiB) is dropped afterwards.
+The 100,000-version table (100 agents, 1,000 versions each, loaded in 15.1 s, 7.5 MiB) is dropped afterwards.
 
 ## Vector search: did it earn its place?
 
@@ -133,9 +140,10 @@ SELECT n.order_id, n.at, n.outcome, n.rules_hit, n.explanation, n.distance,
 
 Method: ten questions a member of staff might type ("milk that was not lactose free", "it would have come too
 late"), each judged by the rule that actually decided each returned decision (from the ledger, not by eye).
-Precision at 5 over the 78 decisions: **vector 0.62**, MariaDB's own `FULLTEXT` on the same text **0.20** (it
-returned nothing for four of the ten questions), best possible on this corpus 0.72 (some rules occur fewer than five
-times; one question has no relevant decision at all). Embeddings: OpenAI `text-embedding-3-small`, about 4,000
+Result: vector search found the right decisions in 44% of top-five slots on 10 questions over 78 templated decisions (precision at 5: 0.44), against 20% for MariaDB's own `FULLTEXT` on the same text (it returned
+nothing for four of the ten questions); best possible on this corpus 72% (some rules occur fewer than five times; one
+question has no relevant decision at all). Before the integration branch reworded the gate's reasons (substitutes now
+named in full, so many decisions say "lactose-free milk") the same run measured 62%; a second run after it, 46%. Embeddings: OpenAI `text-embedding-3-small`, about 4,000
 tokens per run, under $0.0001.
 
 Limits of that result: 78 decisions written by templates, ten questions written by us, one run. It shows the vector

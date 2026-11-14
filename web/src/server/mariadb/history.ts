@@ -1,5 +1,6 @@
 import { isoTime, json, sqlTime, type Maria } from "./client";
 import type { OrderBody } from "./rows";
+import { doorText } from "./words";
 
 /**
  * The questions the time machine answers, each one SQL statement against MariaDB's own history. Every answer
@@ -58,12 +59,12 @@ export async function moments(db: Maria, orgId: string): Promise<Shown<{ area: A
   return { rows: r.rows.map((x) => ({ area: String(x.area) as Area, item: String(x.item), inForce: Number(x.in_force) === 1, by: String(x.changed_by), at: isoTime(x.since)! })), sql: r.sql, params: r.params, ms: r.ms };
 }
 
-export type OrderListItem = { orderId: string; orgId: string; orgName: string; agentId: string; status: string; outcome: string; totalCents: number; createdAt: string; summary: string; scenario: boolean };
+export type OrderListItem = { orderId: string; orgId: string; orgName: string; agentId: string; status: string; outcome: string; totalCents: number; createdAt: string; summary: string; scenario: boolean; door?: string; doorText?: string };
 
 export async function listOrders(db: Maria, limit = 300): Promise<Shown<OrderListItem[]>> {
   const r = await db.query(
     `SELECT o.order_id, o.org_id, o.agent_id, o.status, o.outcome, o.total_cents, o.created_at, o.writer,
-            JSON_VALUE(b.body, '$.orgName') AS org_name, JSON_QUERY(b.body, '$.lines') AS order_lines
+            JSON_VALUE(b.body, '$.orgName') AS org_name, JSON_VALUE(b.body, '$.door') AS door, JSON_QUERY(b.body, '$.lines') AS order_lines
        FROM gate_order o JOIN gate_order_body b ON b.order_id = o.order_id
       ORDER BY o.created_at DESC LIMIT ?`,
     [limit],
@@ -82,6 +83,7 @@ export async function listOrders(db: Maria, limit = 300): Promise<Shown<OrderLis
         createdAt: isoTime(x.created_at)!,
         summary: lines.map((l) => `${l.quantity} × ${l.name}`).join(" + "),
         scenario: String(x.writer) === "scenario",
+        ...(x.door ? { door: String(x.door), doorText: doorText(String(x.door)) } : {}),
       };
     }),
     sql: r.sql,

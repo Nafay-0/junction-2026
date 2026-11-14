@@ -1,5 +1,5 @@
 import type { Mandate } from "@/core/mandate";
-import { RULES, evaluatePolicy, type Decision, type PolicyContext, type RecentOrder, type RuleOutcome } from "@/core/policy";
+import { evaluatePolicy, type Decision, type PolicyContext, type ProductHold, type RecentOrder, type RuleOutcome } from "@/core/policy";
 import { formatEur } from "@/core/util";
 import { mandateRow, type OrderBody } from "./rows";
 import type { RuleRow } from "./history";
@@ -14,7 +14,8 @@ import type { RuleRow } from "./history";
  * confirmations, the moment of ordering (so a quote that was valid then is valid in both runs) and the kitchen's
  * other orders of that day (the splitting check). What comes from the chosen moment: the mandate's terms (limits,
  * budget, categories, claims, allergens, certificates, lead time, substitution, approvers), the week's spend, the
- * wholesaler's recall holds and any suspension at the door. A quote is never counted as used: the question is
+ * wholesaler's recall holds (the gate's own rule recall_hold) and any suspension at the door (checked in front of
+ * the gate, as the app does). A quote is never counted as used: the question is
  * whether this order, presented fresh, would get through.
  */
 
@@ -70,8 +71,6 @@ export function termsDisagree(body: OrderBody, mirrored?: RuleRow): string[] {
   return Object.keys(own).filter((k) => !["issued_as", "changed_by", "mandate_id", "valid_from", "valid_until"].includes(k) && JSON.stringify(own[k]) !== JSON.stringify(fromMirror[k]));
 }
 
-const gateHasHoldRule = (RULES as readonly string[]).includes("recall_hold");
-
 export function judge(body: OrderBody, state: StateAt, recentOrders: RecentOrder[]): Verdict {
   const weekOrders = ((state.budget?.value.weekOrders as { orderId: string; totalCents: number; status: string; expiresAt?: string }[] | undefined) ?? []).filter((o) => o.orderId !== body.orderId);
   const spentCents = weekOrders.reduce((s, o) => s + o.totalCents, 0);
@@ -90,7 +89,7 @@ export function judge(body: OrderBody, state: StateAt, recentOrders: RecentOrder
   const mandate = mandateWithTerms(body.mandate, state.mandate.value);
   Object.assign(read, { perOrderLimitCents: mandate.perOrderLimitCents, weeklyBudgetCents: mandate.weeklyBudgetCents, forbiddenAllergens: mandate.forbiddenAllergens, requiredAttributes: mandate.requiredAttributes });
 
-  const ctx: PolicyContext & { holds?: { productId: string; name?: string; reason: string; url?: string; drill?: boolean }[] } = {
+  const ctx: PolicyContext = {
     now: new Date(body.createdAt),
     spentThisWeekCents: spentCents,
     heldThisWeekCents: heldCents,
@@ -98,22 +97,12 @@ export function judge(body: OrderBody, state: StateAt, recentOrders: RecentOrder
     ...(body.unverified?.length ? { unverifiedConfirmations: body.unverified } : {}),
     quoteAlreadyUsed: false,
     recentOrders,
-    // The gate's own recall_hold rule reads these (once the core has it); see below for a core without it.
-    holds: holds.map((h) => ({ productId: String(h.value.productId), name: String(h.value.productName), reason: String(h.value.reason), url: String(h.value.noticeUrl), drill: h.value.drill === true })),
+    // The gate's own recall_hold rule reads these, exactly as createDock's ProductHolds hands them over.
+    holds: holds.map((h): ProductHold => ({ productId: String(h.value.productId), name: String(h.value.productName), reason: String(h.value.reason), url: String(h.value.noticeUrl), drill: h.value.drill === true })),
   };
-  const decision = evaluatePolicy(mandate, { agentId: body.agentId, quote: body.quote, lines: body.draftLines, neededBy: body.request?.neededBy, requestId: body.requestId, asked: body.request?.asked }, ctx);
+  const decision = evaluatePolicy(mandate, { agentId: body.agentId, quote: body.quote, lines: body.draftLines, neededBy: body.request?.neededBy, deliverOn: body.request?.deliverOn, requestId: body.requestId, asked: body.request?.asked }, ctx);
   const rules: RuleVerdict[] = decision.rules.map((r) => ({ rule: r.rule, outcome: r.outcome, reason: r.reason }));
   let outcome: Verdict["outcome"] = decision.outcome;
-  if (!gateHasHoldRule) {
-    // This build's gate has no recall_hold rule: the hold is enforced in front of it (server/radar/gate.ts), with the
-    // same name and the same effect, so it is reported beside the gate's own rules.
-    rules.push(
-      holds.length
-        ? { rule: "recall_hold", outcome: "fail", reason: holds.map((h) => `${h.value.drill ? "DRILL, not a real recall: " : ""}${String(h.value.productName)} (${String(h.value.productId)}) is held by the wholesaler: ${String(h.value.reason)}`).join(" ") }
-        : { rule: "recall_hold", outcome: "pass", reason: "No product is on a recall hold." },
-    );
-    if (holds.length) outcome = "reject";
-  }
   if (!door.open) outcome = "refused_at_door";
   const approver = decision.outcome === "needs_human_approval" ? `${decision.approver.name} (${decision.approver.role})` : undefined;
   return { at: state.at, outcome, headline: headline(outcome, decision, rules, door, approver), door, rules, approver, read };

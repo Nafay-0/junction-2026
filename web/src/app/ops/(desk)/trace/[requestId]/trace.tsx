@@ -195,6 +195,7 @@ function Trace({ t, error }: { t: TraceView; error?: string }) {
               <span className="font-semibold">{t.orgName}</span>
               <span className="text-ink-soft">{t.agentLabel}</span>
               <ViaTag via={t.via} />
+              {t.doorText && <span className="text-ink-soft">through {t.doorText}</span>}
               <Licence licence={t.licence} />
               <span className="text-ink-soft tabular">
                 {stamp(t.startedAt)}, {n} step{n === 1 ? "" : "s"} in {span(Date.parse(t.endedAt) - t0)}

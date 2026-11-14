@@ -4,7 +4,7 @@ import { InMemoryKitchenRepository, addStatedPreference, emptyProfile, type Kitc
 import { generateEd25519KeyPair, type KeyPair } from "@/core/keys";
 import { InMemoryLedgerStore, Ledger, type LedgerEntry } from "@/core/ledger";
 import { createTrustRegistry, signMandate, type Mandate } from "@/core/mandate";
-import { DockError, InMemoryDockRepository, createDock, type AgentSession, type DockDeps, type PublicOrder } from "@/core/orders";
+import { DockError, InMemoryDockRepository, createDock, type AgentSession, type DockDeps, type Door, type PublicOrder } from "@/core/orders";
 import { SEED_PRODUCTS, SEED_STOCK } from "@/core/seed";
 import { addDays } from "@/core/util";
 import { SuspensionRegistry } from "../ops/suspensions";
@@ -35,9 +35,10 @@ import type { GateSources } from "./rows";
  */
 
 export const SCENARIO_WRITER = "scenario";
-export const AURINKO = { orgId: "org_demo_aurinko", name: "Koulukeittiö Aurinko (seeded scenario)", agentId: "agent_aurinko_buyer" };
-const SATAMA = { orgId: "org_demo_satama", name: "Hotelli Satama (seeded scenario)", agentId: "agent_satama_buyer" };
-const LINNA = { orgId: "org_demo_linna", name: "Kahvila Linna (seeded scenario)", agentId: "agent_linna_buyer" };
+// Each kitchen's agent comes through one door (core/orders.ts Door), as server code would set it.
+export const AURINKO = { orgId: "org_demo_aurinko", name: "Koulukeittiö Aurinko (seeded scenario)", agentId: "agent_aurinko_buyer", door: "mcp" as Door };
+const SATAMA = { orgId: "org_demo_satama", name: "Hotelli Satama (seeded scenario)", agentId: "agent_satama_buyer", door: "rest" as Door };
+const LINNA = { orgId: "org_demo_linna", name: "Kahvila Linna (seeded scenario)", agentId: "agent_linna_buyer", door: "connector" as Door };
 
 export type ScenarioResult = {
   anchor: string;
@@ -46,8 +47,8 @@ export type ScenarioResult = {
   /** Moments worth sliding to. */
   moments: { label: string; at: string }[];
   ledger: LedgerEntry[];
-  /** For "decisions like this one": who each order belongs to. */
-  owner: Map<string, { orgId: string; agentId: string }>;
+  /** For "decisions like this one": who each order belongs to, and the door its request came through. */
+  owner: Map<string, { orgId: string; agentId: string; door?: string }>;
   counts: { orders: number; decisions: number; refusals: number; syncs: number; rows: { insert: number; update: number; touch: number; delete: number } };
 };
 
@@ -105,7 +106,7 @@ export async function runScenario(db: Maria, opts: { now?: Date; log?: (line: st
   const outbox = new InMemoryOutbox();
   const ledgerStore = new InMemoryLedgerStore();
   const holds: Hold[] = [];
-  const deps: DockDeps & { holds?: { holdsFor(ids: string[]): { productId: string; name?: string; reason: string; url?: string; drill?: boolean }[] } } = {
+  const deps: DockDeps = {
     catalog: new MeteredCatalog(new InMemoryCatalog(SEED_PRODUCTS, SEED_STOCK, clock)),
     repo,
     ledger: new Ledger(ledgerStore, clock),
@@ -114,7 +115,7 @@ export async function runScenario(db: Maria, opts: { now?: Date; log?: (line: st
     notifier: outbox,
     now: clock,
     kitchens,
-    // A gate with the recall_hold rule (core/orders.ts ProductHolds) reads the holds here; an older one ignores it.
+    // The gate's recall_hold rule reads the holds through createDock's ProductHolds, as the radar's are in the app.
     holds: { holdsFor: (ids) => holds.filter((h) => !h.liftedAt && ids.includes(h.productId)).map((h) => ({ productId: h.productId, name: h.productName, reason: h.reason, url: h.noticeUrl, drill: h.drill })) },
   };
   const dock = createDock(deps);
@@ -139,7 +140,7 @@ export async function runScenario(db: Maria, opts: { now?: Date; log?: (line: st
 
   async function issue(k: typeof AURINKO, version: number, terms: Partial<Mandate>) {
     const m = mandateOf(k, version, clock(), terms);
-    sessions.set(k.agentId, await dock.authenticate(await signMandate(m, keys.get(k.orgId)!), k.agentId));
+    sessions.set(k.agentId, { ...(await dock.authenticate(await signMandate(m, keys.get(k.orgId)!), k.agentId)), door: k.door });
     presented.set(k.agentId, m);
     await sync();
   }
@@ -309,7 +310,8 @@ export async function runScenario(db: Maria, opts: { now?: Date; log?: (line: st
 
   const st = mirror.status();
   const ledger = ledgerStore.all().map((e) => structuredClone(e));
-  const owner = new Map((await repo.listOrders()).map((o) => [o.orderId, { orgId: o.orgId, agentId: o.agentId }]));
+  const owner = new Map<string, { orgId: string; agentId: string; door?: string }>();
+  for (const o of await repo.listOrders()) owner.set(o.orderId, { orgId: o.orgId, agentId: o.agentId, door: (await repo.getRequest(o.requestId))?.door });
   return {
     anchor: anchor.toISOString(),
     orders: ids,

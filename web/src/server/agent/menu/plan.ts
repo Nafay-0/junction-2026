@@ -1,5 +1,6 @@
 import { MAX_LIVE_IDS_PER_CALL, usableOffer, type LiveOffer, type LiveStatus, type Product } from "@/core/catalog";
 import { formatAmount as formatMeasure } from "@/core/catalog/pack";
+import { piecesPerSalesUnit } from "@/core/catalog/product";
 import { formatDay } from "@/core/kitchen";
 import type { Mandate } from "@/core/mandate";
 import { buildOptions, formatCutoff, type OptionCard } from "@/core/options";
@@ -259,7 +260,18 @@ function toChosen(c: OptionCard, products: Map<string, Product>): ChosenOption {
 export function optionsFor(amount: Amount, candidates: Candidate[], live: LiveData, mandate: Mandate, now: Date, neededBy: string | null) {
   const statuses = candidates.map((c) => live.statuses[c.product.id]).filter((s): s is LiveStatus => !!s);
   const offers = statuses.map(usableOffer).filter((o): o is LiveOffer => !!o);
-  const products = candidates.filter((c) => live.statuses[c.product.id]).map((c) => c.product);
+  let products = candidates.filter((c) => live.statuses[c.product.id]).map((c) => c.product);
+  // Pieces (eggs, tortillas): each product is counted by the pieces its pack holds, when the data says how many;
+  // a product whose pack does not say is left out with that reason rather than counted in packages.
+  const uncounted: { productId: string; reason: string; code: "wrong_unit" }[] = [];
+  if (amount.unit === "pcs") {
+    products = products.flatMap((p) => {
+      const n = piecesPerSalesUnit(p);
+      if (n) return [{ ...p, unit: "pcs" as const, packSize: n, packContent: undefined }];
+      uncounted.push({ productId: p.id, reason: "the pack does not say how many pieces it holds, so Dock will not guess the number of packs", code: "wrong_unit" });
+      return [];
+    });
+  }
   const res = buildOptions({
     amount: { amount: amount.amount, unit: amount.unit },
     candidates: products,
@@ -271,7 +283,13 @@ export function optionsFor(amount: Amount, candidates: Candidate[], live: LiveDa
     spentThisWeekCents: 0,
     goal: "price",
   });
-  return res;
+  return uncounted.length ? { ...res, excluded: [...uncounted, ...res.excluded] } : res;
+}
+
+/** Peeled, sliced, diced or grated produce: the trimming loss a raw one has is already gone. */
+const PRE_PREPARED = /(kuorit|peeled|skalad|kuutioi|diced|viipal|sliced|skivad|raaste|raastet|grated|riven|suikal|strips|pilko|chopped|hackad|paloit)/;
+export function isPrePrepared(p: Product): boolean {
+  return PRE_PREPARED.test([p.names?.fi, p.names?.en, p.names?.sv, p.name].filter(Boolean).join(" ").toLowerCase());
 }
 
 const doubtId = (lineId: string, kind: DoubtKind, extra = "") => `${lineId}:${kind}${extra ? `:${extra}` : ""}`;
@@ -321,8 +339,8 @@ function evaluateLine(spec: LineSpec, input: PlanInput): PlanLineView {
   const keyWords = spec.key.split("_").filter((w) => w.length >= 4);
   const conflict = input.draft.conflicts.find((c) => keyWords.some((w) => c.toLowerCase().includes(w)));
   if (conflict && allergenRefused) addDoubt("rule_conflict", `The request clashes with a kitchen rule: ${conflict}`, undefined, "conflict");
-  if (spec.uses.some((u) => u.perCover.unit === "pcs")) {
-    addDoubt("amount_check", "Counted in pieces, but the catalogue's packs are not counted in pieces, so AimoPilot will not guess how many packs that is. Give the amount per cover in g or ml, or strike the line.", undefined, "pieces");
+  if (spec.uses.some((u) => u.perCover.unit === "pcs") && !set.candidates.some((c) => piecesPerSalesUnit(c.product))) {
+    addDoubt("amount_check", "Counted in pieces, but none of the products found says how many pieces its pack holds, so AimoPilot will not guess how many packs that is. Give the amount per cover in g or ml, or strike the line.", undefined, "pieces");
     return finish(view);
   }
 
@@ -343,8 +361,30 @@ function evaluateLine(spec: LineSpec, input: PlanInput): PlanLineView {
   // Products whose allergen data shows the rules are met go first; held ones only if nothing else can be had.
   const pricedCands = set.candidates.filter((c) => priced.includes(c.product.id));
   const okCands = pricedCands.filter((c) => c.safety.verdict === "ok");
-  let res = optionsFor(gross, okCands.length ? okCands : pricedCands, input.live, input.mandate, input.now, input.settings.deliverBy);
-  if (okCands.length && res.cards.length === 0 && okCands.length < pricedCands.length) res = optionsFor(gross, pricedCands, input.live, input.mandate, input.now, input.settings.deliverBy);
+  let pool = okCands.length ? okCands : pricedCands;
+  const run = (amount: Amount, cands: Candidate[]) => optionsFor(amount, cands, input.live, input.mandate, input.now, input.settings.deliverBy);
+  let res = run(gross, pool);
+  if (okCands.length && res.cards.length === 0 && okCands.length < pricedCands.length) res = run(gross, (pool = pricedCands));
+  // A product already peeled or cut has no peeling loss: it is bought by the net amount, the raw one with the
+  // allowance, and the cheaper of the two goes first (the chef can take the other card).
+  const loss = edits?.yieldPct === undefined && uses.some((u) => u.yieldPct < 100);
+  const prepared = loss ? pool.filter((c) => isPrePrepared(c.product)) : [];
+  if (prepared.length) {
+    const raw = pool.filter((c) => !isPrePrepared(c.product));
+    const net = grossOf(spec, { ...edits, yieldPct: 100 }, covers);
+    const a = raw.length ? run(gross, raw) : undefined;
+    const b = run(net.gross, prepared);
+    const bCards = b.cards.map((c) => ({ ...c, optionId: `prepared_${c.optionId}` }));
+    const takeB = edits?.optionId ? bCards.some((c) => c.optionId === edits.optionId) : bCards.length > 0 && (!a?.cards.length || bCards[0].totalCents < a.cards[0].totalCents);
+    const aCards = a?.cards ?? [];
+    res = { cards: takeB ? [...bCards, ...aCards] : [...aCards, ...bCards], excluded: [...(a?.excluded ?? []), ...b.excluded], notes: [...(a?.notes ?? []), ...b.notes] };
+    if (takeB) {
+      view.uses = net.uses;
+      view.gross = net.gross;
+      const w = net.uses.length > 1 ? `${net.uses.map((u) => u.working.split(" = ").slice(-1)[0]).join(" + ")} = ${formatAmt(net.gross)}` : (net.uses[0]?.working ?? "");
+      view.working = `${w} (already peeled or cut: no peeling allowance)`;
+    }
+  }
   const products = new Map(set.candidates.map((c) => [c.product.id, c.product]));
   const names = new Map(set.candidates.map((c) => [c.product.id, c.product.name]));
   view.excluded.unshift(...res.excluded.map((e) => ({ productId: e.productId, name: names.get(e.productId) ?? e.productId, reason: e.reason })));

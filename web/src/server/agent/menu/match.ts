@@ -1,5 +1,5 @@
 import type { InMemoryCatalog, Product } from "@/core/catalog";
-import { toDockProduct } from "@/core/catalog/product";
+import { piecesPerSalesUnit, toDockProduct } from "@/core/catalog/product";
 import { fold } from "@/core/catalog/search";
 import type { ValioCatalog } from "../../valio/valio-catalog";
 import type { DraftIngredient } from "./draft";
@@ -59,9 +59,51 @@ const FORM_WORDS: Record<string, string[]> = {
 const names = (p: Product) => ` ${fold([p.names?.fi, p.names?.en, p.names?.sv, p.name].filter(Boolean).join(" "))} `;
 const hasWord = (hay: string, w: string) => new RegExp(`(?<![a-z])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`).test(hay);
 
+// ---------- stock: powder, liquid concentrate and ready stock are dosed differently ----------
+
+export type StockForm = "powder" | "paste" | "liquid_concentrate" | "ready";
+const STOCK_WORDS = /(stock|broth|bouillon|buljong|fond|liemi|lient|fumet)/;
+
+/** Is this ingredient a stock, and which form its per-cover amount was written for. Undefined when it is not stock. */
+export type StockNeed = "dry" | "paste" | "liquid_concentrate" | "ready";
+export function stockNeed(ing: DraftIngredient): StockNeed | undefined {
+  const text = fold([ing.key.replace(/_/g, " "), ing.name, ...ing.searchTerms, ing.amountBasis].join(" "));
+  if (!STOCK_WORDS.test(text)) return undefined;
+  if (ing.perCover.unit === "g") return /(paste|tahna|gel|fond du chef)/.test(text) && !/(powder|jauhe|granul|cube|kuutio)/.test(text) ? "paste" : "dry";
+  if (ing.perCover.unit === "ml") return /(concentrate|tiiviste|koncentrat)/.test(text) && !/(ready|valmis|replacing)/.test(text) ? "liquid_concentrate" : "ready";
+  return undefined;
+}
+
+/** The form of a stock product, from its name and its pack (a powder's pack may say the litres it makes). */
+export function stockForm(p: Product): StockForm | undefined {
+  const n = names(p);
+  if (!STOCK_WORDS.test(n)) return undefined;
+  if (/(jauhe|powder|pulver|granul|rake|kuutio|cube|tarning|\d\s*kg\s*\/\s*\d+\s*l\b|\d+\s*g\s*\/\s*l\b)/.test(n)) return "powder";
+  if (/(tahna|paste|fond du chef|annosfondi|gel)/.test(n)) return "paste";
+  if (/(tiiviste|concentrate|koncentrat|touch of taste)/.test(n)) return "liquid_concentrate";
+  if (/(tetra|valmis|ready)/.test(n) || p.unit === "L" || (!!p.packContent?.certainMeasures.includes("L") && !p.packContent.certainMeasures.includes("kg"))) return "ready";
+  return p.unit === "kg" || p.packContent?.certainMeasures.includes("kg") ? "powder" : undefined;
+}
+
+/**
+ * Whether a stock product can be bought by an amount written for another form: grams of powder are not grams of
+ * a liquid concentrate (a concentrate takes two to three times as much), and millilitres of ready stock are not
+ * millilitres of concentrate (which makes twenty times its volume). Undefined when it can; the reason otherwise.
+ */
+export function stockMismatch(ing: DraftIngredient, p: Product): string | undefined {
+  const need = stockNeed(ing);
+  const form = need && stockForm(p);
+  if (!need || !form) return undefined;
+  const ok: Record<StockNeed, StockForm[]> = { dry: ["powder", "paste"], paste: ["paste", "powder"], liquid_concentrate: ["liquid_concentrate"], ready: ["ready", "powder"] };
+  if (ok[need].includes(form)) return undefined;
+  const words: Record<StockNeed, string> = { dry: "powder", paste: "paste", liquid_concentrate: "liquid concentrate", ready: "ready-to-use stock" };
+  const what = words[need];
+  return `${form.replace("_", " ")}, where the ${ing.perCover.amount} ${ing.perCover.unit} per cover is for ${what}: it is dosed differently, so the amount would be wrong`;
+}
+
 export function usableMeasure(ing: DraftIngredient, p: Product): boolean {
   const u = ing.perCover.unit;
-  if (u === "pcs") return p.unit === "pcs";
+  if (u === "pcs") return piecesPerSalesUnit(p) !== undefined; // counted only when the pack says how many pieces it holds
   const m = u === "g" ? "kg" : "L";
   if (p.packContent) return p.packContent.certainMeasures.includes(m) || (p.packContent.perSalesUnit[m] ?? 0) > 0;
   return p.unit === m;
@@ -109,6 +151,11 @@ export async function findCandidates(catalog: MenuCatalog, ing: DraftIngredient,
     }
     if (!usableMeasure(ing, p)) {
       reject(p, `sold in a measure the ${ing.perCover.unit} amount cannot be converted to without guessing`);
+      continue;
+    }
+    const dose = stockMismatch(ing, p);
+    if (dose) {
+      reject(p, dose);
       continue;
     }
     const prepared = PREPARED.find((w) => hasWord(n, w) && !head.some((t) => t.includes(w)) && !fold(ing.name).includes(w));

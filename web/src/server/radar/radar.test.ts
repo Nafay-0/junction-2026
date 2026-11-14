@@ -202,9 +202,14 @@ describe("the hold at the gate", () => {
     await drillAndPickUp("VA-1001");
     const refusedQuote = await quote(rt.dock, "VA-1001", 10).catch((e: unknown) => e);
     expect(refusedQuote).toMatchObject({ rule: "recall_hold", code: "product_on_recall_hold" });
-    const refusedOrder = await rt.dock.placeOrder(session, { requestId: before.req.requestId, quoteToken: before.quoteToken, lines: linesOf(before.quote) }).catch((e: unknown) => e);
-    expect(refusedOrder).toMatchObject({ rule: "recall_hold", status: 409 });
-    const details = (refusedOrder as { details: { noticeUrl: string; alternatives: { productId: string }[] } }).details;
+    // The order quoted before the hold: the gate itself refuses it, by the named rule, and keeps it with the reason.
+    const refusedOrder = await rt.dock.placeOrder(session, { requestId: before.req.requestId, quoteToken: before.quoteToken, lines: linesOf(before.quote) });
+    expect(refusedOrder.status).toBe("rejected");
+    const rule = refusedOrder.decision.rules.find((x) => x.rule === "recall_hold")!;
+    expect(rule.outcome).toBe("fail");
+    expect(rule.reason).toMatch(/^DRILL, not a real recall: .*\(VA-1001\) is held by the wholesaler.*\/ui-api\/radar\/drill\//);
+    expect(r.store.activeHolds(["VA-1001"])[0].refusals).toBe(2); // the quote and the order
+    const details = (refusedQuote as { details: { noticeUrl: string; alternatives: { productId: string }[] } }).details;
     expect(details.noticeUrl).toMatch(/\/ui-api\/radar\/drill\//);
     expect(details.alternatives.map((a) => a.productId)).not.toContain("VA-1001");
     expect(details.alternatives.length).toBeGreaterThan(0);
@@ -213,10 +218,12 @@ describe("the hold at the gate", () => {
     expect(status).toMatchObject({ orderable: false, problems: expect.arrayContaining(["sales_block"]) });
     expect(status.message).toMatch(/Held by the wholesaler: DRILL/);
     const refusals = rt.dock.ledger.entries().filter((e) => e.type === "refusal" && e.data.rule === "recall_hold");
-    expect(refusals).toHaveLength(2);
+    expect(refusals).toHaveLength(1); // the quote; the order's refusal is the gate's own decision entry
+    const decision = rt.dock.ledger.entries().find((e) => e.type === "decision" && e.orderId === refusedOrder.orderId)!;
+    expect(decision.summary).toMatch(/recall_hold|held by the wholesaler/);
   });
 
-  it("flags a waiting order to its approver, refuses its approval, still lets them decline", async () => {
+  it("flags a waiting order to its approver, and the gate's re-check at sign-off refuses to commit it", async () => {
     const big = await quote(rt.dock, "VA-1001", 1000); // €1,490: over the €1,000 the agent may spend alone
     const order = await rt.dock.placeOrder(session, { requestId: big.req.requestId, quoteToken: big.quoteToken, lines: linesOf(big.quote) });
     expect(order.status).toBe("pending_approval");
@@ -225,9 +232,19 @@ describe("the hold at the gate", () => {
     const view = await approvalViewFor(rt, new Request("http://x/"), msg.approvalId);
     expect(view.recall?.[0]).toMatchObject({ productId: "VA-1001", drill: true });
     const token = new URL(msg.link, "http://x").searchParams.get("token")!;
-    const approve = await rt.dock.decideApproval(msg.approvalId, { decision: "approve", proof: { kind: "link_token", token } }).catch((e: unknown) => e);
-    expect(approve).toMatchObject({ rule: "recall_hold", status: 409 });
-    expect((await rt.dock.getOrder(session, order.orderId)).status).toBe("pending_approval");
+    const approved = await rt.dock.decideApproval(msg.approvalId, { decision: "approve", proof: { kind: "link_token", token } });
+    expect(approved.status).toBe("rejected");
+    expect(approved.confirmation).toBeUndefined();
+    expect(approved.decision.rules.find((x) => x.rule === "recall_hold")).toMatchObject({ outcome: "fail" });
+    expect(r.store.activeHolds(["VA-1001"])[0].refusals).toBe(1);
+  });
+
+  it("a waiting order can still be declined while its product is held", async () => {
+    const big = await quote(rt.dock, "VA-1001", 1000);
+    await rt.dock.placeOrder(session, { requestId: big.req.requestId, quoteToken: big.quoteToken, lines: linesOf(big.quote) });
+    await drillAndPickUp("VA-1001");
+    const [msg] = rt.outbox.messages();
+    const token = new URL(msg.link, "http://x").searchParams.get("token")!;
     const declined = await rt.dock.decideApproval(msg.approvalId, { decision: "decline", proof: { kind: "link_token", token }, note: "Recall hold" });
     expect(declined.status).toBe("declined");
   });

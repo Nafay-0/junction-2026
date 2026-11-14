@@ -1,6 +1,7 @@
 import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
 import type { Product } from "@/core/catalog";
+import { alsoAskedIn } from "@/core/also-asked";
 import { DockError } from "@/core/errors";
 import { recordLlmSpend, reserveLlmCall } from "@/server/limits";
 import { addDaysIso, isoWeekday, localNow } from "@/core/kitchen";
@@ -9,6 +10,7 @@ import { createModel, defaultModel, ModelConfigError, type ModelOptions } from "
 import { costOf, tokensFromUsage, type Price, type Tokens } from "./pricing";
 import { interpretSystem, interpretUser, type Vocabulary } from "./prompts";
 import { describeError, isRetryable, withRetry } from "./retry";
+import { groundInterpretation } from "./interpret-grounding";
 
 /**
  * Job 1: a buyer's free text (English, Finnish or Swedish) to the structured need, and nothing more.
@@ -77,6 +79,10 @@ export type InterpretOptions = {
   timeoutMs?: number;
   /** The kitchen's earlier requests, newest first, for follow-ups that refer to one. */
   earlier?: EarlierRequest[];
+  /** More text the need may rest on besides the buyer's words (the kitchen's remembered rules): see interpret-grounding.ts. */
+  evidence?: string[];
+  /** What the kitchen's memory recalls for this request (server/memory/recall.ts forInterpreter): context, never copied into the need. */
+  memory?: string;
 };
 
 const WEEKDAYS: [string, string, string][] = [
@@ -177,6 +183,16 @@ export function toNeed(raw: LlmNeed, text: string): StructuredNeed {
   return parsed.data;
 }
 
+/**
+ * Tests only: the model every interpretation uses when the caller passes none (a scripted AI SDK model), so tests
+ * that go through the routes (the OpenAPI "every documented route succeeds" test) never reach a provider.
+ * Production code never calls this; `undefined` restores the configured model.
+ */
+let modelForTests: InterpretOptions["model"] | undefined;
+export function setInterpretModelForTests(model: Exclude<InterpretOptions["model"], string> | undefined): void {
+  modelForTests = model;
+}
+
 export async function interpretNeed(opts: InterpretOptions): Promise<InterpretResult> {
   const text = opts.text.trim();
   if (!text) throw new DockError(400, "invalid_request", "text must not be empty.");
@@ -185,9 +201,10 @@ export async function interpretNeed(opts: InterpretOptions): Promise<InterpretRe
   let model: LanguageModel;
   let id: string;
   let price: Price | undefined;
-  if (opts.model && typeof opts.model !== "string") ({ model, id, price } = opts.model);
+  const given = opts.model ?? modelForTests;
+  if (given && typeof given !== "string") ({ model, id, price } = given);
   else {
-    const spec = opts.model ?? defaultModel("DOCK_INTERPRET_MODEL");
+    const spec = (typeof given === "string" ? given : undefined) ?? defaultModel("DOCK_INTERPRET_MODEL");
     if (!spec) throw new DockError(503, "model_unavailable", "No model is configured for interpretation: set DOCK_INTERPRET_MODEL or a provider API key.");
     try {
       const m = createModel(spec, opts.modelOptions);
@@ -213,7 +230,7 @@ export async function interpretNeed(opts: InterpretOptions): Promise<InterpretRe
         generateText({
           model,
           instructions: interpretSystem(opts.vocabulary ?? { categories: [], attributes: [], allergens: [] }, earlier.length > 0),
-          prompt: interpretUser(text, calendar(now), earlier.length ? earlierBlock(earlier) : undefined),
+          prompt: interpretUser(text, calendar(now), earlier.length ? earlierBlock(earlier) : undefined, opts.memory || undefined),
           output: Output.object({ schema, name: "structured_need", description: "The buyer's need, with unstated fields left empty." }),
           maxOutputTokens: 4000,
           maxRetries: 0,
@@ -226,7 +243,8 @@ export async function interpretNeed(opts: InterpretOptions): Promise<InterpretRe
     const status = isRetryable(err) ? 503 : 502;
     throw new DockError(status, "interpret_failed", `The model call failed: ${describeError(err)}`);
   }
-  const raw = res.output as LlmNeed | LlmFollowUp;
+  // Nothing the buyer did not say: a claim, allergen, product, amount or date with no backing is removed (grounding check).
+  const raw = groundInterpretation(res.output as LlmNeed | LlmFollowUp, { text, earlier, extra: opts.evidence }).raw;
   const tokens = tokensFromUsage(res.usage);
   recordLlmSpend(costOf(tokens, price));
   const basedOn = earlier.length ? checkBasedOn(raw as LlmFollowUp, earlier) : undefined;
@@ -270,13 +288,29 @@ export const InterpretResponse = z.object({
   model: z.string().describe("provider:model-id that interpreted the text."),
   ms: z.number().int().describe("Time the model took, in milliseconds."),
   cached: z.boolean().optional().describe("True when the same text for the same kitchen was already interpreted today: no model call."),
+  alsoAsked: z
+    .array(z.object({ text: z.string(), group: z.string(), amount: z.object({ amount: z.number(), unit: z.string() }).optional() }))
+    .optional()
+    .describe("Other items the buyer's text names that this need does not cover, found by plain code in the text (never the model's word). Interpret or submit each next; the intake step repeats them."),
   basedOn: z
     .object({ requestId: z.string(), fields: z.array(z.enum(EARLIER_FIELDS)) })
     .optional()
     .describe("Present when the text referred to one of the earlier requests: which one, and the fields taken from it."),
 });
 
-type Mandateish = { allowedCategories: string[]; requiredAttributes: string[]; forbiddenAllergens: string[] };
+type Mandateish = { allowedCategories: string[]; requiredAttributes: string[]; forbiddenAllergens: string[]; issuer?: { orgId: string } };
+
+/** What the kitchen's memory recalls for these words, as the interpreter's context block, and its lines as grounding evidence. */
+async function recallFor(orgId: string | undefined, text: string): Promise<{ block?: string; lines: string[] }> {
+  if (!orgId || process.env.DOCK_MEMORY === "off") return { lines: [] };
+  try {
+    const { getMemoryService } = await import("@/server/memory/runtime");
+    const r = await (await getMemoryService()).recall(orgId, { text });
+    return { block: r.forInterpreter || undefined, lines: r.items.map((x) => x.text) };
+  } catch {
+    return { lines: [] }; // memory is context; the intake applies the kitchen's rules either way
+  }
+}
 
 /** The route body: vocabulary from the product data and the caller's mandate, then interpretNeed. */
 export async function interpretRequest(
@@ -285,6 +319,10 @@ export async function interpretRequest(
 ): Promise<z.input<typeof InterpretResponse>> {
   const products = await ctx.catalog.searchProducts({ limit: 100 });
   const vocabulary = vocabularyFrom(products, { categories: ctx.mandate.allowedCategories, attributes: ctx.mandate.requiredAttributes, allergens: ctx.mandate.forbiddenAllergens });
-  const r = await interpretNeed({ text: body.text, now: body.now ? new Date(body.now) : undefined, vocabulary, earlier: body.earlier });
-  return { need: r.need, model: r.model, ms: r.ms, ...(r.basedOn ? { basedOn: r.basedOn } : {}) };
+  // The kitchen's memory, recalled for these words, goes to the reader as context (never copied into the need).
+  const recalled = await recallFor(ctx.mandate.issuer?.orgId, body.text);
+  const r = await interpretNeed({ text: body.text, now: body.now ? new Date(body.now) : undefined, vocabulary, earlier: body.earlier, ...(recalled.block ? { memory: recalled.block, evidence: recalled.lines } : {}) });
+  // Plain code, not the model's word: whatever else the buyer's text names is returned, so it can be offered next.
+  const alsoAsked = alsoAskedIn(body.text, r.need);
+  return { need: r.need, model: r.model, ms: r.ms, ...(r.basedOn ? { basedOn: r.basedOn } : {}), ...(alsoAsked.length ? { alsoAsked } : {}) };
 }

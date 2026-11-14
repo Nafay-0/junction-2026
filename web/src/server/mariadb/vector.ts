@@ -1,6 +1,7 @@
 import type { LedgerEntry } from "@/core/ledger";
 import { isoTime, json, sqlTime, type Maria } from "./client";
 import { VECTOR_DIMS } from "./schema";
+import { doorText } from "./words";
 
 /**
  * "Decisions like this one", as the rules stood at each: the ledger's plain-language decisions with their
@@ -42,10 +43,10 @@ let tokensUsed = 0;
 /** Embedding tokens spent by this process, for the measurements. */
 export const embeddingTokens = () => tokensUsed;
 
-export type DecisionDoc = { entryHash: string; seq: number; at: string; orgId: string; agentId: string; orderId?: string; outcome: string; rulesHit: string[]; explanation: string };
+export type DecisionDoc = { entryHash: string; seq: number; at: string; orgId: string; agentId: string; orderId?: string; door?: string; outcome: string; rulesHit: string[]; explanation: string };
 
 /** A gate decision from the ledger, as one paragraph a person (and an embedding) reads: the summary and its reasons. */
-export function decisionDoc(e: LedgerEntry, owner: (orderId: string) => { orgId: string; agentId: string } | undefined): DecisionDoc | undefined {
+export function decisionDoc(e: LedgerEntry, owner: (orderId: string) => { orgId: string; agentId: string; door?: string } | undefined): DecisionDoc | undefined {
   if (e.type !== "decision" || !e.orderId) return undefined;
   const who = owner(e.orderId);
   if (!who) return undefined;
@@ -57,6 +58,7 @@ export function decisionDoc(e: LedgerEntry, owner: (orderId: string) => { orgId:
     orgId: who.orgId,
     agentId: who.agentId,
     orderId: e.orderId,
+    ...(who.door ? { door: who.door } : {}),
     outcome: String(d.outcome ?? "unknown"),
     rulesHit: (d.rules ?? []).filter((r) => r.outcome !== "pass").map((r) => r.rule),
     explanation: [e.summary, ...(d.reasons ?? [])].join(" "),
@@ -76,8 +78,8 @@ export async function indexDecisions(db: Maria, writer: string, docs: DecisionDo
     for (let j = 0; j < chunk.length; j++) {
       const d = chunk[j];
       await db.query(
-        "INSERT IGNORE INTO gate_decision (entry_hash, writer, seq, at, org_id, agent_id, order_id, outcome, rules_hit, explanation, embedding) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, VEC_FromText(?))",
-        [d.entryHash, writer, d.seq, sqlTime(d.at), d.orgId, d.agentId, d.orderId ?? null, d.outcome, d.rulesHit.join(","), d.explanation.slice(0, 6000), vecText(vectors[j])],
+        "INSERT IGNORE INTO gate_decision (entry_hash, writer, seq, at, org_id, agent_id, order_id, door, outcome, rules_hit, explanation, embedding) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, VEC_FromText(?))",
+        [d.entryHash, writer, d.seq, sqlTime(d.at), d.orgId, d.agentId, d.orderId ?? null, d.door ?? null, d.outcome, d.rulesHit.join(","), d.explanation.slice(0, 6000), vecText(vectors[j])],
       );
     }
   }
@@ -85,10 +87,10 @@ export async function indexDecisions(db: Maria, writer: string, docs: DecisionDo
 }
 
 /** The combined statement: nearest decisions by meaning, each with the mandate terms in force at its moment. */
-export const SQL_SIMILAR = `SELECT n.order_id, n.at, n.org_id, n.outcome, n.rules_hit, n.explanation, n.distance,
+export const SQL_SIMILAR = `SELECT n.order_id, n.at, n.org_id, n.door, n.outcome, n.rules_hit, n.explanation, n.distance,
        m.per_order_limit_cents, m.weekly_budget_cents, m.forbidden_allergens, m.required_attributes,
        m.ROW_START AS terms_since, m.changed_by AS terms_by
-  FROM (SELECT entry_hash, order_id, at, org_id, agent_id, outcome, rules_hit, explanation,
+  FROM (SELECT entry_hash, order_id, at, org_id, agent_id, door, outcome, rules_hit, explanation,
                VEC_DISTANCE_COSINE(embedding, VEC_FromText(?)) AS distance
           FROM gate_decision
          ORDER BY distance
@@ -99,6 +101,9 @@ export const SQL_SIMILAR = `SELECT n.order_id, n.at, n.org_id, n.outcome, n.rule
 
 export type Similar = {
   orderId?: string;
+  /** Which door the decision's request came through, and the same in words. */
+  door?: string;
+  doorText?: string;
   at: string;
   orgId: string;
   outcome: string;
@@ -114,6 +119,8 @@ export async function similarTo(db: Maria, vector: number[], k = 6): Promise<{ r
   return {
     rows: r.rows.map((x) => ({
       orderId: x.order_id ? String(x.order_id) : undefined,
+      door: x.door ? String(x.door) : undefined,
+      doorText: x.door ? doorText(String(x.door)) : undefined,
       at: isoTime(x.at)!,
       orgId: String(x.org_id),
       outcome: String(x.outcome),

@@ -1,4 +1,5 @@
 import { attr, clock, day, eurShort, helsinkiToday, roleLabel, ruleTitle } from "@/app/_ui/plain";
+import { DOOR_TEXT, type Door } from "@/core/orders";
 import type { Change, RuleRow } from "./history";
 import type { Difference, Verdict } from "./replay";
 
@@ -133,4 +134,9 @@ export function kitchenSentence(then: Verdict, now: Verdict, diffs: Difference[]
     })
     .join("; ");
   return `When it was placed: ${a}. Today: ${b}, because ${why}.`;
+}
+
+/** "an outside agent over MCP": which door a request came through, in words. Undefined when it was not recorded. */
+export function doorText(door: string | undefined): string | undefined {
+  return door && door in DOOR_TEXT ? DOOR_TEXT[door as Door] : undefined;
 }

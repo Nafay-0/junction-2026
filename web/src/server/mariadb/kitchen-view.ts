@@ -31,10 +31,13 @@ export async function kitchenRulesThen(dock: Dock, orgId: string, orderId: strin
   if (!h) return { attached: false, sentence: `This deployment keeps no history of the rules (no MariaDB attached, ${MARIADB_ENV} unset), so it cannot show the rules as they stood. The order's own record and the ledger above are complete.` };
   let v;
   try {
+    const owner = await h.db.query("SELECT org_id FROM gate_order_body WHERE order_id = ?", [orderId]);
+    if (String(owner.rows[0]?.org_id ?? "") !== orgId) return { attached: true, mirrored: false, sentence: "This order is not in the history yet: it is added a moment after it is placed." };
     v = await timeMachineView(h.db, { orderId });
   } catch {
     return { attached: true, mirrored: false, sentence: "The history of the rules cannot be read just now. The order's record above is complete; try again in a minute." };
   }
+  // Another organisation's order reads exactly like one not mirrored yet: nothing about it is told.
   if (!v.replay || !v.order || v.orgId !== orgId) return { attached: true, mirrored: false, sentence: "This order is not in the history yet: it is added a moment after it is placed." };
   const productIds = new Set(v.order.body.lines.map((l) => l.productId));
   const mine = v.rawChanges

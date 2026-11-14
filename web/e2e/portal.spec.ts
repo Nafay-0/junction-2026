@@ -19,3 +19,14 @@ test("enter a kitchen's shop, browse the catalogue, read the rules", async ({ pa
   await page.getByRole("button", { name: "Ask the purchasing agent" }).click();
   await expect(page.getByLabel("Ask, or say what the kitchen needs")).toBeVisible();
 });
+
+/** The order page keeps the request in progress across a reload (QA: a reload discarded a live fixed price). */
+test("a reload of the order page keeps the request in progress", async ({ page }) => {
+  await page.goto("/k/kaari/order");
+  const run = { n: 1, text: "Reload check: 100 L lactose-free milk for Thursday", concernsSeen: [], asked: [], answers: {}, fromMemory: [], options: [] };
+  await page.evaluate((r) => sessionStorage.setItem("dock-run:kaari", JSON.stringify(r)), run);
+  await page.reload();
+  await expect(page.getByText(run.text).first()).toBeVisible();
+  await page.reload();
+  await expect(page.getByText(run.text).first()).toBeVisible();
+});

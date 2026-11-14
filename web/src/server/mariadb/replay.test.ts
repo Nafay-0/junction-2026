@@ -68,7 +68,7 @@ describe("the gate run again on a past order", () => {
 
   it("refuses under a week's spend that leaves no room, and says it is the budget", async () => {
     const { body, mandate } = await placed();
-    const full = [row("mandate", mandate.agentId, mandateRuleValue({ ...mandate, perOrderLimitCents: 100_000 })), row("budget", DEMO_ORG.orgId, { committedCents: 180_000, heldCents: 0, weekOrders: [{ orderId: "ord_other", totalCents: 180_000, status: "committed" }], ordersInWeek: 1 })];
+    const full = [row("mandate", mandate.agentId, mandateRuleValue({ ...mandate, perOrderLimitCents: 100_000, weeklyBudgetCents: 200_000 })), row("budget", DEMO_ORG.orgId, { committedCents: 180_000, heldCents: 0, weekOrders: [{ orderId: "ord_other", totalCents: 180_000, status: "committed" }], ordersInWeek: 1 })];
     const v = judge(body, stateFor(full, body, "2026-11-14T10:00:00Z"), []);
     expect(v.outcome).toBe("reject");
     expect(v.rules.find((r) => r.rule === "weekly_budget")?.outcome).toBe("fail");
@@ -83,7 +83,8 @@ describe("the gate run again on a past order", () => {
     const hold = row("hold", "hold_1", { productId: "VA-1010", productName: "Milk box", reason: "Recall drill.", noticeUrl: "https://example.org/x", drill: true, status: "held" }, { orgId: "*" });
     const held = judge(body, stateFor([m, hold], body, "2026-10-29T10:00:00Z"), []);
     expect(held.outcome).toBe("reject");
-    expect(held.rules.find((r) => r.rule === "recall_hold")).toMatchObject({ outcome: "fail" });
+    // The gate's own recall_hold rule (core/policy.ts), fed the holds as of that moment.
+    expect(held.rules.filter((r) => r.rule === "recall_hold")).toMatchObject([{ outcome: "fail" }]);
     const lifted = judge(body, stateFor([m, { ...hold, inForce: false }], body, "2026-10-31T10:00:00Z"), []);
     expect(lifted.outcome).toBe("auto_approve");
     expect(differences(held, lifted).map((d) => d.rule)).toEqual(["recall_hold"]);

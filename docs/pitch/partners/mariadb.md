@@ -40,8 +40,8 @@ says the mirror is behind.
 | The gate re-run is the real gate | `web/src/server/mariadb/replay.ts` calls `evaluatePolicy` from `web/src/core/policy.ts`; nothing in `core/` was changed | True |
 | The same order gets different verdicts as of two times, for the right reason | `replay.test.ts` and `mariadb.live.test.ts` ("the same order gets different verdicts…") | True: order A passes then, is refused today on `forbidden_allergens`; B goes to a person then, is refused today on `weekly_budget` while `per_order_limit` now passes |
 | The replay against the rules just before an order reproduces the gate's recorded decision | reproduction output for A, B, D; live test | True for every order checked |
-| Rules as of a moment: 0.62 ms median; the combined vector + `FOR SYSTEM_TIME` query: 1.71 ms median | `infra/mariadb/results-2026-11-14.txt` | Measured once on a laptop shared with other builds; 181 row versions; at 100,000 versions a single lookup took 0.45 ms median |
-| Vector search beats keyword search for staff questions | same file: precision at 5, vector 0.62, MariaDB `FULLTEXT` 0.20, best possible 0.72 | True on 78 template-written decisions and ten questions we wrote; small and one run |
+| Rules as of a moment: 0.96 ms median; the combined vector + `FOR SYSTEM_TIME` query: 4.00 ms median | `infra/mariadb/results-2026-11-14.txt` | Measured on a laptop shared with other builds, so noisy; 181 row versions; at 100,000 versions a single lookup took 0.45 to 1.8 ms median over four runs |
+| Vector search beats keyword search for staff questions | same file | Partly: vector search found the right decisions in 44% of top-five slots on 10 questions over 78 templated decisions, against 20% for MariaDB `FULLTEXT` (best possible 72%). A small sample, written by us; 62% before the integration reworded the gate's reasons |
 | Ordering is unaffected when MariaDB is down | `rows.test.ts` ("a poke with MariaDB unreachable returns at once") | True in the code: the taps never await MariaDB |
 
 ## What to correct or say carefully
@@ -54,8 +54,8 @@ says the mirror is behind.
   it. In the app, history is stamped by the server as changes happen.
 - **History lags the app by a moment** (about 120 ms). A mandate first presented with an order can reach MariaDB just
   after it; the page then uses the mandate the order carried and says so.
-- **Vector numbers are small.** 78 decisions, ten questions, one run. Say "it finds decisions by meaning where
-  keywords miss", not a quality figure at scale.
+- **Vector numbers are small.** Say it exactly: vector search found the right decisions in 44% of top-five slots on 10 questions over 78 templated decisions, against 20% for keyword search. Not a quality figure at
+  scale.
 
 ## Honest strength of the use
 

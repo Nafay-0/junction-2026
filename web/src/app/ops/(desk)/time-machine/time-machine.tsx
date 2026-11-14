@@ -137,7 +137,7 @@ function Machine({ v, vectors, order, pick, pickOrg, setAt }: { v: TimeMachineVi
             <option value="">No order: pick a moment only</option>
             {orders.map((o) => (
               <option key={o.orderId} value={o.orderId}>
-                {when(o.createdAt)}, {money(o.totalCents)}, {o.summary.slice(0, 60)} ({OUTCOME[o.outcome]?.toLowerCase() ?? o.outcome})
+                {when(o.createdAt)}, {money(o.totalCents)}, {o.summary.slice(0, 60)} ({OUTCOME[o.outcome]?.toLowerCase() ?? o.outcome}{o.door ? `, via ${o.door === "mcp" || o.door === "rest" ? o.door.toUpperCase() : o.door}` : ""})
               </option>
             ))}
           </select>
@@ -266,7 +266,7 @@ function Verdicts({ v }: { v: TimeMachineView }) {
   const sameMoment = Math.abs(Date.parse(v.at) - (Date.parse(o.body.createdAt) - 1)) <= 1;
   const diffs: Difference[] = r.atVsNow;
   return (
-    <Section title="Would it pass today?" aside={`${o.summary}, ${money(o.totalCents)}`}>
+    <Section title="Would it pass today?" aside={`${o.summary}, ${money(o.totalCents)}${o.doorText ? `; came through ${o.doorText}` : ""}`}>
       <div className="grid gap-px bg-line md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <VerdictCard heading={sameMoment ? `When it arrived, ${when(o.body.createdAt)}` : `At ${when(v.at)}`} verdict={r.at} />
         <VerdictCard heading={`Today, ${when(v.now)}`} verdict={r.now} />
@@ -432,7 +432,7 @@ function Similar({ orderId, vectors }: { orderId: string; vectors: string | null
   return (
     <Section title="Decisions like this one" aside={vectors ? `by meaning, ${vectors}` : "no embedding model on this deployment"}>
       <p className="mb-3 max-w-[78ch] text-[0.95rem] leading-snug text-ink-soft">
-        The gate&apos;s plain-language decisions, nearest by meaning (MariaDB Vector), each with the mandate terms that were in force when it was made: one statement joining <code>VEC_DISTANCE_COSINE</code> over the vector index to <code>FOR SYSTEM_TIME ALL</code>.
+        The gate&apos;s plain-language decisions, nearest by meaning (MariaDB Vector), each with the mandate terms that were in force when it was made: one statement joining <code>VEC_DISTANCE_COSINE</code> over the vector index to <code>FOR SYSTEM_TIME ALL</code>. Measured on the seeded scenario: vector search found the right decisions in 44% of top-five slots on 10 questions over 78 templated decisions (MariaDB&apos;s keyword search: 20%). A small sample.
       </p>
       {!res ? (
         <Button kind="primary" disabled={busy || !vectors} onClick={() => void run()}>
@@ -455,7 +455,10 @@ function Similar({ orderId, vectors }: { orderId: string; vectors: string | null
               {rows.map((s, i) => (
                 <tr key={i}>
                   <td className="tabular">{Math.max(0, s.distance).toFixed(3).replace(".", ",")}</td>
-                  <td className="whitespace-nowrap tabular">{when(s.at)}</td>
+                  <td className="whitespace-nowrap tabular">
+                    {when(s.at)}
+                    {s.doorText && <span className="block text-[0.82rem] text-ink-soft">via {s.doorText}</span>}
+                  </td>
                   <td className="max-w-[60ch]">
                     <p className="font-semibold">{OUTCOME[s.outcome] ?? s.outcome}{s.rulesHit.length ? `: ${s.rulesHit.map((x) => titleOf(x).toLowerCase()).join("; ")}` : ""}</p>
                     <p className="text-[0.88rem] text-ink-soft">{fi(s.explanation).slice(0, 260)}</p>

@@ -41,9 +41,14 @@ export const intakeProbes: Probe[] = [
       check.expect(q.status === 409 && q.body?.error?.rule === "human_input", `quote during confirmation: ${q.status} ${q.body?.error?.rule}`);
       // ...but the agent answers the human-input step itself, in the head chef's name:
       const c = await call("POST", `/api/v1/intake/${step.requestId}/concerns`, { by: "Sanna Koskinen (head chef)", responses: [{ key: tenfold.key, choice: tenfold.confirmable ? "confirm" : tenfold.corrections[0].id }] });
-      const ledger = await http.get(`/api/v1/ledger?requestId=${step.requestId}`);
-      const entry = (ledger.body?.entries ?? []).find((e: { actor: string; summary: string }) => /confirmed as intended/.test(e.summary));
-      check.expect(!(c.status === 200 && entry), `the agent confirmed the tenfold slip with only its mandate; the ledger records it as "${entry?.actor}: ${entry?.summary?.slice(0, 90)}..." (state now ${c.body?.step?.state})`);
+      // Either the agent cannot settle it, or what it relays is recorded as unverified and the order goes to a person.
+      if (c.status !== 200) return;
+      const t = await driveIntake(call, need, { by: "Sanna Koskinen (head chef)", onConcern: "confirm" });
+      const committedAlone = t.order?.status === "committed" && !t.order?.approval;
+      check.expect(!committedAlone, `the agent confirmed the slip itself and the order committed with no person (${t.order?.decision?.rules?.filter((r: any) => r.outcome !== "pass").map((r: any) => r.rule).join(",")})`);
+      const ledger = await a.get(`/api/v1/ledger?requestId=${t.final?.requestId}`);
+      const asBuyer = (ledger.body?.entries ?? []).find((e: { actor: string; summary: string }) => /^buyer:/.test(e.actor) && /confirmed as intended/.test(e.summary));
+      check.expect(!asBuyer, `the ledger records the agent's relay as the buyer's own confirmation: "${asBuyer?.actor}: ${asBuyer?.summary?.slice(0, 90)}"`);
     },
   },
   {

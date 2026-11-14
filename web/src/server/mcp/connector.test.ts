@@ -81,6 +81,12 @@ afterEach(() => {
 });
 
 describe("connector address: binding", () => {
+  it("lists the agent runtimes that work with Dock beside the address", async () => {
+    const body = (await (await connect$("kaari")).json()) as { worksWith: { runtime: string; interface: string; verified: boolean; exampleUrl: string }[] };
+    expect(body.worksWith.length).toBeGreaterThan(0);
+    expect(body.worksWith[0]).toMatchObject({ runtime: expect.any(String), interface: expect.stringMatching(/MCP|OpenAPI/), verified: expect.any(Boolean), exampleUrl: expect.stringMatching(/^https?:\/\//) });
+  });
+
   it("is a URL that carries the kitchen's own mandate and agent id, and ignores any headers sent with it", async () => {
     const url = await addressOf("kaari");
     expect(url).toMatch(/^http:\/\/dock\.test\/api\/mcp\/c\/dk_[A-Za-z0-9_-]{43}$/);
@@ -150,17 +156,18 @@ describe("connector address: same gate, nothing more", () => {
     expect((await call(client, "place_order", { requestId })).s.error).toMatchObject({ rule: "quote_replay" });
     // Without a chosen quote, the short form is refused with a reason.
     const { s: bare } = await call(client, "open_request", { text: "milk" });
-    expect((await call(client, "place_order", { requestId: bare.request.requestId })).s.error).toMatchObject({ code: "invalid_request" });
+    expect((await call(client, "place_order", { requestId: bare.request.requestId })).s.error).toMatchObject({ code: "no_current_quote", rule: "intake_sequence" });
   });
 
-  it("cannot exceed the mandate: the weekly budget refuses, whatever the address", async () => {
+  it("cannot exceed the mandate: a product outside its categories is refused, whatever the address", async () => {
+    // (The demo kitchens' weekly budget is sized for a day of demos, beyond what the seed's stock can reach.)
     const client = await connect(await addressOf("kaari"));
-    const { s: opened } = await call(client, "open_request", { text: "a lot of milk" });
+    const { s: opened } = await call(client, "open_request", { text: "oat drink" });
     const requestId = opened.request.requestId;
-    const q = await call(client, "request_quote", { requestId, lines: [{ productId: "VA-1001", quantity: 1500 }] });
+    const q = await call(client, "request_quote", { requestId, lines: [{ productId: "PK-4001", quantity: 10 }] });
     expect(q.s.policyPreview).toMatchObject({ outcome: "reject" });
     const r = await call(client, "place_order", { requestId, quoteToken: q.s.quoteToken, lines: q.s.quote.lines.map(({ productId, quantity, unitPriceCents }: Record<string, unknown>) => ({ productId, quantity, unitPriceCents })) });
-    expect(r).toMatchObject({ isError: true, s: { error: { code: "policy_rejected", rule: "weekly_budget" } } });
+    expect(r).toMatchObject({ isError: true, s: { error: { code: "policy_rejected", rule: "category_allowed" } } });
   });
 
   it("shares the per-agent live-lookup allowance with every other door of the same agent", async () => {
@@ -285,7 +292,7 @@ describe("connector address: rate limits", () => {
     expect(Number(res.headers.get("retry-after"))).toBeGreaterThan(0);
     // Another kitchen's address is unaffected.
     expect((await connect(await addressOf("laakso"))) instanceof Client).toBe(true);
-  });
+  }, 30_000); // a few hundred in-process MCP calls: slow when the whole suite runs in parallel
 
   it("limiter: a sliding window per address and kind", () => {
     let t = Date.parse("2026-11-15T10:00:00Z");

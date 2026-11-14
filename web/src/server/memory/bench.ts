@@ -158,7 +158,7 @@ async function playNeed(dock: Dock, session: AgentSession, k: ScriptedKitchen, s
     need = scoped.need;
     log.usage.push(...scoped.applied.map((a) => a.text));
   }
-  let v = await dock.intake.open(session, { need, by: k.person });
+  let v = await dock.intake.open(session, { need, by: k.person, ...(step.site ? { site: step.site } : {}) });
   const requestId = v.requestId;
   let caught = false;
   for (let guard = 0; guard < 8; guard++) {

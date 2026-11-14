@@ -1,5 +1,5 @@
 import type { LedgerEntry } from "@/core/ledger";
-import type { PublicOrder } from "@/core/orders";
+import { DOOR_TEXT, type Door, type PublicOrder } from "@/core/orders";
 import { amount, attr, clock, day, eur, humanize, roleLabel } from "@/app/_ui/plain";
 import { memoryCount, memoryParts, publicReasons } from "./privacy";
 import { ruleTitleOf } from "./rules";
@@ -66,6 +66,9 @@ export type Trace = {
   orgName: string;
   agentId: string;
   via?: Via;
+  /** Which door it came through, and in words ("a voice call", "an outside agent over MCP"). */
+  door?: Door;
+  doorText?: string;
   asked: string;
   neededBy?: string;
   startedAt: string;
@@ -87,6 +90,7 @@ export type TraceInput = {
   catalogueSize?: number;
   orgName?: string;
   via?: Via;
+  door?: Door;
 };
 
 const SENTINEL_STOCK = 999_999;
@@ -543,6 +547,7 @@ export function buildTrace(input: TraceInput): Trace {
     orgName: input.orgName ?? last?.orgName ?? orgFromSummary ?? "Unknown organisation",
     agentId: request?.actor.replace(/^agent:/, "") ?? last?.agentId ?? "unknown",
     via: input.via,
+    ...(input.door ? { door: input.door, doorText: DOOR_TEXT[input.door] } : {}),
     asked: String(request?.data.text ?? ""),
     neededBy: typeof request?.data.neededBy === "string" ? request.data.neededBy : undefined,
     startedAt: entries[0]?.at ?? "",

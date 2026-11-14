@@ -129,6 +129,8 @@ export const SCHEMA: string[] = [
     VECTOR INDEX (embedding) M=8 DISTANCE=cosine,
     FULLTEXT (explanation)
   )`,
+  // Which door the decision's request came through (core/orders.ts Door); added after the first schema.
+  `ALTER TABLE gate_decision ADD COLUMN IF NOT EXISTS door VARCHAR(20) NULL AFTER order_id`,
   `CREATE TABLE IF NOT EXISTS mirror_meta (
     writer VARCHAR(80) NOT NULL PRIMARY KEY,
     last_ok_at DATETIME(6) NULL,
