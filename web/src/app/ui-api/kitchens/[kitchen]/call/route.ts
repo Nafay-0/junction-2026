@@ -1,4 +1,5 @@
 import * as interpret from "@/app/api/v1/agent/interpret/route";
+import { asStoreError } from "@/server/aiven/pg/errors";
 import { consoleKitchen, refusalResponse } from "@/server/authz";
 import { storeDoorFor } from "@/server/assistant-handoff";
 import { attachConsoleContext } from "@/server/console-context";
@@ -26,15 +27,20 @@ const ALLOWED: [string, RegExp][] = [
 ];
 
 export async function POST(req: Request, ctx: RouteContext<"/ui-api/kitchens/[kitchen]/call">) {
-  const { kitchen } = await ctx.params;
-  let k;
   try {
-    k = await consoleKitchen(req, await getRuntime(), kitchen); // a visitor's kitchen only from their own phone (server/authz.ts)
+    return await forward(req, ctx);
   } catch (err) {
-    const refused = refusalResponse(err);
+    // A refusal, or the database away (503 store_unavailable): JSON either way, never an empty 500.
+    const refused = refusalResponse(asStoreError(err));
     if (refused) return refused;
-    throw err;
+    console.error(err);
+    return Response.json(errorBody("internal_error", "Something went wrong inside AimoPilot."), { status: 500 });
   }
+}
+
+async function forward(req: Request, ctx: RouteContext<"/ui-api/kitchens/[kitchen]/call">): Promise<Response> {
+  const { kitchen } = await ctx.params;
+  const k = await consoleKitchen(req, await getRuntime(), kitchen); // a visitor's kitchen only from their own phone (server/authz.ts)
   if (!k) return Response.json(errorBody("kitchen_not_found", "This kitchen does not exist or its demo time is over."), { status: 404 });
   let call: { method?: unknown; path?: unknown; body?: unknown };
   try {

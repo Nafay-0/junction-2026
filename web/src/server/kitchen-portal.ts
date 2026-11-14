@@ -163,12 +163,12 @@ export async function overview(k: Kitchen): Promise<Overview> {
   const memory = await dock.intake.kitchen(session);
   const profile = (await rt.kitchens.getProfile(k.info.orgId)) as KitchenProfile | undefined;
 
-  const all = (await dock.listOrders()).filter((o) => o.orgId === k.info.orgId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const all = (await dock.listOrders({ orgId: k.info.orgId })).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const orders = all.map(portalOrder);
   const byRequest = new Map<string, PortalOrder>();
   for (const o of orders) if (o.requestId && !byRequest.has(o.requestId)) byRequest.set(o.requestId, o);
 
-  const entries = dock.ledger.entries();
+  const entries = dock.ledger.readonly();
   const actor = `agent:${k.agentId}`;
   const corrections = new Map<string, number>();
   const weekAgo = new Date(now.getTime() - 7 * 86_400_000).toISOString();

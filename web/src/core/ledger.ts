@@ -57,7 +57,28 @@ export class InMemoryLedgerStore implements LedgerStore {
   }
 }
 
+export type LedgerFilter = { requestId?: string; orderId?: string };
+
+/**
+ * The ledger over a store. Entries are frozen once stored (deep), so nothing in this process can edit one after the
+ * fact; that is what lets the reads below share them instead of copying, and lets verification be incremental:
+ *
+ *   entries(filter)   copies (callers may change what they get), found through an index by request and by order
+ *   readonly(filter)  the stored entries themselves, frozen: for readers that only look (views, the wall), no copy
+ *   verify()          checks only the entries added since the last verification, against the head it verified
+ *                     (and that the entry at that head is still the one it verified); verifyFull() checks the
+ *                     whole chain from the genesis hash, as verifyLedger does
+ *
+ * The index and the freeze catch up with the store lazily, so entries a store loaded before (PostgreSQL) or that
+ * were appended to it directly are covered too.
+ */
 export class Ledger {
+  private readonly byRequest = new Map<string, LedgerEntry[]>();
+  private readonly byOrder = new Map<string, LedgerEntry[]>();
+  private indexed = 0;
+  /** How far the chain has been verified: entries [0, length) are fine, the last of them has hash `hash`. */
+  private verified: { length: number; hash: string } = { length: 0, hash: GENESIS_HASH };
+
   constructor(
     private readonly store: LedgerStore = new InMemoryLedgerStore(),
     private readonly now: () => Date = () => new Date(),
@@ -84,15 +105,38 @@ export class Ledger {
     };
     const entry: LedgerEntry = { ...body, hash: Ledger.hashOf(body) };
     this.store.append(entry);
+    this.catchUp();
     return structuredClone(entry);
   }
 
-  entries(filter: { requestId?: string; orderId?: string } = {}): LedgerEntry[] {
-    return structuredClone(
-      this.store
-        .all()
-        .filter((e) => (!filter.requestId || e.requestId === filter.requestId) && (!filter.orderId || e.orderId === filter.orderId)),
-    );
+  /** Copies of the entries (all, or one request's / one order's), in order. */
+  entries(filter: LedgerFilter = {}): LedgerEntry[] {
+    return structuredClone(this.readonly(filter) as LedgerEntry[]);
+  }
+
+  /** The stored entries themselves (frozen, never copied), in order, in an array of the caller's own. For readers that only look. */
+  readonly(filter: LedgerFilter = {}): readonly LedgerEntry[] {
+    this.catchUp();
+    if (!filter.requestId && !filter.orderId) return this.store.all().slice();
+    const a = filter.requestId ? (this.byRequest.get(filter.requestId) ?? []) : undefined;
+    const b = filter.orderId ? (this.byOrder.get(filter.orderId) ?? []) : undefined;
+    if (a && b) return (a.length <= b.length ? a : b).filter((e) => e.requestId === filter.requestId && e.orderId === filter.orderId);
+    return (a ?? b)!.slice();
+  }
+
+  /** Entries after sequence number `seq` (all of them for -1), frozen, in order. */
+  since(seq: number): readonly LedgerEntry[] {
+    this.catchUp();
+    const all = this.store.all();
+    // seq equals the position in a verified chain; fall back to a scan if it does not.
+    const i = Math.max(0, seq + 1);
+    if (i >= all.length) return [];
+    if (all[i].seq === i) return all.slice(i);
+    return all.filter((e) => e.seq > seq);
+  }
+
+  get length(): number {
+    return this.store.all().length;
   }
 
   head(): LedgerHead | null {
@@ -101,15 +145,71 @@ export class Ledger {
     return last ? { seq: last.seq, hash: last.hash } : null;
   }
 
+  /**
+   * The chain verified: incrementally, from the last head this ledger verified (see the class comment). Same
+   * answer as verifyFull() for anything that can happen to entries in this process, since they are frozen.
+   */
   verify(expectedHead?: LedgerHead): LedgerVerification {
-    return verifyLedger(this.store.all(), expectedHead);
+    this.catchUp();
+    const all = this.store.all();
+    const v = this.verified;
+    const intact = v.length <= all.length && (v.length === 0 || all[v.length - 1].hash === v.hash);
+    if (!intact) this.verified = { length: 0, hash: GENESIS_HASH };
+    const from = this.verified.length;
+    const r = verifyChain(all, from, this.verified.hash, expectedHead);
+    if (r.ok && all.length) this.verified = { length: all.length, hash: all[all.length - 1].hash };
+    return r;
   }
+
+  /** The whole chain checked from the genesis hash, every entry hashed again. */
+  verifyFull(expectedHead?: LedgerHead): LedgerVerification {
+    this.catchUp();
+    const all = this.store.all();
+    const r = verifyLedger(all, expectedHead);
+    this.verified = r.ok && all.length ? { length: all.length, hash: all[all.length - 1].hash } : { length: 0, hash: GENESIS_HASH };
+    return r;
+  }
+
+  /** Freeze and index entries the store holds that this ledger has not seen yet. */
+  private catchUp(): void {
+    const all = this.store.all();
+    if (this.indexed > all.length) {
+      // the store was replaced under us: start again
+      this.byRequest.clear();
+      this.byOrder.clear();
+      this.indexed = 0;
+    }
+    for (; this.indexed < all.length; this.indexed++) {
+      const e = all[this.indexed];
+      deepFreeze(e);
+      if (e.requestId) push(this.byRequest, e.requestId, e);
+      if (e.orderId) push(this.byOrder, e.orderId, e);
+    }
+  }
+}
+
+function push(m: Map<string, LedgerEntry[]>, k: string, e: LedgerEntry): void {
+  const list = m.get(k);
+  if (list) list.push(e);
+  else m.set(k, [e]);
+}
+
+function deepFreeze<T>(v: T): T {
+  if (v !== null && typeof v === "object" && !Object.isFrozen(v)) {
+    Object.freeze(v);
+    for (const k of Object.keys(v)) deepFreeze((v as Record<string, unknown>)[k]);
+  }
+  return v;
 }
 
 /** Check a full chain from its first entry. Pass `expectedHead` to also detect a removed tail. */
 export function verifyLedger(entries: readonly LedgerEntry[], expectedHead?: LedgerHead): LedgerVerification {
-  let prevHash = GENESIS_HASH;
-  for (let i = 0; i < entries.length; i++) {
+  return verifyChain(entries, 0, GENESIS_HASH, expectedHead);
+}
+
+/** Check entries [from, end) given that entry from-1 (already verified) has hash `prevHash`. */
+function verifyChain(entries: readonly LedgerEntry[], from: number, prevHash: string, expectedHead?: LedgerHead): LedgerVerification {
+  for (let i = from; i < entries.length; i++) {
     const e = entries[i];
     if (e.seq !== i) return { ok: false, brokenAt: e.seq, problem: "sequence_gap", message: `Entry at position ${i} has seq ${e.seq}: an entry is missing or out of order.` };
     if (e.prevHash !== prevHash) return { ok: false, brokenAt: e.seq, problem: "chain_break", message: `Entry ${e.seq} does not point to the entry before it.` };

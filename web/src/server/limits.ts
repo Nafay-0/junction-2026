@@ -14,6 +14,9 @@ import { DockError } from "@/core/errors";
  *   DOCK_LLM_DAILY_CALLS     model calls per UTC day (default 500)
  *   DOCK_LIVE_DAILY_CALLS    partner live API requests per UTC day (default 3000)
  *   DOCK_RATE_LIMITS         "off" disables the per-address limits (local load tests only)
+ *   DOCK_LIMIT_<RULE>        one rate rule's limit per window, e.g. DOCK_LIMIT_JOIN=240, DOCK_LIMIT_DEMO_ORDER_KITCHEN=6
+ *                            (the rule name upper-cased, dashes as underscores; rules and defaults in src/proxy.ts and
+ *                            server/accounts/service.ts; every name in web/.env.example)
  */
 
 const int = (v: string | undefined, fallback: number) => {
@@ -24,7 +27,25 @@ const env = (k: string) => process.env[k]?.trim() || undefined;
 
 // ---------- rate limits ----------
 
-export type RateRule = { name: string; limit: number; windowMs: number };
+export type RateRule = { readonly name: string; readonly limit: number; readonly windowMs: number };
+
+/** The environment variable that sets a rule's limit: "demo-order-kitchen" -> DOCK_LIMIT_DEMO_ORDER_KITCHEN. */
+export const limitVar = (name: string) => `DOCK_LIMIT_${name.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}`;
+
+/**
+ * A rate rule whose limit can be set by environment variable (limitVar(name)); `fallback` when unset or not a
+ * number >= 0. Read on every hit, so a test or a restart with a new value needs no code change.
+ */
+export function envRule(name: string, fallback: number, windowMs = 60_000): RateRule {
+  const key = limitVar(name);
+  return {
+    name,
+    windowMs,
+    get limit() {
+      return int(env(key), fallback);
+    },
+  };
+}
 type Window = { start: number; count: number };
 
 /** Fixed-window counters. At most `maxKeys` keys are kept; the oldest windows are dropped first. */

@@ -37,11 +37,11 @@ export type WallSnapshot = {
 };
 
 // Product names for sentences that carry product codes. Looked up once per id from master data (local, not metered).
-const g = globalThis as typeof globalThis & { __dockWallNames?: Map<string, string> };
+const g = globalThis as typeof globalThis & { __dockWallNames?: Map<string, string>; __dockWallState?: WeakMap<object, WallState> };
 const NAMES = (g.__dockWallNames ??= new Map<string, string>());
 let say = (t: string) => humanize(t);
 
-async function learnNames(rt: Runtime, entries: LedgerEntry[]): Promise<void> {
+async function learnNames(rt: Runtime, entries: readonly LedgerEntry[]): Promise<void> {
   const ids = new Set<string>();
   for (const e of entries) {
     const d = e.data as { productIds?: unknown; lines?: unknown; resultIds?: unknown };
@@ -60,89 +60,128 @@ async function learnNames(rt: Runtime, entries: LedgerEntry[]): Promise<void> {
   say = (t: string) => humanize(t, names);
 }
 
+/**
+ * What the wall keeps between polls, per Dock: the ledger is read once, entry by entry, as it grows (never again
+ * from the start), so a poll costs the entries added since the last one plus the few rows on screen.
+ *   activity   request ids by their latest entry, most recent last (bounded): the feed's candidates
+ *   refusals   the latest refusals, with the count of all of them
+ *   committed  orders committed (one ledger "order" entry each), and how many a person signed
+ */
+type WallState = {
+  seen: number;
+  activity: Map<string, true>;
+  refusals: (Omit<RefusalItem, "reason"> & { reason: string })[];
+  refused: number;
+  committed: number;
+  signed: number;
+  cached?: { key: string; at: number; snap: WallSnapshot };
+};
+const WALL_STATE = (g.__dockWallState ??= new WeakMap<object, WallState>());
+const ACTIVITY_MAX = 400;
+const REFUSALS_KEPT = 20;
+/** A poll within this long of the last, with nothing new in the ledger, gets the last snapshot again. */
+const CACHE_MS = 1_000;
+
+const browsing = (list: readonly LedgerEntry[]) => {
+  const first = list.find((e) => e.type === "request");
+  return !first || first.data.text === BROWSE_TEXT ? undefined : first;
+};
+
 export async function wallSnapshot(rt: Runtime): Promise<WallSnapshot> {
   const { dock, sandboxes } = rt;
-  const entries = dock.ledger.entries();
-  const orders = await dock.listOrders();
+  let st = WALL_STATE.get(dock);
+  if (!st) WALL_STATE.set(dock, (st = { seen: 0, activity: new Map(), refusals: [], refused: 0, committed: 0, signed: 0 }));
+  const length = dock.ledger.length;
   const kitchens = await sandboxes.list();
-  const chain = dock.ledger.verify();
-  const now = new Date();
-  await learnNames(rt, entries.slice(-300));
+  const key = `${length}|${kitchens.length}|${dock.stats().liveCalls}`;
+  if (st.cached && st.cached.key === key && Date.now() - st.cached.at < CACHE_MS) return { ...st.cached.snap, at: new Date().toISOString() };
 
+  const now = new Date();
   const agentOrg = new Map<string, string>([
     [KITCHEN_ORG.agentId, KITCHEN_ORG.name],
     [DEMO_ORG.agentId, DEMO_ORG.name],
     ...kitchens.map((k) => [k.agentId, `${k.kitchenName}, ${k.city}`] as [string, string]),
   ]);
-  const orgOfRequest = new Map<string, string>();
-  for (const o of orders) orgOfRequest.set(o.requestId, o.orgName);
-
-  const byRequest = new Map<string, LedgerEntry[]>();
-  for (const e of entries) {
-    if (!e.requestId) continue;
-    const list = byRequest.get(e.requestId) ?? [];
-    list.push(e);
-    byRequest.set(e.requestId, list);
-  }
-
+  // The organisation a request belongs to, as its opening entry names it ("Agent x of <org> opened a request").
   const kitchenOf = (requestId: string | undefined, actor: string): string => {
-    if (requestId && orgOfRequest.has(requestId)) return orgOfRequest.get(requestId)!;
     if (requestId) {
-      const req = byRequest.get(requestId)?.find((e) => e.type === "request");
+      const req = dock.ledger.readonly({ requestId }).find((e) => e.type === "request");
       const m = req && / of (.+?) opened a request/.exec(req.summary);
       if (m) return m[1];
     }
     return agentOrg.get(actor.replace(/^agent:/, "")) ?? "An unknown agent";
   };
 
-  const feed: FeedItem[] = [];
-  for (const [requestId, list] of byRequest) {
-    const first = list.find((e) => e.type === "request");
-    // A portal's catalogue browsing (live prices of products opened in the shop) is not a purchase request.
-    if (!first || first.data.text === BROWSE_TEXT) continue;
-    feed.push({ key: requestId, kitchen: kitchenOf(requestId, first.actor), ...progress(list, now), at: list.at(-1)!.at });
-  }
-  feed.sort((a, b) => b.at.localeCompare(a.at));
-
-  const refusals: RefusalItem[] = [];
-  for (const e of entries) {
-    if (e.type === "refusal") {
+  const fresh = dock.ledger.since(st.seen - 1);
+  for (const e of fresh) {
+    if (e.requestId) {
+      st.activity.delete(e.requestId);
+      st.activity.set(e.requestId, true);
+      if (st.activity.size > ACTIVITY_MAX) st.activity.delete(st.activity.keys().next().value!);
+    }
+    if (e.type === "order") {
+      st.committed++;
+      if ((e.data.authorisedBy as { kind?: string } | undefined)?.kind === "approver") st.signed++;
+    } else if (e.type === "refusal") {
+      st.refused++;
       const rule = typeof e.data.rule === "string" ? e.data.rule : undefined;
-      refusals.push({ key: `r${e.seq}`, kitchen: kitchenOf(e.requestId, e.actor), rule: ruleTitle(rule), reason: say(e.summary.replace(/^Refused: /, "")), at: e.at });
+      st.refusals.push({ key: `r${e.seq}`, kitchen: kitchenOf(e.requestId, e.actor), rule: ruleTitle(rule), reason: e.summary.replace(/^Refused: /, ""), at: e.at });
     } else if (e.type === "decision" && e.data.outcome === "reject") {
+      st.refused++;
       const rules = (e.data.rules as { rule: string; outcome: string }[] | undefined) ?? [];
       const failed = rules.find((r) => r.outcome === "fail");
       const reasons = (e.data.reasons as string[] | undefined) ?? [];
-      refusals.push({ key: `r${e.seq}`, kitchen: kitchenOf(e.requestId, e.actor), rule: ruleTitle(failed?.rule), reason: say(reasons[0] ?? e.summary), at: e.at });
+      st.refusals.push({ key: `r${e.seq}`, kitchen: kitchenOf(e.requestId, e.actor), rule: ruleTitle(failed?.rule), reason: reasons[0] ?? e.summary, at: e.at });
     }
+    if (st.refusals.length > REFUSALS_KEPT * 2) st.refusals.splice(0, st.refusals.length - REFUSALS_KEPT);
   }
-  refusals.sort((a, b) => b.at.localeCompare(a.at));
+  st.seen = length;
 
-  const committed = orders.filter((o) => o.status === "committed");
-  return {
+  // The feed: the requests with the latest activity (a portal's catalogue browsing is not a purchase request).
+  const lists: { requestId: string; list: readonly LedgerEntry[]; first: LedgerEntry }[] = [];
+  const recent = [...st.activity.keys()];
+  for (let i = recent.length - 1; i >= 0 && lists.length < 8; i--) {
+    const list = dock.ledger.readonly({ requestId: recent[i] });
+    const first = browsing(list);
+    if (first) lists.push({ requestId: recent[i], list, first });
+  }
+  await learnNames(rt, [...lists.flatMap((x) => x.list), ...fresh.slice(-300)]);
+  const feed: FeedItem[] = lists.map(({ requestId, list, first }) => ({ key: requestId, kitchen: kitchenOf(requestId, first.actor), ...progress(list, now), at: list.at(-1)!.at }));
+  feed.sort((a, b) => b.at.localeCompare(a.at));
+  const refusals = st.refusals
+    .slice(-REFUSALS_KEPT)
+    .sort((a, b) => b.at.localeCompare(a.at))
+    .slice(0, 4)
+    .map((r) => ({ ...r, reason: say(r.reason) }));
+
+  const chain = dock.ledger.verify();
+  const waiting = await dock.pendingCount();
+  const snap: WallSnapshot = {
     at: new Date().toISOString(),
     counters: {
-      orders: committed.length,
-      agentAlone: committed.filter((o) => !o.approval).length,
-      humanSignedOff: committed.filter((o) => o.approval?.status === "approved").length,
-      refused: refusals.length,
+      orders: st.committed,
+      agentAlone: st.committed - st.signed,
+      humanSignedOff: st.signed,
+      refused: st.refused,
       liveCalls: dock.stats().liveCalls,
-      waiting: orders.filter((o) => o.status === "pending_approval").length,
+      waiting,
     },
-    chain: { ok: chain.ok, length: entries.length },
-    feed: feed.slice(0, 8),
-    refusals: refusals.slice(0, 4),
+    chain: { ok: chain.ok, length },
+    feed,
+    refusals,
     kitchens: kitchens
       .slice()
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .map((k) => ({ slug: k.sandboxId, name: `${k.kitchenName}, ${k.city}`, approverName: k.approverName })),
-    lastActivityAt: entries.at(-1)?.at,
+    lastActivityAt: dock.ledger.since(length - 2)[0]?.at,
     catalogue: rt.catalogSource.kind === "valio" ? { kind: "valio", products: rt.catalogSource.products } : { kind: "seed" },
   };
+  st.cached = { key, at: Date.now(), snap };
+  return { ...snap };
 }
 
 /** Where one request is, in a few words. Reads its ledger entries in order; the last word wins. */
-export function progress(list: LedgerEntry[], now = new Date()): Pick<FeedItem, "what" | "reached" | "status" | "tone" | "totalCents"> {
+export function progress(list: readonly LedgerEntry[], now = new Date()): Pick<FeedItem, "what" | "reached" | "status" | "tone" | "totalCents"> {
   const request = list.find((e) => e.type === "request")!;
   let what = String(request.data.text ?? "").trim();
   let reached = 1;

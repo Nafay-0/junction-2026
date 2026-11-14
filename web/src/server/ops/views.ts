@@ -112,7 +112,7 @@ export async function overview(rt: Runtime): Promise<Overview> {
     .map((t) => {
       const agent = ctx.agents.get(t.agentId);
       const last = t.steps.at(-1);
-      const order = ctx.orders.filter((o) => o.requestId === t.requestId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+      const order = ctx.ordersByRequest.get(t.requestId)?.[0];
       return {
         requestId: t.requestId,
         orgName: t.orgName,
@@ -213,7 +213,7 @@ export async function traceView(rt: Runtime, requestId: string): Promise<TraceVi
   if (!ctx.requests.has(requestId)) throw new DockError(404, "request_not_found", `No request ${requestId} on this server.`);
   const t = traceFor(ctx, requestId);
   const chain = rt.dock.ledger.verify();
-  const orgId = ctx.orders.find((o) => o.requestId === requestId)?.orgId ?? ctx.agents.get(t.agentId)?.orgId;
+  const orgId = ctx.ordersByRequest.get(requestId)?.[0]?.orgId ?? ctx.agents.get(t.agentId)?.orgId;
   const issued = orgId ? await claimsOf(rt, orgId, t.steps.flatMap((s) => s.claimIds ?? [])) : [];
   return {
     ...t,
@@ -233,7 +233,7 @@ export async function traceView(rt: Runtime, requestId: string): Promise<TraceVi
 
 /** The latest request, for /ops/trace without an id. */
 export async function latestRequestId(rt: Runtime): Promise<string | undefined> {
-  return rt.dock.ledger.entries().filter((e) => e.type === "request").at(-1)?.requestId;
+  return rt.dock.ledger.readonly().filter((e) => e.type === "request").at(-1)?.requestId;
 }
 
 // ---------- safeguards ----------
@@ -287,7 +287,7 @@ function refusalCases(ctx: OpsContext): Case[] {
 /** One case per failing (or escalating) rule of a gate decision, with its reason. */
 function decisionCases(ctx: OpsContext, e: LedgerEntry, outcome: "fail" | "escalate"): Case[] {
   const d = e.data as { rules?: { rule: string; outcome: string }[]; reasons?: string[]; totalCents?: number };
-  const order = ctx.orders.find((o) => o.orderId === e.orderId);
+  const order = e.orderId ? ctx.orderById.get(e.orderId) : undefined;
   const hits = (d.rules ?? []).filter((r) => r.outcome === outcome);
   const reasons = d.reasons ?? [];
   const agent = order ? ctx.agents.get(order.agentId) : undefined;
@@ -358,7 +358,7 @@ export type SecondReadingStats = {
 };
 
 /** The second reader's record, from the ledger alone. */
-export function secondReadingStats(entries: LedgerEntry[], orgOf: (requestId: string) => string | undefined = () => undefined): SecondReadingStats {
+export function secondReadingStats(entries: readonly LedgerEntry[], orgOf: (requestId: string) => string | undefined = () => undefined): SecondReadingStats {
   const out: SecondReadingStats = { agreed: 0, differed: 0, unavailable: 0, unavailableBy: {}, settled: { keptFirst: 0, tookSecond: 0, rewrote: 0 }, readers: { first: [], second: [] }, recent: [] };
   const firsts = new Set<string>();
   const seconds = new Set<string>();
@@ -631,7 +631,7 @@ export type AuditRecord = {
 
 export async function auditRecord(rt: Runtime, orderId: string): Promise<AuditRecord> {
   const ctx = await opsContext(rt);
-  const order = ctx.orders.find((o) => o.orderId === orderId);
+  const order = ctx.orderById.get(orderId);
   if (!order) throw new DockError(404, "order_not_found", `No order ${orderId}.`);
   const entries = ctx.byRequest.get(order.requestId) ?? [];
   const request = entries.find((e) => e.type === "request");
@@ -723,7 +723,7 @@ export async function auditRecord(rt: Runtime, orderId: string): Promise<AuditRe
 
 /** The whole chain for a browser check: every entry, with the kitchen's private steps withheld but hashes kept. */
 export function ledgerForCheck(rt: Runtime): { entries: DisclosedEntry[]; withheld: number; server: { ok: boolean; length: number; message?: string } } {
-  const all = rt.dock.ledger.entries();
+  const all = rt.dock.ledger.readonly();
   const entries = all.map(disclose);
   const v = rt.dock.ledger.verify();
   return { entries, withheld: all.filter(isPrivate).length, server: v.ok ? { ok: true, length: v.length } : { ok: false, length: all.length, message: v.message } };

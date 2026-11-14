@@ -129,11 +129,11 @@ export function requireKitchenPerson(k: { info: { kind: string; name: string }; 
  * The ledger entries this principal may read: operations all of them; anyone else the entries of their own
  * organisations' requests and orders (and refusals of their own agent). Strangers none.
  */
-export async function readableEntries<E extends { requestId?: string; orderId?: string; actor: string }>(rt: Runtime, p: Principal, entries: E[]): Promise<E[]> {
+export async function readableEntries<E extends { requestId?: string; orderId?: string; actor: string }>(rt: Runtime, p: Principal, entries: readonly E[]): Promise<E[]> {
   const { all, orgs } = orgsOf(p);
-  if (all) return entries;
+  if (all) return [...entries];
   if (orgs.size === 0) return [];
-  const orderOrg = new Map((await rt.dock.listOrders()).map((o) => [o.orderId, o.orgId]));
+  const orderOrg = new Map<string, string | undefined>();
   const requestOrg = new Map<string, string | undefined>();
   const out: E[] = [];
   for (const e of entries) {
@@ -141,7 +141,10 @@ export async function readableEntries<E extends { requestId?: string; orderId?: 
     if (e.requestId) {
       if (!requestOrg.has(e.requestId)) requestOrg.set(e.requestId, await rt.dock.orgOfRequest(e.requestId));
       org = requestOrg.get(e.requestId);
-    } else if (e.orderId) org = orderOrg.get(e.orderId);
+    } else if (e.orderId) {
+      if (!orderOrg.has(e.orderId)) orderOrg.set(e.orderId, await rt.dock.orgOfOrder(e.orderId));
+      org = orderOrg.get(e.orderId);
+    }
     else if (p.agent && e.actor === `agent:${p.agent.agentId}`) org = p.agent.mandate.issuer.orgId;
     if (org && orgs.has(org)) out.push(e);
   }

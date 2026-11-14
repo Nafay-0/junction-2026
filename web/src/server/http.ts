@@ -1,6 +1,7 @@
 import { unstable_rethrow } from "next/navigation";
 import { DockError, isDockError } from "@/core/errors";
 import type { AgentSession, Dock } from "@/core/orders";
+import { asStoreError } from "./aiven/pg/errors";
 import { consoleContextOf } from "./console-context";
 import { doorLog, interfaceOf } from "./ops/door";
 import { isAdmissionRefusal } from "./ops/onsite";
@@ -21,8 +22,10 @@ export function errorBody(code: string, message: string, rule?: string, details?
 export async function handle(fn: (rt: Runtime) => Promise<Response>): Promise<Response> {
   try {
     return await fn(await getRuntime());
-  } catch (err) {
-    unstable_rethrow(err); // let Next.js see its own control-flow errors (e.g. "this route is request-time")
+  } catch (caught) {
+    unstable_rethrow(caught); // let Next.js see its own control-flow errors (e.g. "this route is request-time")
+    // The database away (refused, reset, timed out) is a 503 store_unavailable with a sentence, never an empty 500.
+    const err = asStoreError(caught);
     if (isDockError(err)) {
       const retry = err.status === 503 || err.status === 429 ? Number((err.details as { retryAfterSeconds?: unknown } | undefined)?.retryAfterSeconds) : NaN;
       return Response.json(errorBody(err.code, err.message, err.rule, err.details), { status: err.status, ...(Number.isFinite(retry) && retry > 0 ? { headers: { "retry-after": String(Math.ceil(retry)) } } : {}) });

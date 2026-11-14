@@ -33,8 +33,11 @@ export type AgentInfo = {
 export type OpsContext = {
   rt: Runtime;
   now: Date;
-  entries: LedgerEntry[];
+  entries: readonly LedgerEntry[];
   orders: PublicOrder[];
+  /** orderId -> order, and requestId -> its orders (latest update first): lookups without scanning every order. */
+  orderById: Map<string, PublicOrder>;
+  ordersByRequest: Map<string, PublicOrder[]>;
   sandboxes: SandboxSummary[];
   door: DoorLog;
   suspensions: SuspensionRegistry;
@@ -55,7 +58,7 @@ export type OpsContext = {
 const g = globalThis as typeof globalThis & { __dockOpsNames?: Map<string, string> };
 const NAMES = (g.__dockOpsNames ??= new Map<string, string>());
 
-async function learnNames(rt: Runtime, entries: LedgerEntry[]): Promise<void> {
+async function learnNames(rt: Runtime, entries: readonly LedgerEntry[]): Promise<void> {
   const ids = new Set<string>();
   const add = (v: unknown) => typeof v === "string" && ids.add(v);
   for (const e of entries) {
@@ -89,7 +92,7 @@ function mandateOfToken(token: string): Mandate | undefined {
 
 export async function opsContext(rt: Runtime, now = new Date()): Promise<OpsContext> {
   const { dock } = rt;
-  const entries = dock.ledger.entries();
+  const entries = dock.ledger.readonly();
   const orders = await dock.listOrders();
   const sandboxes = await rt.sandboxes.list();
   const door = doorLog(dock);
@@ -132,10 +135,19 @@ export async function opsContext(rt: Runtime, now = new Date()): Promise<OpsCont
     list.push(e);
     byRequest.set(e.requestId, list);
   }
+  const orderById = new Map(orders.map((o) => [o.orderId, o]));
+  const ordersByRequest = new Map<string, PublicOrder[]>();
+  for (const o of orders) {
+    const list = ordersByRequest.get(o.requestId);
+    if (list) list.push(o);
+    else ordersByRequest.set(o.requestId, [o]);
+  }
+  for (const list of ordersByRequest.values()) list.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+
   for (const [requestId, e] of requests) {
     const agentId = e.actor.replace(/^agent:/, "");
     if (agents.has(agentId)) continue;
-    const orgName = orders.find((o) => o.requestId === requestId)?.orgName ?? / of (.+?) opened a request/.exec(e.summary)?.[1] ?? "Unknown organisation";
+    const orgName = ordersByRequest.get(requestId)?.[0]?.orgName ?? / of (.+?) opened a request/.exec(e.summary)?.[1] ?? "Unknown organisation";
     agents.set(agentId, { agentId, orgId: orders.find((o) => o.agentId === agentId)?.orgId ?? "unknown", orgName, label: agentId, kind: "outside" });
   }
 
@@ -146,6 +158,8 @@ export async function opsContext(rt: Runtime, now = new Date()): Promise<OpsCont
     now,
     entries,
     orders,
+    orderById,
+    ordersByRequest,
     sandboxes,
     door,
     suspensions: suspensions(dock),

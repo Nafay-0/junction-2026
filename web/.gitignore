@@ -50,5 +50,11 @@ next-env.d.ts
 # crash test output (pnpm crash)
 /crash-results/
 
+# test infrastructure outputs
+/tests-live/results/
+/e2e/.auth/
+
 # raw image-model output (scripts/art/generate.ts); only compressed files in public/art/ ship
 .art-raw/
+# visual baselines: taken once the interface settles (pnpm e2e:visual:update); not committed yet
+/e2e/visual/__screenshots__/
