@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ChevronRight, Cloud, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { RULE_TITLE, clockSeconds } from "../../../../_ui/plain";
 import { fi, stamp } from "../../../_ui/format";
@@ -21,12 +22,12 @@ const TABS = [
 export function PlatformTabs() {
   const path = usePathname();
   return (
-    <nav aria-label="Platform" className="mb-5 flex gap-1 overflow-x-auto border-b-2 border-line">
+    <nav aria-label="Platform" className="mb-6 flex max-w-full gap-1 overflow-x-auto rounded-full bg-surface p-1 sm:inline-flex">
       {TABS.map((t) => {
         const on = t.href === "/ops/platform" ? path === t.href : path.startsWith(t.href);
         return (
-          <Link key={t.href} href={t.href} aria-current={on ? "page" : undefined} title={t.what} className={`-mb-[2px] flex shrink-0 items-center gap-2 px-3 py-2.5 text-[0.98rem] font-semibold ${on ? "border-b-[4px] border-petrol text-ink" : "text-ink-soft hover:text-petrol"}`}>
-            {t.href === "/ops/platform/agent" && <span aria-hidden className="size-2.5 bg-lime ring-1 ring-ink/30" />}
+          <Link key={t.href} href={t.href} aria-current={on ? "page" : undefined} title={t.what} className={`flex min-h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-4 text-[0.9rem] font-medium transition-[background-color,color,box-shadow] duration-150 pointer-coarse:min-h-10 ${on ? "bg-paper text-ink shadow-xs" : "text-ink-soft hover:text-ink"}`}>
+            {t.href === "/ops/platform/agent" && <span aria-hidden className="size-2 rounded-full bg-lime ring-2 ring-lime/30" />}
             {t.label}
           </Link>
         );
@@ -37,10 +38,8 @@ export function PlatformTabs() {
 
 export function OnAiven({ className = "" }: { className?: string }) {
   return (
-    <span className={`inline-flex items-center gap-1 border border-petrol px-1.5 py-[1px] text-[0.78rem] font-semibold text-petrol ${className}`} title="Runs on Aiven">
-      <svg width="9" height="9" viewBox="0 0 10 10" aria-hidden>
-        <path d="M5 0.8 L9.2 9.2 H0.8 Z" fill="none" stroke="currentColor" strokeWidth="1.6" />
-      </svg>
+    <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-petrol-soft px-2.5 text-[0.76rem] font-medium leading-6 text-petrol-deep ${className}`} title="Runs on Aiven">
+      <Cloud aria-hidden size={12} strokeWidth={2.2} />
       On Aiven
     </span>
   );
@@ -49,15 +48,8 @@ export function OnAiven({ className = "" }: { className?: string }) {
 /** Up, down, or not configured: a petrol square when it answers, a crossed one when it does not, an outline when off. */
 export function Status({ ok, label }: { ok: boolean | null | undefined; label?: string }) {
   return (
-    <span className={`inline-flex items-center gap-1.5 text-[0.88rem] font-semibold ${ok === true ? "text-petrol" : ok === false ? "text-ink" : "text-ink-soft"}`}>
-      {ok === false ? (
-        <svg width="11" height="11" viewBox="0 0 10 10" aria-hidden>
-          <rect x="0.5" y="0.5" width="9" height="9" fill="var(--color-ink)" />
-          <path d="M2.5 2.5 L7.5 7.5 M7.5 2.5 L2.5 7.5" stroke="white" strokeWidth="1.5" />
-        </svg>
-      ) : (
-        <span aria-hidden className={`inline-block size-2.5 ${ok === true ? "bg-petrol" : "border-[1.5px] border-current"}`} />
-      )}
+    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[0.8rem] font-semibold leading-6 ${ok === true ? "bg-good-soft text-good" : ok === false ? "bg-bad-soft text-bad" : "bg-surface text-ink-soft"}`}>
+      {ok === false ? <X aria-hidden size={12} strokeWidth={3} /> : <span aria-hidden className={`inline-block size-1.5 rounded-full ${ok === true ? "bg-good" : "border border-current"}`} />}
       {label ?? (ok === true ? "answers" : ok === false ? "not answering" : "not configured")}
     </span>
   );
@@ -72,12 +64,12 @@ export function Rows({ columns, rows, max = 12, empty = "No rows." }: { columns:
   if (!rows.length) return <p className="text-[0.84rem] text-ink-soft">{empty}</p>;
   const cols = columns.length ? columns : Object.keys(rows[0]);
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto rounded-lg border border-line bg-paper">
       <table className="w-full border-collapse text-left text-[0.88rem] tabular">
         <thead>
-          <tr className="border-b-2 border-petrol">
+          <tr className="border-b border-line bg-surface/60">
             {cols.map((c) => (
-              <th key={c} scope="col" title={c} className="whitespace-nowrap px-2 py-1.5 text-[0.82rem] font-semibold text-ink-soft">
+              <th key={c} scope="col" title={c} className="whitespace-nowrap px-3 py-2 text-[0.8rem] font-semibold text-ink-soft">
                 {columnWord(c)}
               </th>
             ))}
@@ -85,9 +77,9 @@ export function Rows({ columns, rows, max = 12, empty = "No rows." }: { columns:
         </thead>
         <tbody>
           {rows.slice(0, max).map((r, i) => (
-            <tr key={i} className="border-b border-line/70">
+            <tr key={i} className="border-b border-line last:border-0">
               {cols.map((c) => (
-                <td key={c} className="max-w-[38ch] truncate px-2 py-1 align-top" title={fmtCell(r[c])}>
+                <td key={c} className="max-w-[38ch] truncate px-3 py-1.5 align-top" title={fmtCell(r[c])}>
                   {fmtCell(r[c])}
                 </td>
               ))}
@@ -95,7 +87,7 @@ export function Rows({ columns, rows, max = 12, empty = "No rows." }: { columns:
           ))}
         </tbody>
       </table>
-      {rows.length > max && <p className="mt-1 text-[0.76rem] text-ink-soft">and {rows.length - max} more rows</p>}
+      {rows.length > max && <p className="border-t border-line px-3 py-1.5 text-[0.76rem] text-ink-soft">and {rows.length - max} more rows</p>}
     </div>
   );
 }
@@ -152,7 +144,7 @@ export function Bars({ rows, series, height = 120, label }: { rows: Record<strin
                 const v = Number(r[s.key]) || 0;
                 const h = (v / max) * (height - 6);
                 y -= h;
-                return v ? <rect key={s.key} x={i * bw + bw * 0.12} y={y} width={Math.max(1, bw * 0.76)} height={h} fill={fill[s.tone]} /> : null;
+                return v ? <rect key={s.key} x={i * bw + bw * 0.12} y={y} width={Math.max(1, bw * 0.76)} height={h} rx={Math.min(3, bw * 0.2)} fill={fill[s.tone]} /> : null;
               })}
             </g>
           );
@@ -161,7 +153,7 @@ export function Bars({ rows, series, height = 120, label }: { rows: Record<strin
       <figcaption className="mt-1 flex flex-wrap gap-x-4 text-[0.82rem] text-ink-soft">
         {series.map((s) => (
           <span key={s.key} className="inline-flex items-center gap-1">
-            <span aria-hidden className="inline-block size-2.5" style={{ background: fill[s.tone] }} />
+            <span aria-hidden className="inline-block size-2.5 rounded-xs" style={{ background: fill[s.tone] }} />
             {s.label}
           </span>
         ))}
@@ -184,8 +176,8 @@ export function HBars({ rows, labelKey, valueKey, safety = false }: { rows: Reco
             <span className="truncate" title={String(r[labelKey])}>
               {RULE_TITLE[String(r[labelKey])] ?? String(r[labelKey]).replaceAll("_", " ")}
             </span>
-            <span className="h-3 bg-mist">
-              <span className={`block h-full ${safety ? "bg-safety-ink" : "bg-petrol"}`} style={{ width: `${(v / max) * 100}%` }} />
+            <span className="h-2 overflow-hidden rounded-full bg-surface">
+              <span className={`block h-full rounded-full ${safety ? "bg-safety-ink" : "bg-petrol"}`} style={{ width: `${(v / max) * 100}%` }} />
             </span>
             <span className="text-right font-semibold tabular">{v}</span>
           </li>
@@ -197,9 +189,12 @@ export function HBars({ rows, labelKey, valueKey, safety = false }: { rows: Reco
 
 export function SqlBox({ sql, summary = "The query" }: { sql: string; summary?: string }) {
   return (
-    <details className="mt-2 text-[0.78rem]">
-      <summary className="cursor-pointer text-[0.85rem] text-ink-soft underline decoration-line underline-offset-2 hover:text-ink">{summary}</summary>
-      <pre className="mt-1 overflow-x-auto whitespace-pre-wrap bg-mist px-3 py-2 font-mono text-[0.76rem] leading-snug">{sql}</pre>
+    <details className="group mt-2.5 text-[0.78rem]">
+      <summary className="inline-flex min-h-8 cursor-pointer list-none items-center gap-1 rounded-full text-[0.84rem] text-ink-soft hover:text-ink [&::-webkit-details-marker]:hidden">
+        <ChevronRight aria-hidden size={14} className="transition-transform duration-150 group-open:rotate-90 motion-reduce:transition-none" />
+        {summary}
+      </summary>
+      <pre className="mt-1.5 overflow-x-auto whitespace-pre-wrap rounded-md bg-surface px-3 py-2.5 font-mono text-[0.76rem] leading-snug">{sql}</pre>
     </details>
   );
 }
