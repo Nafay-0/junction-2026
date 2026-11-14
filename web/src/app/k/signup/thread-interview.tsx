@@ -50,7 +50,10 @@ export function SetUpInterview({ onSigned }: { onSigned: (r: { next: string; fir
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on arrival
   }, []);
-  useEffect(() => end.current?.scrollIntoView?.({ block: "nearest", behavior: "smooth" }), [step]);
+  useEffect(() => {
+    // A block body: scrollIntoView returns a promise in newer browsers, and an effect may only return its cleanup.
+    end.current?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+  }, [step]);
 
   const answer = (id: keyof InterviewAnswers, v: unknown) => void load({ ...answers, [id]: v });
   async function sign() {

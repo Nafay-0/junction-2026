@@ -1,0 +1,265 @@
+{
+  "at": "2026-11-14T07:03:14.474Z",
+  "base": "http://localhost:3125",
+  "rows": [
+    {
+      "id": "setup-en",
+      "lang": "en",
+      "restaurant": "Harbour Kitchen",
+      "pass": true,
+      "questions": 8,
+      "asked": [
+        "kind",
+        "diet",
+        "allergens",
+        "days",
+        "usualEur",
+        "limitEur",
+        "budgetEur",
+        "signer"
+      ],
+      "taps": 13,
+      "seconds": 0.06,
+      "checks": [
+        {
+          "name": "signed (201) and the kitchen has a mandate",
+          "ok": true
+        },
+        {
+          "name": "spend-alone limit as answered",
+          "ok": true
+        },
+        {
+          "name": "weekly budget at least the limit",
+          "ok": true
+        },
+        {
+          "name": "required claims as answered",
+          "ok": true
+        },
+        {
+          "name": "forbidden allergens as answered",
+          "ok": true
+        },
+        {
+          "name": "signer as answered",
+          "ok": true
+        },
+        {
+          "name": "the kind was asked (the name does not say it)",
+          "ok": true
+        },
+        {
+          "name": "answers in memory (allergens, delivery days, usual order)",
+          "ok": true
+        }
+      ],
+      "calls": [
+        {
+          "method": "POST",
+          "path": "/ui-api/account/signup",
+          "status": 201,
+          "ms": 147
+        },
+        {
+          "method": "POST",
+          "path": "/ui-api/account/interview",
+          "status": 200,
+          "ms": 29
+        },
+        {
+          "method": "POST",
+          "path": "/ui-api/account/interview",
+          "status": 200,
+          "ms": 3
+        },
+        {
+          "method": "POST",
+          "path": "/ui-api/account/interview",
+          "status": 200,
+          "ms": 3
+        },
+        {
+          "method": "POST",
+          "path": "/ui-api/account/interview",
+          "status": 200,
+          "ms": 2
+        },
+        {
+          "method": "POST",
+          "path": "/ui-api/account/interview",
+          "status": 200,
+          "ms": 3
+        },
+        {
+          "method": "POST",
+          "path": "/ui-api/account/interview",
+          "status": 200,
+          "ms": 2
+        },
+        {
+          "method": "POST",
+          "path": "/ui-api/account/interview",
+          "status": 200,
+          "ms": 2
+        },
+        {
+          "method": "POST",
+          "path": "/ui-api/account/interview",
+          "status": 200,
+          "ms": 2
+        },
+        {
+          "method": "POST",
+          "path": "/ui-api/account/interview",
+          "status": 200,
+          "ms": 3
+        },
+        {
+          "method": "POST",
+          "path": "/ui-api/account/interview",
+          "status": 201,
+          "ms": 10
+        },
+        {
+          "method": "GET",
+          "path": "/ui-api/account/mandate",
+          "status": 200,
+          "ms": 3
+        },
+        {
+          "method": "GET",
+          "path": "/ui-api/memory/kitchens/eval-en-g273m6",
+          "status": 200,
+          "ms": 6
+        }
+      ]
+    },
+    {
+      "id": "setup-fi",
+      "lang": "fi",
+      "restaurant": "Päiväkoti Satu",
+      "pass": true,
+      "questions": 7,
+      "asked": [
+        "diet",
+        "allergens",
+        "days",
+        "usualEur",
+        "limitEur",
+        "budgetEur",
+        "signer"
+      ],
+      "taps": 15,
+      "seconds": 0.02,
+      "checks": [
+        {
+          "name": "signed (201) and the kitchen has a mandate",
+          "ok": true
+        },
+        {
+          "name": "spend-alone limit as answered",
+          "ok": true
+        },
+        {
+          "name": "weekly budget at least the limit",
+          "ok": true
+        },
+        {
+          "name": "required claims as answered",
+          "ok": true
+        },
+        {
+          "name": "forbidden allergens as answered",
+          "ok": true
+        },
+        {
+          "name": "signer as answered",
+          "ok": true
+        },
+        {
+          "name": "the kind the name says was not asked",
+          "ok": true
+        },
+        {
+          "name": "answers in memory (allergens, delivery days, usual order)",
+          "ok": true
+        }
+      ],
+      "calls": [
+        {
+          "method": "POST",
+          "path": "/ui-api/account/signup",
+          "status": 201,
+          "ms": 49
+        },
+        {
+          "method": "POST",
+          "path": "/ui-api/account/interview",
+          "status": 200,
+          "ms": 2
+        },
+        {
+          "method": "POST",
+          "path": "/ui-api/account/interview",
+          "status": 200,
+          "ms": 1
+        },
+        {
+          "method": "POST",
+          "path": "/ui-api/account/interview",
+          "status": 200,
+          "ms": 1
+        },
+        {
+          "method": "POST",
+          "path": "/ui-api/account/interview",
+          "status": 200,
+          "ms": 2
+        },
+        {
+          "method": "POST",
+          "path": "/ui-api/account/interview",
+          "status": 200,
+          "ms": 1
+        },
+        {
+          "method": "POST",
+          "path": "/ui-api/account/interview",
+          "status": 200,
+          "ms": 1
+        },
+        {
+          "method": "POST",
+          "path": "/ui-api/account/interview",
+          "status": 200,
+          "ms": 1
+        },
+        {
+          "method": "POST",
+          "path": "/ui-api/account/interview",
+          "status": 200,
+          "ms": 1
+        },
+        {
+          "method": "POST",
+          "path": "/ui-api/account/interview",
+          "status": 201,
+          "ms": 6
+        },
+        {
+          "method": "GET",
+          "path": "/ui-api/account/mandate",
+          "status": 200,
+          "ms": 2
+        },
+        {
+          "method": "GET",
+          "path": "/ui-api/memory/kitchens/eval-fi-g273s4",
+          "status": 200,
+          "ms": 2
+        }
+      ]
+    }
+  ]
+}
