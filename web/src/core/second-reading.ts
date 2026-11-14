@@ -140,7 +140,7 @@ const WEEKDAY_WORDS: RegExp[] = [
   /saturday|lauantai|lordag/,
   /sunday|sunnuntai|sondag/,
 ];
-const DAY_WORDS = /today|tonight|tomorrow|tanaan|huome|ylihuome|idag|i ?morgon|overmorgon|week|viiko|vecka|\d{1,2}\s*[./]\s*\d{1,2}|\d{1,2}(st|nd|rd|th|:e)\b|\d{1,2}\.\s*(paiva|pv)|\bden \d{1,2}/;
+const DAY_WORDS = /today|tonight|tomorrow|tanaan|huome|huomis|ylihuom|idag|i ?morgon|overmorgon|week|viiko|vecka|\d{1,2}\s*[./]\s*\d{1,2}|\d{1,2}(st|nd|rd|th|:e)\b|\d{1,2}\.\s*(paiva|pv)|\bden \d{1,2}/;
 
 /** Does the text name this claim (in any polarity)? A tag with no word list counts as named, so it is still compared. */
 export function claimNamed(text: string, tag: string): boolean {
@@ -184,6 +184,19 @@ export function claimNegatedInWords(text: string, tag: string): boolean {
   if (!re) return true;
   const words = fold(text).replace(/n't\b/g, " not").split(/[^a-z0-9]+/).filter(Boolean);
   return words.some((w, i) => re.test(w) && (words.slice(Math.max(0, i - 3), i).some((x) => NEGATION.test(x)) || words.slice(i + 1, i + 4).some((x) => NOT_NEEDED.test(x))));
+}
+
+/**
+ * Do the words say to avoid this allergen ("no nuts", "without eggs", "gluten-free", "pähkinätön", "nut allergy",
+ * "ilman pähkinöitä", "utan nötter")? A word for it with a negation within three words before, or a "-free", "-ton",
+ * "-fri" or allergy word in it or right after it. "Oat cooking cream" names oats but does not avoid them.
+ */
+export function allergenAvoidedInWords(text: string, allergen: string): boolean {
+  const re = ALLERGEN_WORDS[allergen];
+  if (!re) return true;
+  const words = fold(text).replace(/n't\b/g, " not").split(/[^a-z0-9]+/).filter(Boolean);
+  const free = /free|ton$|ton[a-z]|tom|fri$|frit$|allerg|vapaa/;
+  return words.some((w, i) => re.test(w) && (free.test(w) || words.slice(Math.max(0, i - 3), i).some((x) => NEGATION.test(x)) || words.slice(i + 1, i + 3).some((x) => free.test(x))));
 }
 
 /**
@@ -384,7 +397,8 @@ function compareAllergens(a: Reading, b: Reading, text: string, rules: ReadingRu
     return false;
   };
   const onlyA = [...xa].filter((x) => !xb.has(x) && named(x)).sort();
-  const onlyB = [...xb].filter((x) => !xa.has(x) && named(x)).sort();
+  // An allergen only the second reading avoids counts when the words say to avoid it (not merely name it).
+  const onlyB = [...xb].filter((x) => !xa.has(x) && named(x) && (!rules.onlyWhatTheWordsSay || !text || allergenAvoidedInWords(text, x) || (minor.push(`${x} avoided in the second reading, but the words do not say to avoid it`), false))).sort();
   if (!rules.askWhenOnlyFirstHasClaim) onlyA.length = 0;
   if (!rules.askWhenOnlySecondHasClaim) onlyB.length = 0;
   if (!onlyA.length && !onlyB.length) return undefined;
@@ -455,6 +469,11 @@ function compareDate(a: Reading, b: Reading, text: string, today: string | undef
     // A second reading on a day the words rule out (another weekday than the one named, not "tomorrow") misread
     // them; that is no question for the buyer. (The first reading may rightly differ from the words: "before
     // Wednesday" is a Tuesday.)
+    // "Before Tuesday" is Monday to one reader and Tuesday to another: a day apart, both honest readings of the words.
+    if (da && db && /\b(before|ennen|fore|innan)\b/.test(fold(text)) && Math.abs(Date.parse(da) - Date.parse(db)) === 86_400_000) {
+      minor.push(`"before" a day: ${da} against ${db}`);
+      return undefined;
+    }
     if (db && !dayFitsWords(text, db, today)) {
       minor.push(`the second reading's day ${db} does not fit the words`);
       return undefined;

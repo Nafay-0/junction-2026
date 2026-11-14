@@ -182,6 +182,7 @@ describe("the transcription, by plain code", () => {
     expect(d({ deliveryDate: { day: 3, month: null } })).toBe("2026-12-03"); // past this month: next month
     expect(d({ deliveryDate: { day: 31, month: 2 } })).toBeUndefined();
     expect(d({})).toBeUndefined();
+    expect(d({ deliveryRelative: "tomorrow", deliveryWeekday: "saturday" })).toBe("2026-11-15"); // "huomiseksi" with today's weekday added
   });
 
   it("packs with a written pack size keep the size, for the comparison", () => {

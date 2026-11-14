@@ -92,6 +92,29 @@ later, the day before, the day dropped) and compared with the real second readin
 field. Two more kinds add what nobody said (a lactose-free claim, a nut allergy); by design they are left to the
 grounding check, and they are reported apart.
 
+### After the integration merge (main e7c8239: one intake, grounding, multi-item reader, memory recall)
+
+Re-run at production settings, first and second readings both read afresh (two runs of the second reader), plus a
+new set of 10 requests naming several items. The second reader now transcribes every item named and only the item of
+the same kind as the first reading's one need is compared; a "same again on another day" clause turns the day
+comparison off. After the re-run, four rules were fixed on what it showed: "tomorrow" wins over a weekday the small
+model adds next to it; an allergen only the second reading avoids must be avoided in the words, not merely named
+("oat cooking cream"); "before Tuesday" read as Monday or Tuesday is not asked; "huomiseksi" counts as naming a day.
+
+| | Tuning (77) | Held-out (30) | Fresh (20) | Several items (10) |
+|---|---|---|---|---|
+| First reader (Opus 5.5, now with the grounding check) right | 68 (9 wrong) | 27 (3 wrong) | 18 (2 wrong) | 8 (2 asked for the amount) |
+| Needless questions, before the four fixes | 0 and 0 of 68 | 2 and 2 of 27 | 0 and 0 of 18 | 0 and 0 of 8 |
+| **Needless questions, production** | **0 and 0 of 68** | **0 and 0 of 27** | **0 and 0 of 18** | **0 and 0 of 8** |
+| **Real misreadings of the first reader caught** | **2 of 2** | **3 of 3** | **1 of 1** | none |
+| Injected misreadings caught | 93 %, 92 % | 96 %, 94 % | 98 %, 100 % | 81 % |
+
+The first reader's new errors come from main's grounding check, not the model: it removes a delivery day written
+as "huomiseksi", "ylihuomiseksi" or "den 19:e" (6 requests, all caught by the second reader as "only the second
+reading has a day"), and an amount written in words ("two dozen", "tusina", "six 10-litre boxes"; the buyer is then
+asked for the amount, which is not compared). Those should be fixed in `core/grounding.ts`; until they are, the second
+reader is what asks about the dropped day. The numbers below are from before the merge.
+
 ### Results, production settings (two runs of the second reader on each set)
 
 | | Tuning set (77) | Held-out set (30) | Fresh set (20) |

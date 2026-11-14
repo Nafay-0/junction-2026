@@ -1,0 +1,852 @@
+{
+ "anthropic:claude-opus-5-5": {
+  "m-en-01": {
+   "ok": true,
+   "need": {
+    "text": "I need 100 litres of lactose-free milk and 20 kg of butter by Monday",
+    "item": {
+     "text": "lactose-free milk",
+     "attributes": [
+      "lactose_free"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 100,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-16",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 3221,
+   "costUsd": 0.01698
+  },
+  "m-en-03": {
+   "ok": true,
+   "need": {
+    "text": "30 l oat drink on Wednesday and the same again next Monday",
+    "item": {
+     "text": "oat drink",
+     "attributes": [],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 30,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-18",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 3776,
+   "costUsd": 0.018412
+  },
+  "m-en-02": {
+   "ok": true,
+   "need": {
+    "text": "200 L milk plus 15 kg natural yoghurt for Thursday",
+    "item": {
+     "text": "milk",
+     "attributes": [],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 200,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-19",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 4556,
+   "costUsd": 0.019904
+  },
+  "m-en-04": {
+   "ok": true,
+   "need": {
+    "text": "Please send 50 litres of organic milk, 10 kg of cheese and 5 kg of butter on Friday",
+    "item": {
+     "text": "organic milk, cheese and butter",
+     "attributes": [],
+     "excludedAttributes": []
+    },
+    "deliverBy": "2026-11-20",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 5006,
+   "incomplete": true,
+   "costUsd": null
+  },
+  "m-fi-01": {
+   "ok": true,
+   "need": {
+    "text": "40 litraa maitoa ja 15 kg voita perjantaiksi",
+    "item": {
+     "text": "maitoa",
+     "attributes": [],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 40,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-20",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 4116,
+   "costUsd": 0.017108
+  },
+  "m-fi-02": {
+   "ok": true,
+   "need": {
+    "text": "Laktoositonta maitoa 120 litraa ja kermaa 10 litraa tiistaiksi",
+    "item": {
+     "text": "laktoositonta maitoa",
+     "attributes": [
+      "lactose_free"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 120,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-17",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 3579,
+   "costUsd": 0.017592
+  },
+  "m-fi-03": {
+   "ok": true,
+   "need": {
+    "text": "Huomiseksi 60 l maitoa, ja samat uudestaan torstaiksi",
+    "item": {
+     "text": "maitoa",
+     "attributes": [],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 60,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-15",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 3012,
+   "costUsd": 0.016712
+  },
+  "m-sv-01": {
+   "ok": true,
+   "need": {
+    "text": "100 liter mjölk och 20 kg smör till måndag",
+    "item": {
+     "text": "100 liter mjölk och 20 kg smör",
+     "attributes": [],
+     "excludedAttributes": []
+    },
+    "deliverBy": "2026-11-16",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 3900,
+   "incomplete": true,
+   "costUsd": null
+  },
+  "m-sv-02": {
+   "ok": true,
+   "need": {
+    "text": "Laktosfri mjölk 80 liter samt 12 kg yoghurt till onsdag",
+    "item": {
+     "text": "Laktosfri mjölk",
+     "attributes": [
+      "lactose_free"
+     ],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 80,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-18",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 2931,
+   "costUsd": 0.016836
+  },
+  "m-sv-03": {
+   "ok": true,
+   "need": {
+    "text": "50 liter mjölk till tisdag och samma igen till fredag",
+    "item": {
+     "text": "mjölk",
+     "attributes": [],
+     "excludedAttributes": []
+    },
+    "quantity": {
+     "amount": 50,
+     "unit": "L"
+    },
+    "deliverBy": "2026-11-17",
+    "requiredClaims": [],
+    "forbiddenAllergens": [],
+    "optimise": "unstated",
+    "sameAsLastTime": false
+   },
+   "ms": 4445,
+   "costUsd": 0.020616
+  }
+ },
+ "featherless:nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16": {
+  "m-en-02": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "milk",
+      "amount": 200,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     },
+     {
+      "item": "natural yoghurt",
+      "amount": 15,
+      "unit": "kg",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": {
+     "day": 20,
+     "month": 11
+    },
+    "deliveryWeekday": "thursday",
+    "deliveryRelative": null
+   },
+   "ms": 1542,
+   "costUsd": 0.000075
+  },
+  "m-en-01": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "lactose-free milk",
+      "amount": 100,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [
+       "lactose_free"
+      ],
+      "notWanted": [],
+      "avoid": []
+     },
+     {
+      "item": "butter",
+      "amount": 20,
+      "unit": "kg",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "monday",
+    "deliveryRelative": null
+   },
+   "ms": 1770,
+   "costUsd": 0.000073
+  },
+  "m-en-03": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "oat drink",
+      "amount": 30,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "wednesday",
+    "deliveryRelative": null
+   },
+   "ms": 1245,
+   "costUsd": 0.00006
+  },
+  "m-en-04": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "organic milk",
+      "amount": 50,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [
+       "organic"
+      ],
+      "notWanted": [],
+      "avoid": []
+     },
+     {
+      "item": "cheese",
+      "amount": 10,
+      "unit": "kg",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     },
+     {
+      "item": "butter",
+      "amount": 5,
+      "unit": "kg",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "friday",
+    "deliveryRelative": null
+   },
+   "ms": 1609,
+   "costUsd": 0.000082
+  },
+  "m-fi-01": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "maito",
+      "amount": 40,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     },
+     {
+      "item": "voi",
+      "amount": 15,
+      "unit": "kg",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "friday",
+    "deliveryRelative": null
+   },
+   "ms": 1302,
+   "costUsd": 0.000071
+  },
+  "m-fi-02": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "laktoositonta maitoa",
+      "amount": 120,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [
+       "lactose_free"
+      ],
+      "notWanted": [],
+      "avoid": []
+     },
+     {
+      "item": "kermaa",
+      "amount": 10,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": null
+   },
+   "ms": 1592,
+   "costUsd": 0.000074
+  },
+  "m-fi-03": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "maitoa",
+      "amount": 60,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "thursday",
+    "deliveryRelative": "tomorrow"
+   },
+   "ms": 1814,
+   "costUsd": 0.000061
+  },
+  "m-sv-01": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "mjölk",
+      "amount": 100,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     },
+     {
+      "item": "smör",
+      "amount": 20,
+      "unit": "kg",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "monday",
+    "deliveryRelative": null
+   },
+   "ms": 1347,
+   "costUsd": 0.000072
+  },
+  "m-sv-02": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "laktosfri mjölk",
+      "amount": 80,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [
+       "lactose_free"
+      ],
+      "notWanted": [],
+      "avoid": []
+     },
+     {
+      "item": "yoghurt",
+      "amount": 12,
+      "unit": "kg",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "wednesday",
+    "deliveryRelative": null
+   },
+   "ms": 1326,
+   "costUsd": 0.000074
+  },
+  "m-sv-03": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "mjölk",
+      "amount": 50,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     },
+     {
+      "item": "mjölk",
+      "amount": 50,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": null
+   },
+   "ms": 1398,
+   "costUsd": 0.000072
+  }
+ },
+ "featherless:nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16@2": {
+  "m-en-01": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "lactose-free milk",
+      "amount": 100,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [
+       "lactose_free"
+      ],
+      "notWanted": [],
+      "avoid": []
+     },
+     {
+      "item": "butter",
+      "amount": 20,
+      "unit": "kg",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "monday",
+    "deliveryRelative": null
+   },
+   "ms": 1820,
+   "costUsd": 0.000073
+  },
+  "m-en-02": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "milk",
+      "amount": 200,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     },
+     {
+      "item": "natural yoghurt",
+      "amount": 15,
+      "unit": "kg",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": {
+     "day": 200,
+     "month": null
+    },
+    "deliveryWeekday": "thursday",
+    "deliveryRelative": null
+   },
+   "ms": 1638,
+   "costUsd": 0.000075
+  },
+  "m-en-03": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "oat drink",
+      "amount": 30,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "wednesday",
+    "deliveryRelative": null
+   },
+   "ms": 1416,
+   "costUsd": 0.00006
+  },
+  "m-en-04": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "organic milk",
+      "amount": 50,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [
+       "organic"
+      ],
+      "notWanted": [],
+      "avoid": []
+     },
+     {
+      "item": "cheese",
+      "amount": 10,
+      "unit": "kg",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     },
+     {
+      "item": "butter",
+      "amount": 5,
+      "unit": "kg",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "friday",
+    "deliveryRelative": null
+   },
+   "ms": 1580,
+   "costUsd": 0.000082
+  },
+  "m-fi-01": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "maito",
+      "amount": 40,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     },
+     {
+      "item": "voi",
+      "amount": 15,
+      "unit": "kg",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "friday",
+    "deliveryRelative": null
+   },
+   "ms": 1523,
+   "costUsd": 0.000071
+  },
+  "m-fi-02": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "laktoositonta maitoa",
+      "amount": 120,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [
+       "lactose_free"
+      ],
+      "notWanted": [],
+      "avoid": []
+     },
+     {
+      "item": "kermaa",
+      "amount": 10,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": null
+   },
+   "ms": 1332,
+   "costUsd": 0.000074
+  },
+  "m-fi-03": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "maitoa",
+      "amount": 60,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "thursday",
+    "deliveryRelative": "tomorrow"
+   },
+   "ms": 1539,
+   "costUsd": 0.000061
+  },
+  "m-sv-01": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "mjölk",
+      "amount": 100,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     },
+     {
+      "item": "smör",
+      "amount": 20,
+      "unit": "kg",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "monday",
+    "deliveryRelative": null
+   },
+   "ms": 1278,
+   "costUsd": 0.000072
+  },
+  "m-sv-02": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "laktosfri mjölk",
+      "amount": 80,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [
+       "lactose_free"
+      ],
+      "notWanted": [],
+      "avoid": []
+     },
+     {
+      "item": "yoghurt",
+      "amount": 12,
+      "unit": "kg",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "wednesday",
+    "deliveryRelative": null
+   },
+   "ms": 1346,
+   "costUsd": 0.000074
+  },
+  "m-sv-03": {
+   "ok": true,
+   "raw": {
+    "isPurchaseRequest": true,
+    "items": [
+     {
+      "item": "mjölk",
+      "amount": 50,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     },
+     {
+      "item": "mjölk",
+      "amount": 50,
+      "unit": "L",
+      "packSize": null,
+      "wanted": [],
+      "notWanted": [],
+      "avoid": []
+     }
+    ],
+    "deliveryDate": null,
+    "deliveryWeekday": "tuesday",
+    "deliveryRelative": null
+   },
+   "ms": 1393,
+   "costUsd": 0.000072
+  }
+ }
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyNeedPatch, NeedSchema } from "./need";
-import { claimNegatedInWords, compareReadings, describeSecondReading, fieldValues, numbersInText, readerName, readingConcerns, READING_RULES, type Reading, type SecondReadingRecord } from "./second-reading";
+import { allergenAvoidedInWords, claimNegatedInWords, compareReadings, describeSecondReading, fieldValues, numbersInText, readerName, readingConcerns, READING_RULES, type Reading, type SecondReadingRecord } from "./second-reading";
 
 const base: Reading = {
   item: { text: "lactose-free milk", attributes: ["lactose_free"], excludedAttributes: [] },
@@ -154,6 +154,10 @@ describe("only what the words say", () => {
     expect(fields(r({ forbiddenAllergens: ["peanuts"] }), r({ forbiddenAllergens: ["peanuts", "nuts"] }), fi)).toEqual(["allergens"]);
   });
 
+  it("'huomiseksi' names a day: the first reading without one is asked about the second's tomorrow", () => {
+    expect(fields(r({ deliverBy: undefined }), r({ deliverBy: "2026-11-15" }), "Huomiseksi 50 kiloa jogurttia")).toEqual(["date"]);
+  });
+
   it("no day in the words: a day in one reading is no question", () => {
     expect(compareReadings(r({ deliverBy: undefined }), r({ deliverBy: "2026-11-15" }), { text: "300 liter mjölk, ingen brådska" }).agreed).toBe(true);
   });
@@ -188,6 +192,18 @@ describe("negation and totals in the words", () => {
     const packs = (n: number, size?: number) => r({ quantity: { amount: n, unit: "pack" }, ...(size ? { packSize: { amount: size, unit: "L" as const } } : {}) });
     expect(compareReadings(packs(100), packs(1000, 10), { text }).agreed).toBe(true);
     expect(fields(packs(1000), packs(100, 10), text)).toEqual(["amount"]);
+  });
+});
+
+describe("allergens the words avoid, and 'before' a day", () => {
+  it("an allergen only the second reading avoids counts when the words say to avoid it, not when they only name it", () => {
+    const text = "No dairy, it's for a vegan event: 25 litres of oat cooking cream by Friday";
+    expect(compareReadings(r({ forbiddenAllergens: ["milk"] }), r({ forbiddenAllergens: ["milk", "oats", "nuts", "soy"] }), { text }).agreed).toBe(true);
+    for (const t of ["20 kg yoghurt without nuts", "nut allergy, 20 kg yoghurt", "20 kg pähkinätöntä jogurttia", "20 kg yoghurt utan nötter", "gluten-free bread"]) expect(allergenAvoidedInWords(t, t.includes("glut") ? "gluten" : "nuts")).toBe(true);
+  });
+
+  it("'before Tuesday' read as Monday and as Tuesday is no question", () => {
+    expect(compareReadings(r({ deliverBy: "2026-11-16" }), r({ deliverBy: "2026-11-17" }), { text: "18 kg of cottage cheese, organic, before Tuesday", today: "2026-11-14" }).agreed).toBe(true);
   });
 });
 

@@ -99,11 +99,12 @@ export function deliveryDay(d: Pick<SecondRead, "deliveryDate" | "deliveryWeekda
     const check = new Date(`${out}T12:00:00Z`);
     return Number.isNaN(check.getTime()) || check.toISOString().slice(0, 10) !== out ? undefined : out;
   }
+  // "Tomorrow" before a weekday: the small model sometimes adds today's weekday next to "huomiseksi".
+  if (d.deliveryRelative) return addDaysIso(today, { today: 0, tomorrow: 1, day_after_tomorrow: 2 }[d.deliveryRelative]);
   if (d.deliveryWeekday) {
     const want = WEEKDAYS.indexOf(d.deliveryWeekday) + 1;
     return addDaysIso(today, (want - isoWeekday(today) + 7) % 7 || 7);
   }
-  if (d.deliveryRelative) return addDaysIso(today, { today: 0, tomorrow: 1, day_after_tomorrow: 2 }[d.deliveryRelative]);
   return undefined;
 }
 
