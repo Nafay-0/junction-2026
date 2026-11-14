@@ -144,6 +144,13 @@ describe("guardrails", () => {
     expect(guardOffer({ product: c, reasons: reasonsFor(c, k(), [], ctx()) }, k(), [], july)).toMatchObject({ ok: false, rule: "unsupported_claim" });
   });
 
+  it("one open offer of a product is enough: a second run does not offer it again", () => {
+    const c = cream("L-CREAM");
+    const kk = k({ past: [{ ...offered("L-CREAM", 1), family: "cream" }] });
+    expect(guardOffer({ product: c, reasons: reasonsFor(c, kk, [], ctx()) }, kk, [], ctx({ live: L() }))).toMatchObject({ ok: false, rule: "already_offered" });
+    expect(shortlist(kk, PRODUCTS, ctx()).candidates.map((x) => x.product.id)).not.toContain("L-CREAM");
+  });
+
   it("a recent decline keeps the product away for 30 days; no live price, no offer", () => {
     const c = cream("L-CREAM");
     const kk = k({ past: [{ ...offered("L-CREAM", 12, "declined"), family: "cream" }] });

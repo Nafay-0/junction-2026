@@ -155,14 +155,18 @@ async function viewOf(rt: Runtime, k: { orgId: string; name: string; mandate: Pi
 // ---------- the one line ----------
 
 /**
- * The one-line reason. A model may write it (DOCK_OFFER_MODEL, or the cheap default of a provider with a key; off
- * with DOCK_OFFER_LLM=off and under tests); the grounding check then holds it to the offer's own figures, and any
- * line that says what they do not is replaced by the line plain code writes from the reasons.
+ * The one-line reason. Plain code writes it from the reasons. With DOCK_OFFER_LLM=on a model may write it instead
+ * (DOCK_OFFER_MODEL, or the cheap default of a provider with a key; never under tests); the grounding check then holds
+ * it to the offer's own figures, and any line that says what they do not is replaced by the plain-code line.
  */
 export type LineWriter = (input: { product: string; reasons: OfferReason[]; template: string }) => Promise<string | undefined>;
 
 async function modelLine(input: Parameters<LineWriter>[0]): Promise<string | undefined> {
-  if (process.env.DOCK_OFFER_LLM === "off" || process.env.VITEST || process.env.NODE_ENV === "test") return undefined;
+  // Opt-in. Measured 14 Nov 2026 on the real catalogue: a cheap model's lines passed the grounding check (every number
+  // was in the data) while saying what the data does not ("has not ordered milk before" to a kitchen that orders it
+  // weekly; "10 kitchens" from a count of its own orders). The check holds figures, not meaning, so plain code writes
+  // the line unless DOCK_OFFER_LLM=on.
+  if (process.env.DOCK_OFFER_LLM !== "on" || process.env.VITEST || process.env.NODE_ENV === "test") return undefined;
   const { defaultModel, createModel } = await import("../agent/models");
   const spec = defaultModel("DOCK_OFFER_MODEL");
   if (!spec) return undefined;
