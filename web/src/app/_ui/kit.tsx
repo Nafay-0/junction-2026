@@ -255,14 +255,14 @@ export function PageHeader({ title, lead, context, back, actions, className = ""
 }
 
 /**
- * Facts as rows: the label on the left and the value on the right on a desk, the label above the value on a phone;
- * hairlines between rows. For a product's facts, an order's details, a mandate's limits.
+ * Facts as rows: the label on the left and the value on the right on a desk, the label above the value on a phone
+ * (`stack={false}` keeps them side by side there too, for short values); hairlines between rows. For a product's facts, an order's details, a mandate's limits.
  */
-export function FactList({ rows, className = "", labelWidth = "11rem" }: { rows: { label: ReactNode; value: ReactNode; key?: string }[]; className?: string; labelWidth?: string }) {
+export function FactList({ rows, className = "", labelWidth = "11rem", stack = true }: { rows: { label: ReactNode; value: ReactNode; key?: string }[]; className?: string; labelWidth?: string; stack?: boolean }) {
   return (
     <dl className={`divide-y divide-line ${className}`}>
       {rows.map((r, i) => (
-        <div key={r.key ?? i} className="grid gap-x-5 gap-y-0.5 py-3 first:pt-0 last:pb-0 sm:grid-cols-[var(--facts-label)_minmax(0,1fr)]" style={{ ["--facts-label" as string]: labelWidth }}>
+        <div key={r.key ?? i} className={`grid gap-x-4 gap-y-0.5 py-3 first:pt-0 last:pb-0 sm:gap-x-5 ${stack ? "sm:grid-cols-[var(--facts-label)_minmax(0,1fr)]" : "grid-cols-[var(--facts-label)_minmax(0,1fr)]"}`} style={{ ["--facts-label" as string]: labelWidth }}>
           <dt className="text-[0.88rem] text-ink-soft hyphens-manual sm:text-[0.92rem]">{r.label}</dt>
           <dd className="min-w-0 break-words leading-snug">{r.value}</dd>
         </div>
