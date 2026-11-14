@@ -10,7 +10,7 @@ const over = (r?: WeekRun) => !!r && (r.state === "finished" || r.state === "can
  * A live week, kept current by long-polling the director: each request returns as soon as the run changes, so a
  * sign-off on the phone reaches the screen within the round trip of one request.
  */
-export function useLiveWeek(runId: string | undefined, initial?: WeekRun): { run?: WeekRun; error?: ApiError } {
+export function useLiveWeek(runId: string | undefined, initial?: WeekRun, urlOf: (runId: string, after: number) => string = (id, after) => `/ui-api/show/week/${id}?after=${after}`): { run?: WeekRun; error?: ApiError } {
   const [run, setRun] = useState<WeekRun | undefined>(initial);
   const [error, setError] = useState<ApiError>();
   const version = useRef(initial?.version ?? -1);
@@ -21,7 +21,7 @@ export function useLiveWeek(runId: string | undefined, initial?: WeekRun): { run
     version.current = initial?.runId === runId ? initial.version : -1;
     (async () => {
       while (alive) {
-        const r = await api<{ run: WeekRun }>("GET", `/ui-api/show/week/${runId}?after=${version.current}`);
+        const r = await api<{ run: WeekRun }>("GET", urlOf(runId, version.current));
         if (!alive) return;
         if (r.ok) {
           fails = 0;
@@ -42,6 +42,8 @@ export function useLiveWeek(runId: string | undefined, initial?: WeekRun): { run
     return () => {
       alive = false;
     };
+    // urlOf is a pure address builder; a new function each render must not restart the poll.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runId, initial]);
   return { run, error };
 }
@@ -57,10 +59,7 @@ export function useRecording<T extends { startedAt?: string }>(rec: Recording<T>
     const t0 = Date.now();
     const recordedStart = rec.frames[0]?.data.startedAt ? Date.parse(rec.frames[0].data.startedAt) : t0;
     const tick = () => {
-      const elapsed = (Date.now() - t0) * speed;
-      let i = 0;
-      while (i + 1 < rec.frames.length && rec.frames[i + 1].t <= elapsed) i++;
-      setPos({ rec, i, offset: recordedStart - t0 });
+      setPos({ rec, i: frameIndexAt(rec.frames, (Date.now() - t0) * speed), offset: recordedStart - t0 });
     };
     const first = setTimeout(tick, 0);
     const t = setInterval(tick, 200);
@@ -68,4 +67,11 @@ export function useRecording<T extends { startedAt?: string }>(rec: Recording<T>
   }, [rec, playing, speed]);
   if (!rec || !playing || pos.rec !== rec) return { data: rec && playing ? rec.frames[0]?.data : undefined, offset: 0, done: false };
   return { data: rec.frames[pos.i]?.data, offset: pos.offset, done: pos.i >= rec.frames.length - 1 };
+}
+
+/** The frame on screen `elapsed` ms into a recording: the last one whose time has come. */
+export function frameIndexAt(frames: { t: number }[], elapsed: number): number {
+  let i = 0;
+  while (i + 1 < frames.length && frames[i + 1].t <= elapsed) i++;
+  return i;
 }

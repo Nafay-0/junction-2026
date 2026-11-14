@@ -3,7 +3,7 @@
 import { clockSeconds, money, say } from "../_ui/plain";
 import { Target } from "../_ui/target";
 import type { SignOffView, WeekStep } from "@/server/show/types";
-import { useShowNow } from "./clock";
+import { useArrival, useShowNow } from "./clock";
 import { css } from "./css";
 import { titleOf } from "./words";
 
@@ -83,7 +83,7 @@ export function GatePanel({ step, names = {} }: { step: WeekStep; names?: Record
     const signed = so?.state === "approved";
     return (
       <div className="space-y-[clamp(0.6rem,1vw,1.2rem)]">
-        <Slab title={signed ? "Signed. The gate opens." : "Stopped at the gate"} sub={gateSub(step)} open={signed}>
+        <Slab title={signed ? "The gate opens" : "Stopped at the gate"} sub={gateSub(step)} open={signed}>
           <div className="mt-4 flex flex-wrap items-baseline gap-x-6 gap-y-1">
             <span className={`display tabular text-paper ${css.money}`}>{money(g.totalCents)}</span>
             <span className={`text-paper/80 ${css.body}`}>The agent may spend {money(g.limitCents)} alone.</span>
@@ -124,8 +124,11 @@ function gateSub(step: WeekStep): string {
 /** The phone side of the gate: waiting with the time left, then the sign-off landing with the name. */
 export function SignOffCard({ so }: { so: SignOffView }) {
   const now = useShowNow(so.state === "waiting");
+  // When the decision reached this screen: the screen's own clock at first sight, against the server's decision time.
+  const arrived = useArrival(so.state === "approved" || so.state === "declined");
   if (so.state === "approved" || so.state === "declined") {
-    const delay = so.decidedAt && so.seenAt ? Math.max(0, (Date.parse(so.seenAt) - Date.parse(so.decidedAt)) / 1000) : undefined;
+    const d = so.decidedAt && arrived ? (arrived - Date.parse(so.decidedAt)) / 1000 : undefined;
+    const delay = d !== undefined && d >= 0 && d < 30 ? d : undefined;
     return (
       <div className="flex items-center gap-[clamp(0.8rem,1.4vw,1.8rem)] bg-paper p-[clamp(0.9rem,1.4vw,1.8rem)] text-ink">
         <div className={`border-[5px] border-petrol px-[0.6em] py-[0.25em] ${css.land}`}>
@@ -136,7 +139,7 @@ export function SignOffCard({ so }: { so: SignOffView }) {
           <p className={`text-ink-soft ${css.body}`}>
             {so.roleLabel}, {so.method === "passkey" ? "with a passkey (Face ID or fingerprint)" : so.verified === false ? "with an unverified demo tap" : "on their phone"}, at {clockSeconds(so.decidedAt ?? so.seenAt ?? new Date())}.
           </p>
-          {delay !== undefined && <p className={`text-ink-soft ${css.small}`}>On this screen {delay.toFixed(1).replace(".", ",")} s after the phone.</p>}
+          {delay !== undefined && <p className={`text-ink-soft ${css.small}`}>On this screen {delay.toFixed(1).replace(".", ",")} s after the passkey.</p>}
         </div>
       </div>
     );

@@ -160,9 +160,14 @@ const ATTACK_FNS: Record<AttackId, (ctx: Ctx) => Promise<Outcome>> = {
     let step = r.body.step as Json | undefined;
     const concern = (step?.concerns as Json[] | undefined)?.[0];
     if (!step || !concern) return { held: false, how: "allowed", message: `Nothing asked about ${litres} L (state ${step?.state ?? r.status}).` };
-    r = await ctx.agent.concerns(step.requestId, "the chef said yes (relayed by the agent)", [{ key: concern.key, choice: concern.confirmable ? "confirm" : concern.corrections[0].id }]);
-    step = r.body.step as Json;
-    if (step.state === "options_ready") step = (await ctx.agent.choose(step.requestId, "the agent", step.preselected?.optionId ?? step.options[0].optionId)).body.step as Json;
+    // The agent says yes to everything Dock asks, on the chef's behalf.
+    for (let round = 0; round < 4 && step.state !== "quoted"; round++) {
+      if (step.state === "needs_confirmation") r = await ctx.agent.concerns(step.requestId, "the chef said yes (relayed by the agent)", (step.concerns as Json[]).map((c) => ({ key: c.key, choice: c.confirmable ? "confirm" : c.corrections[0].id })));
+      else if (step.state === "needs_input") r = await ctx.agent.answers(step.requestId, "the chef said yes (relayed by the agent)", (step.questions as Json[]).map((q) => ({ questionId: q.id, optionId: q.options[0].id })));
+      else if (step.state === "options_ready") r = await ctx.agent.choose(step.requestId, "the agent", step.preselected?.optionId ?? step.options[0].optionId);
+      else break;
+      step = r.body.step as Json;
+    }
     if (step.state !== "quoted") return { held: true, how: "stopped", message: say(String(step.notes?.[0] ?? `The request is ${step.state}.`)) };
     const placed = await ctx.agent.placeOrder(step.requestId, step.quote.quoteToken, orderLines(step.quote.quote));
     const out = refusal(placed);
