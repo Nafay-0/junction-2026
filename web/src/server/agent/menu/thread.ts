@@ -33,6 +33,8 @@ export type PendingScenario = {
   planId: string;
   /** The options named in the question, in the order said: what "the first", "the second" or a product's name picks. */
   options: { optionId: string; lineId: string; words: string[] }[];
+  /** Every verified option of every line, by its words: "use the frozen one", "add the smetana" picks any of them. */
+  more?: { optionId: string; lineId: string; words: string[] }[];
   /** For a day nothing could make: the earliest day, which a yes plans for. */
   earliest?: string;
   words: string;
@@ -124,9 +126,22 @@ async function seasonalSay(r: SeasonalResult, rt: Awaited<ReturnType<typeof kit>
 
 export async function eventForThread(slug: string, words: string, by: string, lang: Lang = "en", date?: string, planId?: string): Promise<ThreadScenario> {
   const { rt, scenarios, kitchen } = await kit(slug);
-  const r = await scenarios.event(kitchen, words, by, { ...(date ? { date } : {}), ...(planId ? { planId } : {}) });
+  // The same plan for the earliest day, worked out while the buyer reads "plan it for Monday instead?": a yes then
+  // answers in seconds (no model call; the live prices and the ways out are already in).
+  const ahead = planId && date ? early.get(`${planId}:${date}`) : undefined;
+  const r = (ahead ? await ahead.catch(() => undefined) : undefined) ?? (await scenarios.event(kitchen, words, by, { ...(date ? { date } : {}), ...(planId ? { planId } : {}) }));
+  if (r.allLate?.earliest && !date) {
+    const key = `${r.planId}:${r.allLate.earliest}`;
+    const job = scenarios.event(kitchen, words, by, { planId: r.planId, date: r.allLate.earliest });
+    job.catch(() => undefined);
+    early.set(key, job);
+    if (early.size > 50) early.delete(early.keys().next().value!);
+  }
   return eventSay(r, rt, lang, words);
 }
+
+const g = globalThis as typeof globalThis & { __dockEventAhead?: Map<string, Promise<EventResult>> };
+const early: Map<string, Promise<EventResult>> = (g.__dockEventAhead ??= new Map<string, Promise<EventResult>>());
 
 function optionLabel(o: SubOption, names: Map<string, string>, lang: Lang): string {
   if (o.kind === "dish" && o.dish) return dishL(o.dish, lang);
@@ -149,14 +164,15 @@ async function eventSay(r: EventResult, rt: Awaited<ReturnType<typeof kit>>["rt"
     ...r.lines.map((l) => `${l.ingredient}${l.dishes.length ? ` (${l.dishes.join(", ")})` : ""}: ${l.arrival === null ? `not bought (${l.note})` : l.arrival.ok ? `arrives ${l.arrival.date}${l.arrival.orderBy ? `, order by ${l.arrival.orderBy}` : ""}${l.product ? `: ${l.product.packText}, ${l.product.name}, ${money(l.product.totalCents)}` : ""}` : `cannot arrive: ${l.arrival.why}`}.`),
   ];
   const pending: PendingScenario = { kind: "event", planId: r.planId, options: [], words };
+  const menu = r.dishes.length ? t.menuIs(list(r.dishes.map((d) => dishL(d, lang)), lang)) : "";
   if (r.allLate) {
     const earliest = r.allLate.earliest ? dayL(r.allLate.earliest, lang) : "";
     steps.push(`Nothing on the plan can come by ${r.allLate.neededBy}${r.allLate.earliest ? `; the earliest delivery is ${r.allLate.earliest}` : ""}: no recipe changes proposed, the fix is the day.`);
     if (r.allLate.earliest) pending.earliest = r.allLate.earliest;
-    return { planId: r.planId, kind: "event", say: upper(t.allLate(day, earliest)), ask: upper(r.allLate.earliest ? t.askDay(earliest) : t.askSheet), steps, facts: { event: r }, pending };
+    return { planId: r.planId, kind: "event", say: upper(`${menu} ${t.allLate(day, earliest)}`.trim()), ask: upper(r.allLate.earliest ? t.askDay(earliest) : t.askSheet), steps, facts: { event: r }, pending };
   }
-  if (!r.cannotArrive.length) return { planId: r.planId, kind: "event", say: `${t.allArrive(day)} ${t.buy(r.lines.filter((l) => l.product).length, money(r.totalCents))}`, ask: t.askSheet, steps, facts: { event: r }, pending };
-  const parts: string[] = [];
+  if (!r.cannotArrive.length) return { planId: r.planId, kind: "event", say: `${menu} ${t.allArrive(day)} ${t.buy(r.lines.filter((l) => l.product).length, money(r.totalCents))}`, ask: t.askSheet, steps, facts: { event: r }, pending };
+  const parts: string[] = menu ? [menu] : [];
   const named = r.cannotArrive.slice(0, 4).map((x) => `${what(x)} (${why(x)})`);
   const more = r.cannotArrive.length - named.length;
   parts.push(r.cannotArrive.length === 1 ? t.cannot(what(r.cannotArrive[0]), day, why(r.cannotArrive[0])) : t.cannotMany(r.cannotArrive.length, day, more > 0 ? `${named.join(", ")} ${t.more(more)}` : list(named, lang)));
@@ -188,6 +204,7 @@ async function eventSay(r: EventResult, rt: Awaited<ReturnType<typeof kit>>["rt"
     if (pending.options.length <= 2) ask = t.askChoice(optionLabel(best, names, lang), other ? optionLabel(other, names, lang) : undefined);
   }
   if (rest) parts.push(t.restBest(rest));
+  pending.more = r.cannotArrive.flatMap((x) => (r.options[x.lineId] ?? []).map((o) => ({ optionId: o.optionId, lineId: x.lineId, words: optionWords(o, names) })));
   return { planId: r.planId, kind: "event", say: upper(parts.join(" ")), ask: upper(ask), steps, facts: { event: r }, pending };
 }
 
@@ -211,16 +228,30 @@ const SECOND = /\b(?:second|2nd|latter|the other|toinen|toista|jälkimmäi|toka\
 export function scenarioAnswerOf(words: string, pending: PendingScenario): ScenarioAnswer | undefined {
   const w = fold(words.trim());
   if (!w) return undefined;
-  const hits = pending.options.filter((o) => o.words.some((x) => w.includes(x)));
+  const hits = [...pending.options, ...(pending.more ?? []).filter((m) => !pending.options.some((o) => o.optionId === m.optionId))].filter((o) => o.words.some((x) => w.includes(x)));
   const named = hits.filter((o) => !hits.some((h) => h !== o && h.words.filter((x) => w.includes(x)).length > o.words.filter((x) => w.includes(x)).length));
   if (named.length === 1) return { kind: "choose", optionId: named[0].optionId };
   if (pending.options.length >= 2 && SECOND.test(words)) return { kind: "choose", optionId: pending.options[1].optionId };
   if (pending.options.length >= 1 && FIRST.test(words)) return { kind: "choose", optionId: pending.options[0].optionId };
   const yn = yesOrNo(words);
-  if (yn === "yes") return pending.earliest ? { kind: "day", date: pending.earliest } : { kind: "yes" };
-  if (yn === "no") return { kind: "no" };
+  if (yn === "no" || NO_WORDS.test(words)) return { kind: "no" };
+  // "Monday is fine", "sounds good", "use that instead": a yes to what was asked.
+  const dayNamed = pending.earliest ? WEEKDAY_WORDS[new Date(`${pending.earliest}T12:00:00Z`).getUTCDay()].test(words) : false;
+  if (yn === "yes" || dayNamed || OK_WORDS.test(words)) return pending.earliest ? { kind: "day", date: pending.earliest } : { kind: "yes" };
   return undefined;
 }
+
+const OK_WORDS = /\b(fine|ok|okay|sure|sounds good|go ahead|do it|do that|use that|use those|that one|that works|works for me|perfect|great|please do|käy|sopii|selvä|hyvä on|tehdään niin|käytä sitä|går bra|okej|gör det|använd den|det funkar)\b/iu;
+const NO_WORDS = /\b(no thanks|don't|do not|not that|ei käy|älä|inte|nej tack)\b/iu;
+const WEEKDAY_WORDS: RegExp[] = [
+  /\b(sunday|sunnuntai|söndag)/iu,
+  /\b(monday|maanantai|måndag)/iu,
+  /\b(tuesday|tiistai|tisdag)/iu,
+  /\b(wednesday|keskiviikko|onsdag)/iu,
+  /\b(thursday|torstai|torsdag)/iu,
+  /\b(friday|perjantai|fredag)/iu,
+  /\b(saturday|lauantai|lördag)/iu,
+];
 
 export type Who = { by: string };
 
@@ -241,11 +272,12 @@ export async function actOnScenario(slug: string, pending: PendingScenario, answ
   if (pending.kind === "event") {
     const ev = scenarios.cached(pending.planId);
     // The buyer's pick for its ingredient; for the others, the best option the question named, which their yes accepts.
-    const picked = answer.kind === "choose" ? pending.options.find((o) => o.optionId === answer.optionId) : undefined;
+    const picked = answer.kind === "choose" ? (pending.options.find((o) => o.optionId === answer.optionId) ?? pending.more?.find((o) => o.optionId === answer.optionId)) : undefined;
+    // The question said "with the best stand-ins for the rest": a yes takes the best verified option of every line.
     for (const x of ev?.cannotArrive ?? []) {
       const best = ev?.options[x.lineId]?.[0];
       if (picked && picked.lineId === x.lineId) choices.push({ lineId: x.lineId, optionId: picked.optionId });
-      else if (best && pending.options.some((o) => o.optionId === best.optionId)) choices.push({ lineId: x.lineId, optionId: best.optionId });
+      else if (best) choices.push({ lineId: x.lineId, optionId: best.optionId });
     }
   } else choices = [];
   const sheet = await scenarios.sheetOf(kitchen, pending.planId, choices, { by: who.by, agentAlone: true });

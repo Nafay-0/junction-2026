@@ -187,6 +187,8 @@ export type PlanTotals = {
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
 /** One ingredient above this per cover is almost certainly a wrong amount or pack (a whole school lunch costs about €3). */
 export const MAX_LINE_CENTS_PER_COVER = 400;
+/** A line whose pack is far more than the need and costs more than this is checked by a person first. */
+export const LARGE_PACK_CENTS = 2500;
 export function toBase(amount: number, unit: DraftUnit): Amount {
   return unit === "g" ? { amount: amount / 1000, unit: "kg" } : unit === "ml" ? { amount: amount / 1000, unit: "L" } : { amount, unit: "pcs" };
 }
@@ -446,6 +448,8 @@ function evaluateLine(spec: LineSpec, input: PlanInput): PlanLineView {
     if (note) {
       view.leftover = note;
       view.chosen.fitNotes = [...view.chosen.fitNotes, note];
+      // Only a large pack, and dear: a person checks it before it is bought (a 5 kg tub of bouillon for 10 l of stock).
+      if (card.totalCents > LARGE_PACK_CENTS) addDoubt("amount_check", `${spec.name}: only a large pack was found, ${note.replace(/, the smallest pack found that covers it$/, "")}, ${formatEur(card.totalCents)}. Check it, or strike the line.`, "Buy it", "large_pack");
     }
   }
   const late = card.match === "compromise" && card.givesUp.some((g) => g.part === "delivery_date");

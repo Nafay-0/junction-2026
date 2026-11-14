@@ -323,12 +323,13 @@ export function createScenarios(deps: ScenarioDeps) {
     const todo = [...new Set(ids)].filter((id) => !p.live.statuses[id]);
     const s = await service.agentSession(k);
     const room = dock.liveAllowance.remaining(agentKeyOf(s.mandate.issuer.orgId, s.agentId)).newProductsLeft;
-    const take = todo.slice(0, Math.max(0, Math.min(room, 20)));
+    const take = todo.slice(0, Math.max(0, Math.min(room, 40)));
     const out: Record<string, LiveStatus> = { ...p.live.statuses };
-    for (let i = 0; i < take.length && p.requestId; i += 10) {
-      const r = await dock.lookupAvailability(s, { requestId: p.requestId, productIds: take.slice(i, i + 10), ...(p.settings.deliverBy ? { deliveryDate: p.settings.deliverBy } : {}) }).catch(() => undefined);
-      for (const st of r?.statuses ?? []) out[st.productId] = st;
-    }
+    const batches: string[][] = [];
+    for (let i = 0; i < take.length; i += 10) batches.push(take.slice(i, i + 10));
+    // In parallel: one call per ten, all at once (a booking's ways out are priced in one go, not line by line).
+    const results = p.requestId ? await Promise.all(batches.map((ids) => dock.lookupAvailability(s, { requestId: p.requestId!, productIds: ids, ...(p.settings.deliverBy ? { deliveryDate: p.settings.deliverBy } : {}) }).catch(() => undefined))) : [];
+    for (const r of results) for (const st of r?.statuses ?? []) out[st.productId] = st;
     p.live.statuses = out;
     return out;
   }
@@ -385,37 +386,72 @@ export function createScenarios(deps: ScenarioDeps) {
   }
 
   /** Options for one ingredient that cannot come, by its role: verified, ranked, each with the gate's word on it. */
-  async function optionsForStuck(k: MenuKitchen, p: PlanRecord, view: PlanView, st: Stuck): Promise<{ options: SubOption[]; unresolved: string[] }> {
+  type Raw = { o: Omit<OptionToVerify, "checks" | "deltaCents">; parts: { ing: DraftIngredient; main: boolean; cands: Product[] }[] }[];
+
+  /** Products known not to come by the day: never offered again as a way round. */
+  const knownLate = (p: PlanRecord, id: string, want: string) => !!p.live.statuses[id] && !arrivalOf(p.live.statuses[id], want).ok;
+
+  /** The ways out to check for one ingredient that cannot come, before any is priced (searches run at once). */
+  async function gatherFor(k: MenuKitchen, p: PlanRecord, st: Stuck): Promise<Raw> {
     const spec = specOf(p, st.lineId)!;
-    const covers = p.settings.covers ?? 0;
     const allowed = (x: Product) => k.mandate.allowedCategories.includes(x.category);
-    const before = view.lines.find((l) => l.lineId === st.lineId)?.chosen?.totalCents ?? null;
-    const raw: { o: Omit<OptionToVerify, "checks" | "deltaCents">; parts: { ing: DraftIngredient; main: boolean; cands: Product[] }[] }[] = [];
+    const want = p.settings.deliverBy ?? addDaysIso(today(deps.now()), 1);
+    const raw: Raw = [];
+    // 0. The same ingredient in another product of the range (fresh, then frozen): the most faithful way round, and the
+    //    one truth about the product: "this product cannot come", never "the ingredient cannot be had" when another can.
+    const same = await Promise.all([
+      findCandidates(catalog, { ...spec.ingredient, form: spec.ingredient.form === "frozen" ? "frozen" : "any", avoid: [] }, k.diet, allowed, 12),
+      spec.ingredient.form === "frozen" ? Promise.resolve(undefined) : findCandidates(catalog, { ...spec.ingredient, key: `${spec.key}_frozen`, searchTerms: [...spec.ingredient.searchTerms.slice(0, 2).map((t) => `${t} pakaste`), `frozen ${spec.ingredient.name}`], form: "frozen", avoid: [] }, k.diet, allowed, 8),
+    ]);
+    const other = (xs: Product[]) => xs.filter((x) => x.id !== st.product?.productId && !knownLate(p, x.id, want));
+    const fresh = other(same[0].candidates.map((c) => c.product)).filter((x) => x.temperatureClass !== "frozen");
+    const frozen = other([...(same[1]?.candidates ?? []), ...same[0].candidates].map((c) => c.product)).filter((x) => x.temperatureClass === "frozen");
+    if (fresh.length) raw.push({ o: { optionId: `${st.lineId}:same`, kind: "ingredient", title: `${spec.name}, another product`, tradeoff: { taste: "the same ingredient", texture: "the same", work: "none" }, fidelity: 0.95, source: "rules" }, parts: [{ ing: { ...spec.ingredient, avoid: [] }, main: true, cands: fresh.slice(0, 4) }] });
+    if (frozen.length) raw.push({ o: { optionId: `${st.lineId}:same_frozen`, kind: "ingredient", title: `${spec.name}, frozen`, tradeoff: { taste: "the same ingredient", texture: "frozen: a little softer", work: "thaw it in the cold room overnight" }, fidelity: 0.88, source: "rules" }, parts: [{ ing: { ...spec.ingredient, form: "frozen", avoid: [] }, main: true, cands: [...new Map(frozen.map((x) => [x.id, x])).values()].slice(0, 4) }] });
     // 1. The rules of the kitchen: another ingredient that does the same job, the amount adjusted.
-    for (const r of subsFor(spec.ingredient, st.role)) {
-      const parts = await Promise.all(
-        r.parts.map(async (x) => {
-          const unit = x.unit ?? spec.ingredient.perCover.unit;
-          const ing: DraftIngredient = { ...spec.ingredient, key: `${spec.key}_${r.id}`, name: x.name, searchTerms: x.searchTerms, perCover: { amount: Math.round(spec.ingredient.perCover.amount * x.ratio * 1000) / 1000, unit }, form: x.form, avoid: [], yieldPct: 100 };
-          const set = await findCandidates(catalog, ing, k.diet, allowed, 4);
-          return { ing, main: x.main, cands: set.candidates.filter((c) => c.product.id !== st.product?.productId).map((c) => c.product) };
-        }),
-      );
-      raw.push({ o: { optionId: `${st.lineId}:${r.id}`, kind: "ingredient", title: r.title, tradeoff: r.tradeoff, fidelity: r.fidelity, source: "rules" }, parts });
-    }
+    const byRule = await Promise.all(
+      subsFor(spec.ingredient, st.role).map(async (r) => {
+        const parts = await Promise.all(
+          r.parts.map(async (x) => {
+            const unit = x.unit ?? spec.ingredient.perCover.unit;
+            const ing: DraftIngredient = { ...spec.ingredient, key: `${spec.key}_${r.id}`, name: x.name, searchTerms: x.searchTerms, perCover: { amount: Math.round(spec.ingredient.perCover.amount * x.ratio * 1000) / 1000, unit }, form: x.form, avoid: [], yieldPct: 100 };
+            const set = await findCandidates(catalog, ing, k.diet, allowed, 4);
+            return { ing, main: x.main, cands: set.candidates.filter((c) => c.product.id !== st.product?.productId).map((c) => c.product) };
+          }),
+        );
+        return { o: { optionId: `${st.lineId}:${r.id}`, kind: "ingredient" as const, title: r.title, tradeoff: r.tradeoff, fidelity: r.fidelity, source: "rules" as const }, parts };
+      }),
+    );
+    raw.push(...byRule);
     // 2. The planner's own ways out (the product map's alternatives for the dish's use, the model's ideas), each re-checked here.
     for (const f of p.fixes[st.lineId] ?? []) {
       if (!f.ingredient || f.kind === "change_amount") continue;
       const set = p.candidates[`fix:${f.fixId}`];
       raw.push({ o: { optionId: `${st.lineId}:fix:${f.fixId}`, kind: f.changesDish ? "dish" : "ingredient", title: f.title, tradeoff: { taste: f.effect, texture: f.changesDish ? "the dish changes" : "close to the original", work: f.changesDish ? "a different recipe" : "none" }, fidelity: f.changesDish ? 0.5 : f.source === "code" ? 0.8 : 0.7, source: f.source === "code" ? "map" : "model" }, parts: [{ ing: f.ingredient, main: true, cands: (set?.candidates ?? []).map((c) => c.product).slice(0, 4) }] });
     }
-    // Price the first products of every part in one batched call (only these, only now).
-    const ids = raw.flatMap((x) => x.parts.flatMap((pt) => pt.cands.slice(0, 2).map((c) => c.id)));
-    await priceMore(k, p, ids);
+    return raw;
+  }
+
+  /** The first products of every part of every way out, priced in one go. */
+  const idsOf = (raw: Raw) => raw.flatMap((x) => x.parts.flatMap((pt) => pt.cands.slice(0, pt.main && x.o.optionId.includes(":same") ? 4 : 2).map((c) => c.id)));
+
+  /** Options for one ingredient that cannot come, by its role: verified, ranked, each with the gate's word on it. */
+  async function optionsForStuck(k: MenuKitchen, p: PlanRecord, view: PlanView, st: Stuck, gathered?: Raw): Promise<{ options: SubOption[]; unresolved: string[] }> {
+    const spec = specOf(p, st.lineId)!;
+    const covers = p.settings.covers ?? 0;
+    const before = view.lines.find((l) => l.lineId === st.lineId)?.chosen?.totalCents ?? null;
+    const raw = gathered ?? (await gatherFor(k, p, st));
+    if (!gathered) await priceMore(k, p, idsOf(raw));
+    // A model's or the map's stand-in for a protein that is another kind of food (tofu for whitefish) changes the dish.
+    const kindWords = [spec.name, ...spec.ingredient.searchTerms].flatMap((t) => t.toLowerCase().split(/[^a-zåäö]+/u)).filter((w) => w.length >= 4).map((w) => w.slice(0, Math.max(4, w.length - 2)));
     const verified: OptionToVerify[] = [];
     for (const x of raw) {
       const checks = await Promise.all(x.parts.map((pt) => partCheck(k, p, pt.ing, pt.main, covers, () => p.live.statuses, pt.cands)));
       const total = checks.reduce((s, c) => s + (c.product?.totalCents ?? 0), 0);
+      const main = checks.find((c) => c.main)?.product;
+      if (x.o.source !== "rules" && st.role === "protein" && main && !kindWords.some((w) => main.name.toLowerCase().includes(w))) {
+        x.o = { ...x.o, fidelity: Math.min(x.o.fidelity, 0.45), tradeoff: { ...x.o.tradeoff, texture: "another kind of protein: the dish changes" } };
+      }
       verified.push({ ...x.o, checks, deltaCents: before === null ? null : total - before });
     }
     // 3. A change to the component or the technique, with nothing to buy.
@@ -459,10 +495,11 @@ export function createScenarios(deps: ScenarioDeps) {
     if (opts.date && opts.date !== first.record.settings.deliverBy) planned = await service.edit(k, first.record.planId, [{ op: "deliverBy", date: opts.date }], by);
     // The planner's own ways out (the model's ideas by the dish) are welcome if they come within 20 s; the options by
     // role do not wait for them.
-    await Promise.race([service.settled(first.record.planId), new Promise((r) => setTimeout(r, opts.waitMs ?? 20_000))]);
+    await Promise.race([service.settled(first.record.planId), new Promise((r) => setTimeout(r, opts.waitMs ?? 5_000))]);
     planned = await service.get(k, first.record.planId);
     // A line not priced yet is not "cannot arrive": ask the wholesaler for it first (one short batched call).
-    if (planned.view.lines.some((l) => l.doubts.some((d) => !d.accepted && d.kind === "not_priced"))) planned = await service.edit(k, first.record.planId, [{ op: "price" }], by);
+    // Up to three rounds of ten: a three-course menu has more lines than one call holds.
+    for (let round = 0; round < 3 && planned.view.lines.some((l) => l.doubts.some((d) => !d.accepted && d.kind === "not_priced")); round++) planned = await service.edit(k, first.record.planId, [{ op: "price" }], by);
     const p = planned.record;
     const view = planned.view;
     const want = p.settings.deliverBy ?? addDaysIso(today(deps.now()), 1);
@@ -509,8 +546,13 @@ export function createScenarios(deps: ScenarioDeps) {
     const named = stuck.map((x) => x.arrival.earliest).filter((d): d is string => !!d).sort();
     const allLate = view.totals.allLate ?? (stuck.length && !arriving ? { neededBy: want, earliest: named.at(-1) ?? null } : null);
     if (!allLate) {
-      for (const st of stuck.slice(0, 6)) {
-        const r = await optionsForStuck(k, p, view, st);
+      // Every way out of every ingredient that cannot come, searched at once, then priced in one go, then verified.
+      const top = stuck.slice(0, 8);
+      const gathered = await Promise.all(top.map((st) => gatherFor(k, p, st)));
+      await priceMore(k, p, gathered.flatMap(idsOf));
+      const results = await Promise.all(top.map((st, i) => optionsForStuck(k, p, view, st, gathered[i])));
+      for (const [i, st] of top.entries()) {
+        const r = results[i];
         options[st.lineId] = r.options;
         unresolved[st.lineId] = r.unresolved;
         if (!r.options.some((o) => o.kind !== "technique") && opts.swapDishes === true) {

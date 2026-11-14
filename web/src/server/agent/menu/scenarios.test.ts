@@ -21,6 +21,9 @@ const EXTRA: FixtureSpec[] = [
   { id: "810003", names: { fi: "Tunturi smetana 1 kg laktoositon", en: "Tunturi smetana 1 kg lactose free" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "10420", claims: ["FREE_FROM_LACTOSE"], allergens: [["AM", "CONTAINS"]], labels: COOL, each: kg(1) },
   { id: "810004", names: { fi: "Liemi kasvisliemijauhe 1,5 kg", en: "Liemi vegetable bouillon powder 1,5 kg" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "21902", freeFrom: ["AN", "AP", "AM"], labels: AMB, each: kg(1.5) },
   { id: "810005", names: { fi: "Liemi kasvisliemijauhe 500 g", en: "Liemi vegetable bouillon powder 500 g" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "21902", freeFrom: ["AN", "AP", "AM"], labels: AMB, each: kg(0.5) },
+  // A beef cheek the wholesaler cannot deliver on any day, and another beef cheek, frozen, that can come.
+  { id: "810007", names: { fi: "NAUDAN POSKI TUORE 2KG", en: "BEEF CHEEK FRESH 2KG" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "18731", freeFrom: ["AN", "AP", "AM"], labels: COOL, each: kg(2) },
+  { id: "810008", names: { fi: "HK naudan poski haudutettu pakaste 2 kg", en: "HK beef cheek slow-cooked frozen 2 kg" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "41720", freeFrom: ["AN", "AP", "AM"], labels: ["freezeTemperature"], each: kg(2) },
   { id: "810006", names: { fi: "Meijeri voi 500 g laktoositon", en: "Meijeri butter 500 g lactose free" }, salesUnit: "ST", baseUnit: "ST", units: [["ST", 1]], category: "10501", claims: ["FREE_FROM_LACTOSE"], allergens: [["AM", "CONTAINS"]], labels: COOL, each: kg(0.5) },
 ];
 const LIVE: Record<string, FakeScenario> = {
@@ -31,6 +34,8 @@ const LIVE: Record<string, FakeScenario> = {
   "810003": { price: 6.5, amount: 500, date: "2026-11-16", closingTime: "2026-11-15T17:00:00", unit: "ST" },
   "810004": { price: 21.0, amount: 500, date: "2026-11-16", closingTime: "2026-11-15T17:00:00", unit: "ST" },
   "810005": { price: 8.4, amount: 500, date: "2026-11-16", closingTime: "2026-11-15T17:00:00", unit: "ST" },
+  "810007": { price: 30, noLines: true },
+  "810008": { price: 41, amount: 500, date: "2026-11-16", closingTime: "2026-11-15T17:00:00", unit: "ST" },
   "810006": { price: 4.1, amount: 500, date: "2026-11-16", closingTime: "2026-11-15T17:00:00", unit: "ST" },
 };
 
@@ -47,6 +52,9 @@ const ROOTS = draft([
     ing("butter", "Butter", ["voi", "butter"], 10, "g", { role: "for frying the onions" }),
     ing("vegetable_bouillon", "Vegetable bouillon powder", ["kasvisliemijauhe", "bouillon powder"], 2, "g", { role: "seasoning", form: "dried" }),
   ]),
+]);
+const BRAISE = draft([
+  dish("Braised beef cheeks", [ing("beef_cheek", "Beef cheek", ["naudan poski", "beef cheek"], 200, "g", { role: "main protein, braised", form: "fresh", avoid: ["pakaste", "frozen"] }), ing("beetroot", "Beetroot", ["punajuuri", "beetroot"], 100, "g")]),
 ]);
 const BOOKING = draft([
   dish("Beetroot with crème fraîche and dill", [
@@ -77,7 +85,7 @@ async function setup() {
     now: () => MENU_NOW,
     store: new InMemoryPlanStore(),
     draft: async (text) => {
-      const raw = text.startsWith("Lunch for 40 on Monday around root vegetables") ? ROOTS : text.startsWith("Unexpected booking") ? BOOKING : undefined;
+      const raw = text.startsWith("Lunch for 40 on Monday around root vegetables") ? ROOTS : text.startsWith("Unexpected booking") ? BOOKING : text.startsWith("Dinner booking") ? BRAISE : undefined;
       if (!raw) throw new Error(`no draft for ${text}`);
       return { draft: sanitiseDraft(raw), raw, model: "scripted:menu", ms: 1, tokens: { input: 0, output: 0, cachedInput: 0, reasoning: 0 }, costUsd: 0, calls: [] };
     },
@@ -173,6 +181,20 @@ describe("scenario 2: a booking at short notice, substitutes by the ingredient's
     expect(sheet.text).toMatch(/Menu for 40 covers: Beetroot with crème fraîche and dill/);
     const placed = await scenarios.order(kaari, r.planId, sheet);
     expect(["committed", "pending_approval"]).toContain(placed.order.status);
+  });
+
+  it("beef cheek the wholesaler cannot deliver: the same ingredient in another product (frozen) is the best swap, and a yes puts it on the sheet", async () => {
+    const { scenarios, kaari } = await setup();
+    const r = await scenarios.event(kaari, "Dinner booking for 40 on Monday", "Sanna Koskinen (test)");
+    const st = r.cannotArrive.find((x) => x.lineId === "beef_cheek")!;
+    // One truth per product per day: it is this product that cannot come, named, and the other one that can is offered.
+    expect(st.product?.productId).toBe("810007");
+    expect(st.arrival.code).toBe("not_deliverable");
+    expect(r.options.beef_cheek[0]).toMatchObject({ rank: "best", optionId: "beef_cheek:same_frozen", title: "Beef cheek, frozen" });
+    expect(r.options.beef_cheek[0].checks[0].product).toMatchObject({ productId: "810008", packs: 4 });
+    const sheet = await scenarios.sheetOf(kaari, r.planId, r.cannotArrive.map((x) => ({ lineId: x.lineId, optionId: r.options[x.lineId][0].optionId })), { by: "Sanna Koskinen (test)" });
+    expect(sheet.lines.find((x) => x.productId === "810008")).toMatchObject({ packs: 4 });
+    expect(sheet.leftOff).toEqual([]);
   });
 
   it("a day nothing can come: says so with the earliest day, and offers no recipe changes", async () => {

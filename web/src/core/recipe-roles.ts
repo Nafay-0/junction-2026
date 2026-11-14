@@ -169,7 +169,7 @@ export function cutoffText(orderBy: string): string {
  * is not one.
  */
 export function arrivalOf(status: LiveStatus | undefined, wanted: string): Arrival {
-  if (!status) return { ok: false, code: "not_checked", why: "not checked with the wholesaler" };
+  if (!status) return { ok: false, code: "not_checked", why: `it cannot be priced for ${dayText(wanted)}: the wholesaler gave no price for it` };
   const o = status.offer;
   const has = (p: LiveStatus["problems"][number]) => status.problems.includes(p);
   if (has("unknown_product")) return { ok: false, code: "blocked", why: "not in the wholesaler's assortment" };

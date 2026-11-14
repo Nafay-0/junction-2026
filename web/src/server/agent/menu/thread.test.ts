@@ -31,6 +31,12 @@ describe("the conversation's side of the menu scenarios", () => {
     expect(scenarioAnswerOf("yes, do that", pending)).toEqual({ kind: "yes" });
     expect(scenarioAnswerOf("no thanks", pending)).toEqual({ kind: "no" });
     expect(scenarioAnswerOf("what is the weather like", pending)).toBeUndefined();
+    // "Monday is fine" to "plan it for Monday instead?" is a yes; "use that instead" is a yes to the best swap.
+    expect(scenarioAnswerOf("Monday is fine", { ...pending, options: [], earliest: "2026-11-16" })).toEqual({ kind: "day", date: "2026-11-16" });
+    expect(scenarioAnswerOf("maanantai sopii", { ...pending, options: [], earliest: "2026-11-16" })).toEqual({ kind: "day", date: "2026-11-16" });
+    expect(scenarioAnswerOf("use that instead", pending)).toEqual({ kind: "yes" });
+    // Any verified option of any line, named: "add the frozen beef cheek".
+    expect(scenarioAnswerOf("add the frozen beef cheek", { ...pending, more: [{ optionId: "bc:same_frozen", lineId: "bc", words: ["frozen", "cheek", "haudutettu"] }] })).toEqual({ kind: "choose", optionId: "bc:same_frozen" });
     // A day nothing could make: a yes plans it for the earliest day.
     expect(scenarioAnswerOf("joo", { ...pending, options: [], earliest: "2026-11-16" })).toEqual({ kind: "day", date: "2026-11-16" });
   });
