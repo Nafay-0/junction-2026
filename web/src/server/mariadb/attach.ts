@@ -75,7 +75,7 @@ export function attachTimeMachine(
   let indexedSeq = -1;
   const afterSync = embedder
     ? async () => {
-        const fresh = dock.ledger.readonly().filter((e) => e.seq > indexedSeq && e.type === "decision");
+        const fresh = dock.ledger.since(indexedSeq).filter((e) => e.type === "decision");
         if (!fresh.length) return;
         const owners = new Map<string, { orgId: string; agentId: string; door?: string }>();
         for (const o of await stores.repo.listOrders()) owners.set(o.orderId, { orgId: o.orgId, agentId: o.agentId, door: (await stores.repo.getRequest(o.requestId))?.door });

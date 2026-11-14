@@ -86,6 +86,7 @@ export async function checkOrderQueries(repo: DockRepository, all: Order[], same
     same(ids(await repo.pendingExpired(at, orgId)), ids(byTime(mine.filter((o) => o.status === "pending_approval" && Date.parse(o.quote.expiresAt) <= t))), `pendingExpired ${orgId}`);
   }
   same(ids(await repo.pendingOrders()), ids(byTime(all.filter((o) => o.status === "pending_approval"))), "pendingOrders, all");
+  same(await repo.pendingCount(), all.filter((o) => o.status === "pending_approval").length, "pendingCount");
   same(ids(await repo.pendingExpired(at)), ids(byTime(all.filter((o) => o.status === "pending_approval" && Date.parse(o.quote.expiresAt) <= t))), "pendingExpired, all");
   for (const requestId of ["req_0", "req_3", "req_none"]) same(ids(await repo.ordersOfRequest(requestId)).sort(), ids(all.filter((o) => o.requestId === requestId)).sort(), `ordersOfRequest ${requestId}`);
   const withApproval = all.find((o) => o.approval)!;

@@ -260,6 +260,8 @@ export interface DockRepository {
   pendingOrders(orgId?: string): Promise<Order[]>;
   /** Orders waiting for sign-off whose quote expired at or before `at` (ISO), of one organisation or all. */
   pendingExpired(at: string, orgId?: string): Promise<Order[]>;
+  /** How many orders wait for sign-off (the wall's count), without reading them. */
+  pendingCount(): Promise<number>;
   /**
    * The weekly budget's sums over one organisation's orders created after `since`: the committed total, and the
    * orders waiting for sign-off whose quote is still valid at `at` (they hold their total).
@@ -361,6 +363,11 @@ export class InMemoryDockRepository implements DockRepository {
   }
   async pendingOrders(orgId?: string) {
     return structuredClone(this.pendingRefs(orgId));
+  }
+  async pendingCount() {
+    let n = 0;
+    for (const ids of this.pending.values()) n += ids.size;
+    return n;
   }
   async pendingExpired(at: string, orgId?: string) {
     const t = Date.parse(at);
@@ -1367,6 +1374,12 @@ export function createDock(deps: DockDeps) {
     async pendingOrders(orgId?: string): Promise<PublicOrder[]> {
       await expireStale(orgId);
       return (await repo.pendingOrders(orgId)).map(stripOrder);
+    },
+
+    /** How many orders wait for sign-off, after closing those whose price ran out. */
+    async pendingCount(): Promise<number> {
+      await expireStale();
+      return repo.pendingCount();
     },
 
     /** The organisation an order belongs to (for deciding who may read its ledger entries); undefined when unknown. */

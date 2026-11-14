@@ -50,6 +50,10 @@ export class PgDockRepository implements DockRepository {
     const due = "status = 'pending_approval' and quote_expires::timestamptz <= $1::timestamptz";
     return orgId ? this.orders(`${due} and org_id = $2`, [at, orgId]) : this.orders(due, [at]);
   }
+  async pendingCount() {
+    const r = await this.docs.pool.query<{ n: number }>(`select count(*)::int as n from ${this.t} where collection = 'order' and status = 'pending_approval'`);
+    return r.rows[0]?.n ?? 0;
+  }
   async spendOf(orgId: string, q: { since: string; at: string; excludeOrderId?: string }): Promise<OrderSpend> {
     const r = await this.docs.pool.query<{ committed: string; held: { orderId: string; totalCents: number | string; expiresAt: string }[] }>(
       `select coalesce(sum(total_cents) filter (where status = 'committed'), 0)::text as committed,

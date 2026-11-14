@@ -155,7 +155,7 @@ export async function wallSnapshot(rt: Runtime): Promise<WallSnapshot> {
     .map((r) => ({ ...r, reason: say(r.reason) }));
 
   const chain = dock.ledger.verify();
-  const waiting = (await dock.pendingOrders()).length;
+  const waiting = await dock.pendingCount();
   const snap: WallSnapshot = {
     at: new Date().toISOString(),
     counters: {
