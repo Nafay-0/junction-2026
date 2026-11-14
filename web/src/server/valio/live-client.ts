@@ -8,7 +8,13 @@ import { reserveLiveLookup } from "@/server/limits";
  * Gentle by design: requests are batched (at most `batchSize` product codes each, never more than the partner's
  * 1,000), time out, retry with backoff only on 429 and 5xx, and answers are cached: availability briefly, prices
  * until their validity window ends (capped). It never lists or scans the catalogue; callers narrow down first.
+ *
+ * A buyer never waits long on it: one lookup (prices and availability, every batch and retry) has `deadlineMs`
+ * (default 8 s, DOCK_LIVE_DEADLINE_MS) in all. A Retry-After that would run past it is not slept on: the lookup
+ * fails at once as rate_limited, saying when to try again (QA F-SLOW-PARTNER-WAIT: 30 to 36 s before).
  */
+export const LIVE_DEADLINE_MS = 8000;
+const PER_CALL_TIMEOUT_MS = 5000;
 
 export type ValioPrice =
   | {
@@ -51,6 +57,8 @@ export class ValioApiError extends Error {
     readonly code: ValioApiErrorCode,
     message: string,
     readonly status?: number,
+    /** When the partner (or the deadline) says to try again, in seconds. */
+    readonly retryAfterSeconds?: number,
   ) {
     super(message);
     this.name = "ValioApiError";
@@ -63,7 +71,10 @@ export type ValioClientConfig = {
   /** Required by the API, ignored in the challenge. */
   customer?: string;
   fetch?: typeof fetch;
+  /** One HTTP call's timeout (default 5 s), never more than what is left of the lookup's deadline. */
   timeoutMs?: number;
+  /** All the time one lookup may take, every call and retry included (default 8 s). */
+  deadlineMs?: number;
   maxRetries?: number;
   batchSize?: number;
   now?: () => Date;
@@ -135,6 +146,13 @@ export function validFromMs(validFrom: string | undefined): number | undefined {
 }
 
 type CacheEntry<T> = { value: T; expires: number };
+type Deadline = { slept: number; left: () => number };
+
+/** The partner's Retry-After, in whole seconds, when it sent one. */
+function retryAfterOf(res?: Response): number | undefined {
+  const v = Number(res?.headers.get("retry-after"));
+  return Number.isFinite(v) && v > 0 ? Math.ceil(v) : undefined;
+}
 
 export class ValioLiveClient {
   private readonly cfg: Required<Omit<ValioClientConfig, "fetch" | "now" | "sleep">> & Pick<ValioClientConfig, "fetch">;
@@ -150,7 +168,8 @@ export class ValioLiveClient {
       apiKey: config.apiKey,
       customer: config.customer ?? "dock",
       fetch: config.fetch,
-      timeoutMs: config.timeoutMs ?? 8000,
+      timeoutMs: config.timeoutMs ?? PER_CALL_TIMEOUT_MS,
+      deadlineMs: config.deadlineMs ?? (Number(process.env.DOCK_LIVE_DEADLINE_MS) || LIVE_DEADLINE_MS),
       maxRetries: config.maxRetries ?? 3,
       batchSize: Math.min(Math.max(config.batchSize ?? MAX_LIVE_IDS_PER_CALL, 1), 1000),
       availabilityTtlMs: config.availabilityTtlMs ?? 60_000,
@@ -167,7 +186,7 @@ export class ValioLiveClient {
 
   /** GET /api/ping: checks the key. Never throws on HTTP status; network failures do throw. */
   async ping(): Promise<{ ok: boolean; status: number; body: unknown }> {
-    const res = await this.request("GET", "/api/ping");
+    const res = await this.request("GET", "/api/ping", undefined, this.deadline());
     return { ok: res.ok, status: res.status, body: await res.json().catch(() => null) };
   }
 
@@ -175,11 +194,19 @@ export class ValioLiveClient {
   async lookup(productIds: string[], requestedDate: string): Promise<ValioLiveResult[]> {
     const ids = [...new Set(productIds)];
     if (!/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) throw new ValioApiError("bad_request", `requestedDate must be YYYY-MM-DD; got ${requestedDate}.`);
-    const [prices, avail] = await Promise.all([this.cached("p", ids, requestedDate, (b) => this.fetchPrices(b, requestedDate)), this.cached("a", ids, requestedDate, (b) => this.fetchAvailability(b, requestedDate))]);
+    const dl = this.deadline();
+    const [prices, avail] = await Promise.all([this.cached("p", ids, requestedDate, (b) => this.fetchPrices(b, requestedDate, dl)), this.cached("a", ids, requestedDate, (b) => this.fetchAvailability(b, requestedDate, dl))]);
     return ids.map((productId) => ({ productId, requestedDate, price: prices.get(productId) as ValioPrice | undefined, availability: avail.get(productId) as ValioAvailability | undefined }));
   }
 
   // ---------- internals ----------
+
+  /** One lookup's time budget. Elapsed is wall time, or the time slept when sleeping is simulated (tests). */
+  private deadline(): Deadline {
+    const started = Date.now();
+    const d: Deadline = { slept: 0, left: () => this.cfg.deadlineMs - Math.max(Date.now() - started, d.slept) };
+    return d;
+  }
 
   private async cached(kind: "p" | "a", ids: string[], date: string, load: (batch: string[]) => Promise<Map<string, unknown>>): Promise<Map<string, unknown>> {
     const out = new Map<string, unknown>();
@@ -224,8 +251,8 @@ export class ValioLiveClient {
     return { customer: this.cfg.customer, requestedDate, products: ids };
   }
 
-  private async fetchPrices(ids: string[], requestedDate: string): Promise<Map<string, ValioPrice>> {
-    const json = await this.postJson("/api/price", this.body(ids, requestedDate));
+  private async fetchPrices(ids: string[], requestedDate: string, dl: Deadline): Promise<Map<string, ValioPrice>> {
+    const json = await this.postJson("/api/price", this.body(ids, requestedDate), dl);
     const parsed = PriceResponse.safeParse(json);
     if (!parsed.success) throw new ValioApiError("bad_response", "Price response is not in the documented shape.");
     const out = new Map<string, ValioPrice>();
@@ -257,8 +284,8 @@ export class ValioLiveClient {
     return out;
   }
 
-  private async fetchAvailability(ids: string[], requestedDate: string): Promise<Map<string, ValioAvailability>> {
-    const json = await this.postJson("/api/availability", this.body(ids, requestedDate));
+  private async fetchAvailability(ids: string[], requestedDate: string, dl: Deadline): Promise<Map<string, ValioAvailability>> {
+    const json = await this.postJson("/api/availability", this.body(ids, requestedDate), dl);
     const parsed = AvailabilityResponse.safeParse(json);
     if (!parsed.success) throw new ValioApiError("bad_response", "Availability response is not in the documented shape.");
     const out = new Map<string, ValioAvailability>();
@@ -283,11 +310,11 @@ export class ValioLiveClient {
     return out;
   }
 
-  private async postJson(path: string, body: unknown): Promise<unknown> {
-    const res = await this.request("POST", path, body);
+  private async postJson(path: string, body: unknown, dl: Deadline): Promise<unknown> {
+    const res = await this.request("POST", path, body, dl);
     if (!res.ok) this.counters.failures += res.status === 429 || res.status >= 500 ? 0 : 1; // retried ones are counted in request()
     if (res.status === 401 || res.status === 403) throw new ValioApiError("unauthorized", `Valio API refused the key (HTTP ${res.status}).`, res.status);
-    if (!res.ok) throw new ValioApiError(res.status === 429 ? "rate_limited" : res.status >= 500 ? "server_error" : "bad_request", `Valio API ${path} answered HTTP ${res.status}.`, res.status);
+    if (!res.ok) throw new ValioApiError(res.status === 429 ? "rate_limited" : res.status >= 500 ? "server_error" : "bad_request", `Valio API ${path} answered HTTP ${res.status}.`, res.status, retryAfterOf(res));
     try {
       return await res.json();
     } catch {
@@ -295,10 +322,18 @@ export class ValioLiveClient {
     }
   }
 
-  /** One HTTP call with timeout, retried with exponential backoff on 429, 5xx, timeouts and network errors. */
-  private async request(method: "GET" | "POST", path: string, body?: unknown): Promise<Response> {
+  /**
+   * One HTTP call with timeout, retried with exponential backoff on 429, 5xx, timeouts and network errors, all
+   * within the lookup's deadline: a call never waits past it, and a wait that would end past it is not started.
+   */
+  private async request(method: "GET" | "POST", path: string, body: unknown, dl: Deadline): Promise<Response> {
     const doFetch = this.cfg.fetch ?? fetch;
     for (let attempt = 0; ; attempt++) {
+      const left = dl.left();
+      if (left <= 0) {
+        this.counters.failures += 1;
+        throw new ValioApiError("timeout", `Valio API ${path}: no usable answer within ${Math.round(this.cfg.deadlineMs / 1000)} s.`, undefined, 30);
+      }
       reserveLiveLookup(); // public-demo cap on partner API requests per day (server/limits.ts)
       this.counters.httpRequests += 1;
       let res: Response | undefined;
@@ -308,11 +343,12 @@ export class ValioLiveClient {
           method,
           headers: { "X-API-Key": this.cfg.apiKey, accept: "application/json", ...(body !== undefined ? { "content-type": "application/json" } : {}) },
           body: body === undefined ? undefined : JSON.stringify(body),
-          signal: AbortSignal.timeout(this.cfg.timeoutMs),
+          signal: AbortSignal.timeout(Math.max(1, Math.min(this.cfg.timeoutMs, left))),
         });
       } catch (err) {
         const name = (err as { name?: string })?.name;
-        failure = new ValioApiError(name === "TimeoutError" || name === "AbortError" ? "timeout" : "network", `Valio API ${path}: ${name === "TimeoutError" ? `no answer within ${this.cfg.timeoutMs} ms` : "network error"}.`);
+        const timedOut = name === "TimeoutError" || name === "AbortError";
+        failure = new ValioApiError(timedOut ? "timeout" : "network", `Valio API ${path}: ${timedOut ? `no answer within ${Math.round(Math.min(this.cfg.timeoutMs, left))} ms` : "network error"}.`, undefined, timedOut ? 30 : undefined);
       }
       const retryable = failure !== undefined || (res !== undefined && (res.status === 429 || res.status >= 500));
       if (!retryable) return res!;
@@ -321,8 +357,17 @@ export class ValioLiveClient {
         if (failure) throw failure;
         return res!;
       }
+      const wait = this.backoffMs(attempt, res);
+      const asked = retryAfterOf(res);
+      // Waiting would run past the deadline (a Retry-After of 30 s, say): say so now instead of sleeping on it.
+      if ((asked !== undefined && asked * 1000 > dl.left()) || wait >= dl.left()) {
+        this.counters.failures += 1;
+        if (failure) throw failure;
+        return res!;
+      }
       this.counters.retries += 1;
-      await this.sleep(this.backoffMs(attempt, res));
+      await this.sleep(wait);
+      dl.slept += wait;
     }
   }
 

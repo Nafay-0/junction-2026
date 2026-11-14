@@ -23,7 +23,10 @@ export async function handle(fn: (rt: Runtime) => Promise<Response>): Promise<Re
     return await fn(await getRuntime());
   } catch (err) {
     unstable_rethrow(err); // let Next.js see its own control-flow errors (e.g. "this route is request-time")
-    if (isDockError(err)) return Response.json(errorBody(err.code, err.message, err.rule, err.details), { status: err.status });
+    if (isDockError(err)) {
+      const retry = err.status === 503 || err.status === 429 ? Number((err.details as { retryAfterSeconds?: unknown } | undefined)?.retryAfterSeconds) : NaN;
+      return Response.json(errorBody(err.code, err.message, err.rule, err.details), { status: err.status, ...(Number.isFinite(retry) && retry > 0 ? { headers: { "retry-after": String(Math.ceil(retry)) } } : {}) });
+    }
     console.error(err);
     return Response.json(errorBody("internal_error", "Something went wrong inside Dock."), { status: 500 });
   }
