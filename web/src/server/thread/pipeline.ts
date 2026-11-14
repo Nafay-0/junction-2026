@@ -11,7 +11,7 @@ import { callTool } from "@/server/mcp/server";
 import { qualifiersOf, wordsNotCarried } from "@/core/qualifiers";
 import { TOOLS } from "@/server/mcp/tools";
 import type { Runtime } from "@/server/runtime";
-import { refusalOfError, refusalOfRule, refusalOfStep, sayRefusal, type Refusal } from "./refusal";
+import { groupOf, groupsOf, refusalOfError, refusalOfRule, refusalOfStep, sayRefusal, type Refusal } from "./refusal";
 import { anomalyCard, cardId, gateCard, noOptionsCard, optionsCard, orderCard, passedOver, priceCard, questionCard, understoodCard } from "./cards";
 import { threadTag } from "./context";
 import type { StoredThread, ThreadStore } from "./store";
@@ -203,6 +203,18 @@ async function watchAnswersFor(run: TurnRun, step: IntakeView): Promise<NoticeCa
   return { type: "notice", cardId: cardId("notice", `${step.requestId}:watch`), requestId: step.requestId, kind: "not_found", ...worded(() => ({ code: "out_of_stock", what, ...(day ? { day } : {}) })), ...(sub ? { message: `${what} can't come${f.shortfall.backOn ? `: the supplier is out until ${f.shortfall.backOn}` : ""}. The closest is ${shortName(sub.name)}. Shall I order that instead?` } : {}) };
 }
 
+/** The kind of product the words name, when none of it is in the kitchen's allowed groups (master data, no live call). */
+async function outsideRules(run: TurnRun, what: string): Promise<{ what: string; category: string } | undefined> {
+  if (!what.trim()) return undefined;
+  const { findProducts } = await import("@/server/search/service");
+  const found = await findProducts(run.rt.catalog, { text: what, limit: 8, noJudge: true } as never);
+  const cats = found.hits.slice(0, 6).map((h: { product: { category: string } }) => h.product.category);
+  if (!cats.length) return undefined;
+  const allowed = run.session.mandate.allowedCategories;
+  if (cats.some((c: string) => allowed.includes(c))) return undefined;
+  return { what: what.trim(), category: cats[0] };
+}
+
 /** A refusal said in each language; `message` is the English one (what the record and the model read). */
 export function worded(r: (lang: "en" | "fi" | "sv") => Refusal): { message: string; said: Record<"en" | "fi" | "sv", string> } {
   const said = { en: sayRefusal(r("en"), "en"), fi: sayRefusal(r("fi"), "fi"), sv: sayRefusal(r("sv"), "sv") };
@@ -360,6 +372,19 @@ export async function orderFromWords(run: TurnRun, words: string, earlier: Earli
       if (usual) {
         reading.done("the usual, from your recurring orders");
         return [{ words, requestId: usual.requestId, sheet: usual }];
+      }
+    }
+    // Only the amount is missing, but the kind of product is clear: if the kitchen's rules do not let it buy that kind
+    // at all, that is the answer (asking how much first would ask a question whose answer changes nothing).
+    if (notice.kind === "incomplete" && !notice.missing?.includes("what to buy") && err instanceof DockError) {
+      const outside = await outsideRules(run, String((err.details?.partial as { item?: { text?: string } } | undefined)?.item?.text ?? "")).catch(() => undefined);
+      if (outside) {
+        reading.done("outside the kitchen's rules");
+        const refusal: NoticeCard = { type: "notice", cardId: notice.cardId, kind: "refused", ...worded((l) => ({ code: "out_of_mandate", what: outside.what, ...(groupOf(outside.category, l) ? { group: groupOf(outside.category, l) } : {}), groups: groupsOf(run.session.mandate.allowedCategories, l), ...(run.session.mandate.approvers?.[0]?.name ? { signer: run.session.mandate.approvers[0].name } : {}) })) };
+        run.store.card(run.thread, run.turnId, refusal);
+        run.facts.push(refusal);
+        record(run, "rules_first", `"${words.slice(0, 80)}": ${outside.what} is outside the kitchen's rules (${outside.category}); said before asking how much.`, {});
+        return [{ words, notice: refusal }];
       }
     }
     reading.fail(err instanceof DockError ? err.code : undefined);

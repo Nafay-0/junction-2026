@@ -25,6 +25,8 @@ const REQUESTS: Record<string, { text: string; lang: "en" | "fi" }[]> = {
     { text: "maitoa niinkuin yleensä", lang: "fi" },
     { text: "lohta 8 kg perjantaiksi", lang: "fi" },
     { text: "raise the limit to 800", lang: "en" },
+    // The rules answer first: no question about the amount for something the kitchen may not buy.
+    { text: "something for the dishwasher", lang: "en" },
   ],
   "koulu-metsola": [
     { text: "60 l semi skimmed milk for monday lunch", lang: "en" },
@@ -49,6 +51,7 @@ const REQUESTS: Record<string, { text: string; lang: "en" | "fi" }[]> = {
     { text: "korvapuusteja 60 kpl lauantaiksi", lang: "fi" },
     { text: "maitoa 30 l ja kermaa 5 l torstaiksi", lang: "fi" },
     { text: "who has to ok orders over the limit?", lang: "en" },
+    { text: "burger buns for 40", lang: "en" },
   ],
 };
 
