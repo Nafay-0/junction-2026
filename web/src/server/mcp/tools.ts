@@ -339,7 +339,7 @@ const CORE_TOOLS = [
         .optional()
         .describe("Only with quoteToken: the quote's lines (productId, quantity, unitPriceCents) copied from quote.lines."),
     }),
-    output: z.object({ order: OrderSchema, replaced: z.looseObject({ orderId: z.string(), status: z.string() }).optional().describe("With replaces: what happened to the order this one replaces."), receiptEmail: z.looseObject({ emailed: z.boolean() }).optional().describe("Committed: whether the receipt was emailed to the kitchen, and the masked address."), nextStep }),
+    output: z.object({ order: OrderSchema, replaced: z.looseObject({ orderId: z.string(), status: z.string() }).optional().describe("With replaces: what happened to the order this one replaces."), receiptEmail: z.looseObject({ emailed: z.boolean() }).optional().describe("Receipt emailed to the kitchen (masked address)."), nextStep }),
     run: async ({ dock, session }, { requestId, quoteToken, lines, replaces }) => {
       // Without a quoteToken the core places the quote it signed for this request (at choose_option, or the latest
       // request_quote outside the intake); no_current_quote if none.
@@ -361,7 +361,7 @@ const CORE_TOOLS = [
     description:
       "An order's status (pending_approval, committed, declined, rejected, withdrawn, expired), the gate's decision with every rule's result, the sign-off and, once committed, the wholesaler-signed confirmation. With waitSeconds (at most 55) it answers as soon as the person decides an order waiting for sign-off: the way to learn the outcome. It only reads; no tool can approve.",
     input: z.object({ orderId: z.string().min(1).describe("orderId returned by place_order."), waitSeconds: z.number().int().min(0).max(55).optional().describe("Wait up to this long for a sign-off decision.") }),
-    output: z.object({ order: OrderSchema, decided: z.boolean().optional(), receiptEmail: z.looseObject({ emailed: z.boolean() }).optional().describe("As place_order."), nextStep }),
+    output: z.object({ order: OrderSchema, decided: z.boolean().optional(), receiptEmail: z.looseObject({ emailed: z.boolean() }).optional(), nextStep }),
     readOnly: true,
     run: async ({ dock, session }, { orderId, waitSeconds }) => {
       if (!waitSeconds) {
