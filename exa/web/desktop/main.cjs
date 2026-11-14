@@ -152,6 +152,15 @@ function createWindow() {
     return { action: "deny" };
   });
 
+  // The interface has been loaded afresh (a reload, signing in or out): the browser view it
+  // showed went with the old page. The engine starts clean, so a step that was waiting on that
+  // view is not kept as if it could still be answered; the conversation asks for it again and the
+  // agent works its way back. This fires once the old page is gone and before the new one runs:
+  // any earlier, and the old page would hear its waiting step end and report it as declined.
+  win.webContents.on("did-navigate", () => {
+    void engine.reset().catch(() => {});
+  });
+
   // The browser view: no access to this app's internals, whatever a page asks for, and only in
   // an account's own store.
   win.webContents.on("will-attach-webview", (event, webPreferences, params) => {

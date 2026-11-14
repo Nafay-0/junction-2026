@@ -695,6 +695,35 @@ export class BrowserSession {
     return { kind: "browser", label, action, url: url.startsWith("chrome-error:") ? "" : url, title: this.state.title, ok: true, sources: [], ...extra };
   }
 
+  /**
+   * A step that was waiting when the app was closed, asked for again now that it is open. It is
+   * not taken: what it pointed at belonged to a page that is gone or has changed. The agent gets
+   * the state of things and finds its own way back; a step that needs the user's yes asks again.
+   */
+  missed(action: BrowserStepData["action"]): Promise<BrowserStepData> {
+    return this.queue(async () => {
+      const why = "This step was still waiting when the app was closed or reloaded, so it was not taken.";
+      const page = this.page;
+      if (!page) {
+        return this.step("Picking up where it stopped", action, undefined, {
+          ok: false,
+          problem: why,
+          page:
+            `${why} Nothing was approved and nothing was sent. The live browser closed with it, so the page is gone. ` +
+            "Sign-ins and whatever the site itself saved (an account, a basket) are kept; what was only typed into a form is not. " +
+            "Open the page again with browserOpen, look at what is already done before repeating anything, and work back to this step. " +
+            "Do not ask the user whether to continue: carry on. A step that needs their approval will ask them again by itself.",
+        });
+      }
+      const text = await this.pageText(page);
+      return this.step("Picking up where it stopped", action, page, {
+        ok: false,
+        problem: why,
+        page: `${why} Nothing was approved and nothing was sent. The page as it stands now is below: check it is the right one and what is already done, then carry on from there.\n\n${text}`,
+      });
+    });
+  }
+
   /** The agent closes the browser: the task there is finished, or the user asked. Sign-ins are kept. */
   shut(signal?: AbortSignal): Promise<BrowserStepData> {
     return this.queue(async () => {

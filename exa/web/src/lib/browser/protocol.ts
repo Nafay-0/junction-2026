@@ -133,15 +133,28 @@ export type ControlRequest =
   /** Close the browser. Sign-ins are kept. */
   | { action: "close" };
 
-/** What the agent's "it is your turn" request resolves to. */
-export type HandoverAnswer = { status: "done" | "skipped"; note?: string };
+/**
+ * What the agent's "it is your turn" request resolves to. "interrupted": the app was closed while
+ * it was the user's turn, and the page went with it. Nobody said they were done or skipped it.
+ */
+export type HandoverAnswer = { status: "done" | "skipped" | "interrupted"; note?: string };
 
 /** The agent's browser tools. They are carried out in the desktop app, not on the server. */
 export const BROWSER_TOOL_NAMES = ["browserOpen", "browserAct", "browserRead", "browserLook", "browserClose"] as const;
 export type BrowserToolName = (typeof BROWSER_TOOL_NAMES)[number];
 
 /** One step the agent asked for, as the interface passes it to the app. */
-export type BrowserCall = { tool: BrowserToolName; toolCallId: string; input: unknown };
+export type BrowserCall = {
+  tool: BrowserToolName;
+  toolCallId: string;
+  input: unknown;
+  /**
+   * The step was asked for before, by a view that has since been closed and opened again (a
+   * reload, the app quit and started). If the app still has it, the same answer comes back; if it
+   * does not, the step is not taken blind on whatever page is there now.
+   */
+  again?: boolean;
+};
 
 /** One browser step as the conversation shows it. What the agent's browser tools return. */
 export type BrowserStepData = {

@@ -63,6 +63,12 @@ export function createEngine() {
       if (!call || typeof call.toolCallId !== "string" || !call.toolCallId) return Promise.resolve(refused("read", "The step had no name."));
       const known = calls.get(call.toolCallId);
       if (known) return known;
+      // Asked for again after the view that asked was closed, and this browser never had the step:
+      // the app was quit in between, or the step never arrived. The page it was meant for may be
+      // gone or another one, so it is not taken. The agent is told where things stand instead.
+      if (call.again === true && call.tool !== "browserOpen") {
+        return session.missed(call.tool === "browserClose" ? "close" : call.tool === "browserAct" ? "click" : "read");
+      }
       const abort = new AbortController();
       running.add(abort);
       const result = take(call, abort.signal)
@@ -75,6 +81,16 @@ export function createEngine() {
     /** The user pressed Stop: steps in flight end, and a step waiting for approval counts as declined. */
     stop() {
       for (const abort of running) abort.abort();
+    },
+    /**
+     * The interface was loaded afresh (the window was reloaded, someone signed in or out): the
+     * browser view it showed went with the old page. The browser starts clean, and no step is
+     * remembered as if it could still be answered: one that is asked for again gets `missed`.
+     */
+    async reset() {
+      for (const abort of running) abort.abort();
+      calls.clear();
+      if (session.snapshotState().status !== "idle") await session.close();
     },
     /** The agent asks the user to step in: the page is theirs until they hand it back. */
     handover(input: unknown, toolCallId: string) {

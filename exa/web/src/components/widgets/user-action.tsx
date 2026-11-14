@@ -84,8 +84,8 @@ export function UserAction({
           {done ? <Check className="size-4" strokeWidth={2.5} /> : <SkipForward className="size-3.5" />}
         </span>
         <p className="min-w-0 text-[0.85rem] leading-snug">
-          <span className="font-medium">{done ? copy.doneLine : kind === "payment" ? "You stopped before paying" : "You skipped this"}</span>
-          <span className="text-muted-foreground">{done ? `, and handed the browser back to ${APP_NAME}.` : "."}</span>
+          <span className="font-medium">{done ? copy.doneLine : final.status === "interrupted" ? "The app was closed before this was done" : kind === "payment" ? "You stopped before paying" : "You skipped this"}</span>
+          <span className="text-muted-foreground">{done ? `, and handed the browser back to ${APP_NAME}.` : final.status === "interrupted" ? `. ${APP_NAME} is picking it up again.` : "."}</span>
         </p>
       </div>
     );

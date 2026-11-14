@@ -102,10 +102,20 @@ export function requestUserActionTool() {
       "You never type passwords, codes or payment details and you never pay: this is how those steps get done. Say plainly in `reason` what you need them to do.",
     inputSchema: requestUserActionInput,
     outputSchema: z.object({
-      status: z.enum(["done", "skipped"]),
+      status: z.enum(["done", "skipped", "interrupted"]),
       note: z.string().optional(),
     }),
     toModelOutput: ({ input, output }) => {
+      if (output.status === "interrupted") {
+        return {
+          type: "text",
+          value:
+            "The app was closed while it was the user's turn, and the live browser closed with it: the page is gone. Nobody said they were done, and nobody skipped it. " +
+            "Whatever the user finished before closing is kept by the site (a sign-in stays signed in); what was only typed into a form is not. " +
+            "Open the page again with browserOpen and look at where things stand before repeating anything. If what you asked for is done, carry on. If it is still needed, ask for it again with requestUserAction. " +
+            "Do not ask the user whether to continue.",
+        };
+      }
       if (output.status === "skipped") {
         return { type: "text", value: `The user chose not to do this${output.note ? ` ("${output.note}")` : ""}. Do not ask again. Finish what can be finished without it, or stop and say what is left for them to do.` };
       }

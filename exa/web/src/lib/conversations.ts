@@ -1,8 +1,10 @@
 "use client";
 
 import * as React from "react";
+import { isVoice } from "@/lib/agent/stats";
 import type { ButlerMessage } from "@/lib/agent/tools";
 import { api } from "@/lib/auth/fetch";
+import { BROWSER_TOOL_NAMES } from "@/lib/browser/protocol";
 import { clientKind, type ClientKind } from "@/lib/client-kind";
 
 /**
@@ -113,7 +115,10 @@ export async function loadConversation(id: string): Promise<{ meta: Conversation
     const response = await api(path(id));
     if (!response.ok) return null;
     const { meta, messages } = (await response.json()) as { meta: ConversationMeta; messages: ButlerMessage[] };
-    return { meta, messages: settle(messages) };
+    // In the desktop app, a recent conversation of its own may be waiting on a step in the live
+    // browser or on the user there: that is picked up again, not closed off.
+    const pickUp = clientKind() === "desktop" && meta.origin === "desktop" && Date.now() - meta.updatedAt < PICK_UP_WITHIN_MS;
+    return { meta, messages: settle(messages, pickUp) };
   } catch {
     return null;
   }
@@ -273,18 +278,31 @@ export function retitleAfterEdit(id: string, before: ButlerMessage[], editedText
 const WAITS_FOR_USER = new Set(["tool-askUser", "tool-requestLocation"]);
 
 /**
+ * What the desktop app answers: a step in the live browser, and the user's turn on a page. When
+ * the app is closed while one of these is waiting, the task waits with it, and the conversation
+ * picks it up when it is opened in the app again (`ChatView` in butler.tsx).
+ */
+const ANSWERED_BY_APP = new Set(["tool-requestUserAction", ...BROWSER_TOOL_NAMES.map((name) => `tool-${name}`)]);
+/** After a day a task that was waiting is no longer picked up by itself: it is shown as stopped, and the user can ask again. */
+const PICK_UP_WITHIN_MS = 24 * 60 * 60 * 1000;
+
+/**
  * A conversation saved while the agent was still working has parts frozen mid-flight.
  * Close them off so a reopened conversation shows "stopped" instead of a spinner that never ends.
+ * With `pickUp`, the steps the desktop app answers are left waiting in the last answer (unless it
+ * was spoken in a call, which ended with the app): the chat asks the app for them again.
  */
-function settle(messages: ButlerMessage[]): ButlerMessage[] {
-  return messages.map((message) => {
+function settle(messages: ButlerMessage[], pickUp = false): ButlerMessage[] {
+  return messages.map((message, index) => {
     if (message.role !== "assistant") return message;
+    const resumes = pickUp && index === messages.length - 1 && !isVoice(message.metadata);
     const parts = message.parts.map((part) => {
       if ((part.type === "text" || part.type === "reasoning") && part.state === "streaming") return { ...part, state: "done" as const };
       if (!part.type.startsWith("tool-")) return part;
       const tool = part as { type: string; state: string; preliminary?: boolean };
       const unfinished = tool.state === "input-streaming" || tool.state === "input-available" || (tool.state === "output-available" && tool.preliminary === true);
       if (!unfinished || WAITS_FOR_USER.has(tool.type)) return part;
+      if (resumes && tool.state === "input-available" && ANSWERED_BY_APP.has(tool.type)) return part;
       return { ...part, state: "output-error", errorText: "Stopped before this finished.", output: undefined, preliminary: undefined } as unknown as typeof part;
     });
     return { ...message, parts };

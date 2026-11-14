@@ -92,6 +92,24 @@ export function useBrowser(): BrowserSnapshot {
   );
 }
 
+/** The id of the step that is waiting for the user's yes or no, if one is. Changes only when that does. */
+export function useApprovalId(): string | undefined {
+  return React.useSyncExternalStore(
+    subscribe,
+    () => snapshot.state.approval?.toolCallId,
+    () => undefined,
+  );
+}
+
+/** The browser's state straight from the app, for a view that has only just been opened. Null outside the desktop app. */
+export async function askBrowserState(): Promise<BrowserState | null> {
+  try {
+    return (await desktop()?.browser.state()) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** The state right now, outside rendering. */
 export const browserState = (): BrowserState => snapshot.state;
 

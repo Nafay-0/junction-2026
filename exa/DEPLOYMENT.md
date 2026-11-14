@@ -2,8 +2,8 @@
 
 Set up on Saturday 14 November 2026 in the Google Cloud project `beryl-exa`, region `europe-north1`. The project is meant to stay up through Sunday 15 November and be shut down after.
 
-- Site: https://beryl.zeroanomaly.tech (once the DNS record below is in)
-- Always works, with HTTPS: https://beryl-58963151537.europe-north1.run.app
+- Site: https://beryl.zeroanomaly.tech (live since 14 Nov, 16:33; the certificate is active and http redirects to https)
+- The same server, without the domain: https://beryl-58963151537.europe-north1.run.app
 - Health: `/api/health` on either address
 
 ## What runs
@@ -62,7 +62,7 @@ BERYL_SERVER_URL=https://beryl.zeroanomaly.tech pnpm desktop:release
 gcloud storage cp desktop/release/downloads/* gs://beryl-exa-downloads/ --cache-control="no-cache, max-age=0"
 ```
 
-The address is baked into the app. The installers in the bucket today open the `run.app` address, which keeps working; they are rebuilt for the domain once its certificate is active.
+The address is baked into the app. The installers in the bucket open `https://beryl.zeroanomaly.tech` (built and uploaded 14 Nov, 17:07). The upload does not restart the server. The app's browser engine is inside the installer, so a change under `web/src/lib/browser/` or `web/desktop/` reaches people only through a new installer; the interface comes from the server and is new with every deploy.
 
 ## Changing a setting
 

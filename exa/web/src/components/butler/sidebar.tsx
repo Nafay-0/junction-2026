@@ -40,9 +40,12 @@ export function Sidebar({
   onDelete,
   onDeleteAll,
   running,
+  waiting,
 }: {
   /** Conversations with a task running in them right now, here or left running in the background. */
   running?: string[];
+  /** Conversations whose task cannot go on until the user does something: approve a step, finish on a page. */
+  waiting?: string[];
   open: boolean;
   onClose: () => void;
   conversations: ConversationMeta[];
@@ -138,6 +141,7 @@ export function Sidebar({
                           conversation={c}
                           elsewhere={c.origin !== here}
                           running={running?.includes(c.id) ?? false}
+                          waiting={waiting?.includes(c.id) ?? false}
                           active={c.id === activeId}
                           editing={editing === c.id}
                           onSelect={() => onSelect(c.id)}
@@ -168,6 +172,7 @@ export function Sidebar({
 
 function Row({
   running,
+  waiting,
   conversation,
   elsewhere,
   active,
@@ -182,6 +187,8 @@ function Row({
   elsewhere: boolean;
   /** A task is running in this conversation. */
   running: boolean;
+  /** Its task is waiting for the user. Said instead of "running". */
+  waiting: boolean;
   active: boolean;
   editing: boolean;
   onSelect: () => void;
@@ -227,7 +234,16 @@ function Row({
       <button type="button" onClick={onSelect} aria-current={active ? "page" : undefined} title={conversation.title} className="min-w-0 flex-1 truncate py-2 pr-1 pl-2.5 text-left text-[0.85rem] leading-5 outline-none focus-visible:underline">
         {conversation.title}
       </button>
-      {running ? (
+      {waiting ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span tabIndex={0} role="img" aria-label="This task is waiting for you" className="flex size-6 shrink-0 items-center justify-center outline-none">
+              <span className="size-2 rounded-full bg-brass ring-2 ring-brass/25" />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="right">Waiting for you. Open it to carry on.</TooltipContent>
+        </Tooltip>
+      ) : running ? (
         <Tooltip>
           <TooltipTrigger asChild>
             <span tabIndex={0} role="img" aria-label="A task is running in this conversation" className="flex size-6 shrink-0 items-center justify-center outline-none">

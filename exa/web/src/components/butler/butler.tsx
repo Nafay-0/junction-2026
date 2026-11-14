@@ -10,7 +10,7 @@ import { DEFAULT_EFFORT, cleanEffort, getMode, pickMode, type Effort, type ModeI
 import type { ButlerMessage } from "@/lib/agent/tools";
 import { useUser } from "@/lib/auth/client";
 import { APP_NAME } from "@/lib/brand";
-import { browserState, control as browserControl, requestHandover, runBrowserTool, stopBrowserTools } from "@/lib/browser/client";
+import { askBrowserState, browserState, control as browserControl, requestHandover, runBrowserTool, stopBrowserTools, useApprovalId } from "@/lib/browser/client";
 import { useDesktopApp } from "@/lib/browser/desktop";
 import { BROWSER_TOOL_NAMES, type BrowserToolName, type HandoverAnswer } from "@/lib/browser/protocol";
 import { CLIENT_HEADER, clientKind, type ClientKind } from "@/lib/client-kind";
@@ -146,6 +146,13 @@ function answeredHere(messages: ButlerMessage[]): boolean {
   return tools.some((p) => ANSWERED_HERE.has(p.type)) && tools.every((p) => p.state === "output-available");
 }
 
+/** True when the last answer has a step still waiting: of the given kind, or the one with the given id. */
+function waitsFor(messages: ButlerMessage[], type?: string, toolCallId?: string): boolean {
+  const last = messages.at(-1);
+  if (last?.role !== "assistant") return false;
+  return last.parts.some((p) => "toolCallId" in p && "state" in p && p.state === "input-available" && (type === undefined || p.type === type) && (toolCallId === undefined || p.toolCallId === toolCallId));
+}
+
 /** A picture the agent took of a page is for the answer being written. It is not kept in the saved conversation. */
 function withoutPictures(messages: ButlerMessage[]): ButlerMessage[] {
   const has = (p: ButlerMessage["parts"][number]) => p.type === "tool-browserLook" && p.state === "output-available" && Boolean(p.output?.picture);
@@ -208,6 +215,95 @@ async function openConversation(id: string): Promise<Active | null> {
 const workingNow = new Set<string>();
 let browserHolder: string | null = null;
 
+/*
+ * Tasks at work in the live browser. The browser is part of the app, so when the app is closed
+ * such a task waits until its conversation is opened in the app again. Which ones they were is
+ * kept in this app's own storage (it is about this computer's browser, not the account), so the
+ * list can mark them after the app has been closed and opened. After a day they are forgotten:
+ * a task that old is no longer picked up by itself.
+ */
+const BROWSER_TASKS_KEY = "hovi.browserTasks";
+const BROWSER_TASK_LIFE_MS = 24 * 60 * 60 * 1000;
+/** In progress now, in this window. */
+const browserTasks = new Map<string, number>();
+/** Left from before the app was last closed, and not opened since. */
+const leftTasks = new Map<string, number>();
+
+/* The left ones as a small store, so the list re-draws when one is opened or deleted. */
+const NO_TASKS: string[] = [];
+let leftIds: string[] = NO_TASKS;
+let leftRead = false;
+const leftListeners = new Set<() => void>();
+
+function publishLeft() {
+  leftIds = [...leftTasks.keys()];
+  leftListeners.forEach((listener) => listener());
+}
+
+function subscribeLeft(onChange: () => void) {
+  leftListeners.add(onChange);
+  if (!leftRead) {
+    leftRead = true;
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(BROWSER_TASKS_KEY) ?? "[]") as Array<[string, number]>;
+      for (const [id, at] of saved) if (typeof id === "string" && Date.now() - at < BROWSER_TASK_LIFE_MS && !browserTasks.has(id)) leftTasks.set(id, at);
+    } catch {
+      /* nothing kept, or storage is blocked: nothing is marked */
+    }
+    if (leftTasks.size > 0) leftIds = [...leftTasks.keys()];
+  }
+  return () => {
+    leftListeners.delete(onChange);
+  };
+}
+
+const useLeftTasks = () =>
+  React.useSyncExternalStore(
+    subscribeLeft,
+    () => leftIds,
+    () => NO_TASKS,
+  );
+
+/** The conversation has been opened (it picks its task up itself) or is gone: it is no longer one that was left. */
+function forgetLeftTask(id: string) {
+  if (!leftTasks.delete(id)) return;
+  writeBrowserTasks();
+  publishLeft();
+}
+
+function writeBrowserTasks() {
+  try {
+    window.localStorage.setItem(BROWSER_TASKS_KEY, JSON.stringify([...leftTasks, ...browserTasks].slice(-20)));
+  } catch {
+    /* storage blocked: the tasks still pick up when opened, they are just not marked */
+  }
+}
+
+function noteBrowserTask(id: string, on: boolean) {
+  if (on === browserTasks.has(id)) return;
+  if (on) browserTasks.set(id, Date.now());
+  else browserTasks.delete(id);
+  writeBrowserTasks();
+}
+
+/* Whether the conversation list is closed only because it stepped aside for the live browser. */
+const ASIDE_KEY = "hovi.sidebar.aside";
+function noteAside(on: boolean) {
+  try {
+    if (on) window.localStorage.setItem(ASIDE_KEY, "1");
+    else window.localStorage.removeItem(ASIDE_KEY);
+  } catch {
+    /* storage blocked: the list just stays as it was left */
+  }
+}
+function wasAside(): boolean {
+  try {
+    return window.localStorage.getItem(ASIDE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 type HandoverHandler = (answer: HandoverAnswer, toolCallId?: string) => void;
 
 /** The app shell: the conversation list on the left, the open conversation on the right. */
@@ -234,11 +330,27 @@ export function Butler() {
     keptIds.current = kept;
   }, [active, kept]);
 
+  /* Conversations that cannot go on until the user does something in the live browser: a step
+     waiting for their yes, or a page handed to them. The list marks them. */
+  const [needsUser, setNeedsUser] = React.useState<string[]>([]);
+  const onNeedsUser = React.useCallback((id: string, now: boolean) => {
+    setNeedsUser((ids) => (now === ids.includes(id) ? ids : now ? [...ids, id] : ids.filter((x) => x !== id)));
+  }, []);
+
+  /* Browser tasks that were in progress when the app was last closed. They pick up when their
+     conversation is opened; the one that was on screen is opened by itself. */
+  const left = useLeftTasks();
+  React.useEffect(() => {
+    if (active?.id) forgetLeftTask(active.id);
+  }, [active]);
+  const waitingForUser = React.useMemo(() => [...new Set([...needsUser, ...left])], [needsUser, left]);
+
   const onWorking = React.useCallback((id: string, now: boolean) => {
     if (now === workingNow.has(id)) return;
     if (now) workingNow.add(id);
     else {
       workingNow.delete(id);
+      noteBrowserTask(id, false);
       if (browserHolder === id) browserHolder = null;
     }
     setWorking([...workingNow]);
@@ -310,12 +422,20 @@ export function Butler() {
   const makeRoom = React.useCallback(() => {
     if (sidebarPref !== "open") return;
     steppedAside.current = true;
+    noteAside(true);
     setSidebarPref("closed");
   }, [sidebarPref, setSidebarPref]);
   const giveRoomBack = React.useCallback(() => {
     if (!steppedAside.current) return;
     steppedAside.current = false;
+    noteAside(false);
     setSidebarPref("open");
+  }, [setSidebarPref]);
+  // The app was closed while the list was aside for a browser that is gone now: the list comes back.
+  React.useEffect(() => {
+    if (!wasAside()) return;
+    noteAside(false);
+    if (browserState().status !== "ready") setSidebarPref("open");
   }, [setSidebarPref]);
 
   const newTask = React.useCallback(() => {
@@ -348,10 +468,28 @@ export function Butler() {
     [leave],
   );
 
+  // A task was left waiting when the app was last closed: say so once, with a way to open it.
+  // The list may be closed or out of view, and the mark there is easy to miss.
+  const toldLeft = React.useRef(false);
+  React.useEffect(() => {
+    if (toldLeft.current || !active) return;
+    const found = left.filter((id) => id !== active.id && conversations.some((c) => c.id === id));
+    if (found.length === 0) return;
+    toldLeft.current = true;
+    const first = found[0];
+    toast(found.length > 1 ? `${found.length} tasks are waiting for you` : "A task is waiting for you", {
+      description: found.length > 1 ? "Open one from the list to carry on." : conversations.find((c) => c.id === first)?.title,
+      duration: 20_000,
+      action: { label: "Open", onClick: () => open(first) },
+    });
+  }, [left, active, conversations, open]);
+
   const remove = React.useCallback(
     (id: string) => {
       // Deleting a conversation ends whatever is running in it (the server does the same).
       workingNow.delete(id);
+      noteBrowserTask(id, false);
+      forgetLeftTask(id);
       setWorking([...workingNow]);
       setKept((ids) => ids.filter((x) => x !== id));
       void deleteConversation(id).then(() => void refreshRunning());
@@ -373,6 +511,7 @@ export function Butler() {
         conversations={conversations}
         activeId={active?.id ?? null}
         running={running}
+        waiting={waitingForUser}
         onSelect={open}
         onNew={newTask}
         onRename={(id, title) => void renameConversation(id, title)}
@@ -407,6 +546,7 @@ export function Butler() {
                   onBrowserGone={giveRoomBack}
                   registerHandover={registerHandover}
                   onWorking={onWorking}
+                  onNeedsUser={onNeedsUser}
                   startedIn={meta?.origin}
                   title={meta?.title}
                 />
@@ -429,6 +569,7 @@ function ChatView({
   onBrowserGone,
   registerHandover,
   onWorking,
+  onNeedsUser,
   hidden,
   rejoin,
   startedIn,
@@ -440,6 +581,8 @@ function ChatView({
   rejoin: boolean;
   /** Tell the shell whether this conversation has work in progress. */
   onWorking: (id: string, working: boolean) => void;
+  /** Tell the shell whether this conversation is waiting for the user in the live browser. */
+  onNeedsUser: (id: string, waiting: boolean) => void;
   /** Where the browser pane finds this conversation's way of answering a hand-over. */
   registerHandover: (id: string, handler: ((answer: HandoverAnswer, toolCallId?: string) => void) | null) => void;
   /** The conversation's name, once it has been saved under one. */
@@ -485,7 +628,7 @@ function ChatView({
   const composer = React.useRef<ComposerHandle>(null);
   /** The user pressed Stop (or left): what arrives after that is kept, but does not start the agent again. */
   const halted = React.useRef(false);
-  const takeStep = React.useRef<((call: { toolName: string; toolCallId: string; input: unknown }) => void) | null>(null);
+  const takeStep = React.useRef<((call: { toolName: string; toolCallId: string; input: unknown }, again?: boolean) => void) | null>(null);
   const { messages, setMessages, sendMessage, status, stop, error, regenerate, addToolOutput, clearError } = useChat<ButlerMessage>({
     id: conversationId,
     messages: seed,
@@ -501,11 +644,17 @@ function ChatView({
      safety rules, and the page as it then stands goes back to the agent. Each step is taken once. */
   const taken = React.useRef(new Set<string>());
   const [stepping, setStepping] = React.useState(0);
+  /** This conversation's own steps in flight. Stopping, or leaving, ends those and nobody else's. */
+  const inFlight = React.useRef(0);
+  const stopOwnSteps = React.useCallback(() => {
+    if (inFlight.current > 0) stopBrowserTools();
+  }, []);
   React.useEffect(() => {
-    takeStep.current = (call) => {
+    takeStep.current = (call, again = false) => {
       if (taken.current.has(call.toolCallId)) return;
       if (call.toolName === "requestUserAction") {
         taken.current.add(call.toolCallId);
+        noteBrowserTask(conversationId, true);
         requestHandover(call.input, call.toolCallId);
         return;
       }
@@ -518,25 +667,52 @@ function ChatView({
         return;
       }
       browserHolder = conversationId;
+      noteBrowserTask(conversationId, true);
+      inFlight.current += 1;
       setStepping((n) => n + 1);
       // Not awaited here: the answer is written into the conversation when the step is done.
-      void runBrowserTool({ tool, toolCallId: call.toolCallId, input: call.input })
+      void runBrowserTool({ tool, toolCallId: call.toolCallId, input: call.input, ...(again ? { again: true } : {}) })
         .then((output) => void addToolOutput({ tool, toolCallId: call.toolCallId, output }))
-        .finally(() => setStepping((n) => Math.max(0, n - 1)));
+        .finally(() => {
+          inFlight.current = Math.max(0, inFlight.current - 1);
+          setStepping((n) => Math.max(0, n - 1));
+        });
     };
     return () => {
       takeStep.current = null;
     };
   }, [addToolOutput, conversationId]);
-  // The view was mounted afresh while a step was on its way (a code reload, a layout change): ask
-  // for it again. The app answers a step it has already taken with the same result.
+  /* The conversation was opened with something still waiting in the live browser: the window was
+     reloaded, the conversation was left and opened again, or the app was quit and started. Ask for
+     it again, so the task picks up by itself.
+     - A step: if the app still has it (it is waiting for the user's yes, say) the same answer
+       comes back. If it does not, the app was closed in between: the step is not taken, the agent
+       is told the page is gone, and it works its way back (asking for approval again).
+     - The user's turn on a page: if the page is still in their hands, "Done" in the browser
+       reaches this conversation as before. If the browser has closed, the agent is told so. */
   React.useEffect(() => {
+    if (!desktop || readOnly) return;
     const last = seed.at(-1);
     if (last?.role !== "assistant") return;
     for (const part of last.parts) {
-      if (BROWSER_PARTS.has(part.type) && "state" in part && part.state === "input-available") takeStep.current?.({ toolName: part.type.slice(5), toolCallId: part.toolCallId, input: part.input });
+      if (!("state" in part) || part.state !== "input-available") continue;
+      if (BROWSER_PARTS.has(part.type)) takeStep.current?.({ toolName: part.type.slice(5), toolCallId: part.toolCallId, input: part.input }, true);
+      if (part.type !== "tool-requestUserAction" || taken.current.has(part.toolCallId) || liveCall.ownsHandover(part.toolCallId)) continue;
+      const { toolCallId, input } = part;
+      taken.current.add(toolCallId);
+      void askBrowserState().then((state) => {
+        if (state?.handover?.toolCallId === toolCallId) return;
+        const free = !browserHolder || browserHolder === conversationId || !workingNow.has(browserHolder);
+        // The page is still open but no longer in the user's hands: hand it to them again.
+        if (state?.status === "ready" && free) {
+          browserHolder = conversationId;
+          requestHandover(input, toolCallId);
+          return;
+        }
+        void addToolOutput({ tool: "requestUserAction", toolCallId, output: { status: "interrupted" } });
+      });
     }
-  }, [seed]);
+  }, [seed, desktop, readOnly, conversationId, addToolOutput]);
 
   const busy = status === "submitted" || status === "streaming";
   const empty = messages.length === 0;
@@ -546,10 +722,21 @@ function ChatView({
      when the user goes elsewhere. Pressing Stop ends it. */
   const [stopped, setStopped] = React.useState(false);
   const working = busy || stepping > 0 || (!stopped && !readOnly && answeredHere(messages));
+  /* Waiting for the user in the live browser: the page is in their hands, or a step needs their
+     yes. The task is not over, so the conversation stays alive when they look at another one
+     ("Done" in the browser must still reach it), and the list says it is waiting for them. */
+  const approvalId = useApprovalId();
+  const theirTurn = Boolean(desktop) && !readOnly && !stopped && waitsFor(messages, "tool-requestUserAction");
+  const theirYes = stepping > 0 && approvalId !== undefined && waitsFor(messages, undefined, approvalId);
+  const alive = working || theirTurn;
   React.useEffect(() => {
-    onWorking(conversationId, working);
-  }, [onWorking, conversationId, working]);
+    onWorking(conversationId, alive);
+  }, [onWorking, conversationId, alive]);
   React.useEffect(() => () => onWorking(conversationId, false), [onWorking, conversationId]);
+  React.useEffect(() => {
+    onNeedsUser(conversationId, theirTurn || theirYes);
+  }, [onNeedsUser, conversationId, theirTurn, theirYes]);
+  React.useEffect(() => () => onNeedsUser(conversationId, false), [onNeedsUser, conversationId]);
 
   /* A task that is already running on the server (the page was reloaded or closed, or the task
      was started from another window): the conversation was opened as that task found it, and
@@ -630,17 +817,24 @@ function ChatView({
     lastSaved.current = Date.now();
     void persistConversation(conversationId, withoutPictures(messages), labelRef.current);
   }, [messages, status, conversationId, calling]);
-  // Leaving the conversation: stop any answer in progress, any call and any step in the browser, and save what there is.
-  React.useEffect(
-    () => () => {
+  // Leaving the conversation: stop any answer in progress, any call and its own steps in the browser, and save what there is.
+  // It happens a tick later and is called off if the view is put straight back: in development
+  // React takes a new view down and mounts it again, and that is not leaving. (Taken as leaving,
+  // it would decline a step that is waiting for approval and keep the task from picking up.)
+  const leaving = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  React.useEffect(() => {
+    clearTimeout(leaving.current);
+    halted.current = false;
+    return () => {
       halted.current = true;
-      if (liveCall.conversationId === conversationId) liveCall.end();
-      stopBrowserTools();
-      void stopRef.current();
-      if (dirty.current && latest.current.length > 0) void persistConversation(conversationId, withoutPictures(latest.current), labelRef.current);
-    },
-    [conversationId],
-  );
+      leaving.current = setTimeout(() => {
+        if (liveCall.conversationId === conversationId) liveCall.end();
+        stopOwnSteps();
+        void stopRef.current();
+        if (dirty.current && latest.current.length > 0) void persistConversation(conversationId, withoutPictures(latest.current), labelRef.current);
+      }, 0);
+    };
+  }, [conversationId, stopOwnSteps]);
 
   /* Keep the newest content in view while the agent works, unless the user has scrolled up to read.
      Sending a message, or answering a card the agent showed, always brings the view back down. */
@@ -757,7 +951,7 @@ function ChatView({
     // One voice at a time: an answer that is still being written stops here.
     halted.current = true;
     setStopped(true);
-    stopBrowserTools();
+    stopOwnSteps();
     void stopRunOnServer(conversationId);
     void stop();
     clearError();
@@ -770,7 +964,7 @@ function ChatView({
       setMessages: (update) => setMessages(update),
       locate: locateNow,
     });
-  }, [conversationId, stop, clearError, setMessages, locateNow]);
+  }, [conversationId, stop, clearError, setMessages, locateNow, stopOwnSteps]);
   // A call that could not start, or ended by itself, says why. The usage limit has its own dialog.
   React.useEffect(() => {
     if (!call.problem) return;
@@ -1006,7 +1200,7 @@ function ChatView({
               // It also ends a step in the live browser; a step waiting for approval counts as declined.
               halted.current = true;
               setStopped(true);
-              stopBrowserTools();
+              stopOwnSteps();
               void stopRunOnServer(conversationId);
               void stop();
             }}

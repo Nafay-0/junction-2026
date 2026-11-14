@@ -20,6 +20,7 @@
     "test:desktop": "node desktop/build.mjs && electron scripts/desktop-test.cjs",
     "test:voice": "node desktop/build.mjs && electron scripts/voice-test.cjs",
     "test:background": "node desktop/build.mjs && electron scripts/background-test.cjs",
+    "test:waiting": "node desktop/build.mjs && node scripts/waiting-test.mjs",
     "desktop": "node desktop/run.mjs",
     "desktop:build": "node desktop/build.mjs",
     "desktop:pack": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON desktop/pack.mjs",
