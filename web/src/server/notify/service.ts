@@ -335,6 +335,11 @@ async function send(rt: Runtime, s: State, rec: MailRecord, c: Contact, transpor
     saveRecord(s, r);
     ledger(rt, { orderId: rec.orderId, summary: `${what(r)} emailed to ${c.kitchenName} (${transport.name} id ${result.id}${result.attempts > 1 ? `, after ${result.attempts} tries` : ""}).`, data: { step: "sent", kind: r.kind, eventKey: r.eventKey, outcome: "sent", providerId: result.id } });
     scheduleDeliveryCheck(rt, r.mailId);
+  } else if (result.code === "invalid_idempotent_request") {
+    // The provider saw this event's key in the last 24 hours (a restart, another process): it was sent once already.
+    const r: MailRecord = { ...rec, outcome: "skipped", reason: "already sent for this event (the mail service's idempotency key)", attempts: result.attempts };
+    saveRecord(s, r);
+    ledger(rt, { orderId: rec.orderId, summary: `${what(r)} to ${c.kitchenName}: not sent again: the mail service already sent one for this event.`, data: { step: "skipped", kind: r.kind, eventKey: r.eventKey, outcome: "skipped", reason: r.reason } });
   } else {
     const reason = `${result.code}${result.status ? ` (${result.status})` : ""}: ${result.message}`;
     const r: MailRecord = { ...rec, outcome: "failed", reason, attempts: result.attempts };
@@ -472,6 +477,17 @@ async function onOrderEvent(rt: Runtime, e: DockEvent): Promise<void> {
   }
 }
 
+async function onRefusedAtPlacement(rt: Runtime, orderId: string, at: string): Promise<void> {
+  const s = await ready(rt);
+  const orgId = await rt.dock.orgOfOrder(orderId);
+  const c = orgId ? s.contacts.get(orgId) : undefined;
+  if (!orgId || !c || c.state === "removed") {
+    s.noAddress += 1;
+    return;
+  }
+  await onOrderEvent(rt, { id: 0, type: "order_rejected", at, orgId, orderId, totalCents: 0, summary: "" });
+}
+
 async function onWatchEntry(rt: Runtime, e: LedgerEntry): Promise<void> {
   const d = e.data as Record<string, unknown>;
   const step = d.step;
@@ -541,6 +557,8 @@ export function attachMail(rt: Runtime): void {
   );
   rt.dock.ledger.onAppend((e) => {
     if (e.type === "watch") later(() => onWatchEntry(rt, e));
+    // The gate refusing an order as it is placed (the bus carries only a refusal at sign-off; both give one mail).
+    else if (e.type === "decision" && e.orderId && (e.data as { outcome?: unknown }).outcome === "reject") later(() => onRefusedAtPlacement(rt, e.orderId!, e.at));
   });
 }
 

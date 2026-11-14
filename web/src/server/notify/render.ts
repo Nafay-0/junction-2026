@@ -1,6 +1,6 @@
 import { dayL, measureL, roleLabelL, ruleTitleL } from "@/app/_i18n/format";
 import { agentNameL, placeNameL } from "@/app/_i18n/kitchen-words";
-import { clock, money, num } from "@/app/_ui/plain";
+import { clock, fiMoney, money, num } from "@/app/_ui/plain";
 import { MAIL_TEXT } from "./mail.text";
 import type { ChangedModel, ConfirmModel, MailModel, ReceiptModel, RenderContext, RenderedMail, SignOffModel } from "./model";
 
@@ -69,10 +69,11 @@ function note(text: string, tone: "petrol" | "warn" = "petrol"): string {
 
 function button(text: string, href: string, kind: "primary" | "secondary" = "primary"): string {
   const primary = kind === "primary";
+  const bg = primary ? C.petrol : C.card;
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:6px 8px 6px 0;display:inline-table;"><tr>${td(
-    `border-radius:8px;background:${primary ? C.petrol : C.card};border:1px solid ${C.petrol};`,
-    `<a href="${esc(href)}" class="${primary ? "btn" : "petrol"}" style="display:inline-block;padding:12px 20px;font-family:${FONT};font-size:15px;line-height:20px;font-weight:600;color:${primary ? "#ffffff" : C.petrol};text-decoration:none;border-radius:8px;">${esc(text)}</a>`,
-    `class="${primary ? "btn" : ""}" bgcolor="${primary ? C.petrol : C.card}"`,
+    `border-radius:8px;background:${bg};`,
+    `<a href="${esc(href)}" class="${primary ? "btn" : "petrol"}" style="display:inline-block;padding:12px 20px;border:1px solid ${C.petrol};border-radius:8px;font-family:${FONT};font-size:15px;line-height:20px;font-weight:600;color:${primary ? "#ffffff" : C.petrol};text-decoration:none;">${esc(text)}</a>`,
+    `class="${primary ? "btn" : "btn2"}" bgcolor="${bg}"`,
   )}</tr></table>`;
 }
 
@@ -137,13 +138,14 @@ a{color:${C.petrol};}
 }
 @media (prefers-color-scheme:dark){
   .bg{background:#0e181c !important;}
-  .card{background:#15232a !important;border-color:#26383f !important;}
+  .card{background:#15232a !important;border-left-color:#26383f !important;border-right-color:#26383f !important;border-bottom-color:#26383f !important;}
   .ink{color:#e6eef0 !important;}
   .soft{color:#a3b5bb !important;}
   .line{border-color:#2a3e45 !important;}
   .petrol{color:#7cc6da !important;}
   .tint{background:#1b3640 !important;color:#cfe9f0 !important;}
   .btn{background:#0a7290 !important;border-color:#0a7290 !important;color:#ffffff !important;}
+  .btn2{background:transparent !important;}
   .brand{color:#7cc6da !important;}
 }
 [data-ogsc] .ink{color:#e6eef0 !important;}
@@ -188,6 +190,9 @@ function plain(parts: (string | false | undefined | null)[], ctx: RenderContext,
   return `AimoPilot\n\n${body}\n\n--\n${foot}\n`.replace(/ /g, " ").replace(/\n{3,}/g, "\n\n");
 }
 
+/** The watch's reason for a substitute, cut to its first two figures (price per litre or kilo, packs). */
+const shortWhy = (why: string) => why.split(/;\s*/).slice(0, 2).join("; ");
+
 const rule = (s = "") => s || "----------------------------------------";
 
 // ---------- the mails ----------
@@ -214,8 +219,7 @@ function receipt(m: ReceiptModel, ctx: RenderContext): RenderedMail {
   const vatRows = m.vat.byRate.map((v) => (v.ratePct === null || v.vatCents === null ? { label: t.vatUnknown(money(v.baseCents)), value: "–", soft: true } : { label: t.vatAt(pct(v.ratePct), money(v.baseCents)), value: money(v.vatCents) }));
   // With a VAT rate unknown the total before VAT is the last word (the invoice adds the rest); otherwise the total with VAT.
   const sumRows: { label: string; value: string; strong?: boolean; soft?: boolean }[] = [
-    { label: t.goods, value: money(m.goodsCents) },
-    ...(m.depositCents ? [{ label: t.deposits, value: money(m.depositCents) }] : []),
+    ...(m.depositCents ? [{ label: t.goods, value: money(m.goodsCents) }, { label: t.deposits, value: money(m.depositCents) }] : []),
     ...(m.vat.incomplete ? [] : [{ label: t.totalExcl, value: money(m.totalCents) }]),
     ...vatRows,
     m.vat.incomplete ? { label: t.totalExcl, value: money(m.totalCents), strong: true } : { label: t.totalIncl, value: money(m.totalWithVatCents), strong: true },
@@ -270,7 +274,7 @@ function signOff(m: SignOffModel, ctx: RenderContext): RenderedMail {
   const subject = t.signOffSubject(m.approver.name, m.orderId, money(m.totalCents));
   const preheader = t.signOffPre(m.approver.name, money(m.totalCents));
   const first = t.signOffFirst(agentNameL(m.agentName, lang), money(m.totalCents), placeNameL(m.kitchen.name, ctx.lang), m.approver.name);
-  const reasons = m.reasons.map((r) => `${ruleTitleL(r.rule, lang)}: ${r.reason}`);
+  const reasons = m.reasons.map((r) => `${ruleTitleL(r.rule, lang)}: ${fiMoney(r.reason)}`);
   const rows = m.lines.map((l) => ({ name: l.name, sub: [`${num(l.quantity, 0)} × ${measureL(l.packSize, l.unit, lang)}`, ...(l.insteadOf ? [t.insteadOf(l.insteadOf)] : [])], total: money(l.lineTotalCents) }));
   const html = [
     heading(t.signOffTitle),
@@ -321,7 +325,7 @@ function changed(m: ChangedModel, ctx: RenderContext): RenderedMail {
       did.push(t.cannotDid);
       you.push(t.cannotYou);
       if (m.product?.amount !== undefined && m.product.unit) figures.push([t.factDelivery, `${day} · ${amount(m.product.amount, m.product.unit)}`]);
-      subs = (m.substitutes ?? []).slice(0, 3).map((s) => `<strong>${esc(t.rank[s.rank])}:</strong> ${esc(s.name)}<br><span class="soft" style="color:${C.soft};font-size:13px;">${esc(s.why)} · ${esc(s.insidePreferences ? t.inside : t.outside)}</span>`);
+      subs = (m.substitutes ?? []).slice(0, 3).map((s) => `<strong>${esc(t.rank[s.rank])}:</strong> ${esc(s.name)}<br><span class="soft" style="color:${C.soft};font-size:13px;">${esc(shortWhy(s.why))} · ${esc(s.insidePreferences ? t.inside : t.outside)}</span>`);
       if (!m.substitutes?.length) did.push(t.noSubstitute);
       break;
     }
@@ -345,7 +349,8 @@ function changed(m: ChangedModel, ctx: RenderContext): RenderedMail {
       title = t.heldTitle;
       first = t.heldFirst(what, day);
       if (m.reason) happened.push(m.reason);
-      if (m.amounts) did.push(t.heldAmounts(amount(m.amounts.usual, m.amounts.unit), amount(m.amounts.latest, m.amounts.unit)));
+      if (m.amounts) happened.push(t.heldAmounts(amount(m.amounts.usual, m.amounts.unit), amount(m.amounts.latest, m.amounts.unit)));
+      did.push(t.heldDid);
       you.push(t.heldYou);
       break;
     }
@@ -354,7 +359,7 @@ function changed(m: ChangedModel, ctx: RenderContext): RenderedMail {
       subject = t.refusedSubject(total);
       preheader = t.refusedPre;
       title = t.refusedTitle;
-      first = t.refusedFirst(total, placeNameL(m.kitchen.name, ctx.lang), ruleName.toLowerCase());
+      first = t.refusedFirst(total, placeNameL(m.kitchen.name, ctx.lang), ruleName);
       if (m.reason) happened.push(m.reason);
       did.push(t.refusedDid);
       you.push(t.refusedYou);
@@ -388,13 +393,15 @@ function changed(m: ChangedModel, ctx: RenderContext): RenderedMail {
     }
   }
   const link = m.links.order ?? m.links.store;
+  // The system's own sentences arrive as written (a buyer's note may start in lower case).
+  for (let i = 0; i < happened.length; i++) happened[i] = fiMoney(happened[i].charAt(0).toUpperCase() + happened[i].slice(1));
   const html = [
     heading(title),
     para(first),
     happened.length ? label(t.whatHappened) + happened.map((h) => para(h, { size: 15 })).join("") : "",
     did.length ? label(t.whatWeDid) + did.map((h) => para(h, { size: 15 })).join("") : "",
-    subs.length ? bullets(subs) : "",
     figures.length ? label(t.figures) + facts(figures) : "",
+    subs.length ? label(t.whatYouCan) + bullets(subs) : "",
     you.length ? note(you.join(" ")) : "",
     m.staged ? para(t.staged, { soft: true, size: 13 }) : "",
     `<div style="margin:4px 0 0 0;">${button(m.links.order ? t.openOrder : t.openStore, link)}</div>`,
@@ -406,7 +413,7 @@ function changed(m: ChangedModel, ctx: RenderContext): RenderedMail {
       first,
       ...(happened.length ? ["", `${t.whatHappened}:`, ...happened] : []),
       ...(did.length ? ["", `${t.whatWeDid}:`, ...did] : []),
-      ...(m.substitutes?.length ? m.substitutes.slice(0, 3).map((s) => `- ${t.rank[s.rank]}: ${s.name} (${s.why}; ${s.insidePreferences ? t.inside : t.outside})`) : []),
+      ...(m.substitutes?.length ? m.substitutes.slice(0, 3).map((s) => `- ${t.rank[s.rank]}: ${s.name} (${shortWhy(s.why)}; ${s.insidePreferences ? t.inside : t.outside})`) : []),
       ...(figures.length ? ["", ...figures.map(([k, v]) => `${k}: ${v}`)] : []),
       ...(you.length ? ["", `${t.whatYouCan}: ${you.join(" ")}`] : []),
       m.staged ? `\n${t.staged}` : null,
