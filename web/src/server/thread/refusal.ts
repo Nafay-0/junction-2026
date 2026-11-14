@@ -226,3 +226,18 @@ export function codeLeaks(text: string): string[] {
   add(/\b[a-z]+_[a-z_]+\b/g);
   return [...new Set(out)];
 }
+
+/** Text from a lower layer made to read as people write: English days as "Tue 17 Nov", catalogue capitals in case. */
+export function readable(text: string, lang: Lang): string {
+  const KEEP = new Set(["VAT", "ALV", "MOMS", "UHT", "ESL", "EUR", "MSC", "ASC", "CO2", "OK", "EU", "NL", "FI", "SE", "DE", "PL"]);
+  let t = text.replace(/\b([A-ZÄÖÅ]{3,}(?:[ -][A-ZÄÖÅ0-9]{2,})*)\b/g, (m) => {
+    const parts = m.split(/([ -])/);
+    if (!parts.some((w) => w.length >= 5 && !KEEP.has(w))) return m;
+    return parts.map((w, i) => (KEEP.has(w) || /^[A-ZÄÖÅ]{2}$/.test(w) ? w : i === 0 ? w.charAt(0) + w.slice(1).toLowerCase() : w.toLowerCase())).join("");
+  });
+  if (lang === "en") {
+    const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    t = t.replace(/\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday) (\d{1,2})\.(\d{1,2})\.?/g, (m, w: string, d: string, mo: string) => (Number(mo) >= 1 && Number(mo) <= 12 ? `${w} ${Number(d)} ${MON[Number(mo) - 1]}` : m));
+  }
+  return t.replace(/(\d{1,2}\.\d{1,2}\.)\./g, "$1").replace(/(\d{1,2}\.\d{1,2})\.(?=[?;:,!])/g, "$1");
+}

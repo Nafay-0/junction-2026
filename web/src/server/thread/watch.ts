@@ -1,6 +1,7 @@
 import { familyL } from "@/app/k/[kitchen]/family.text";
 import { answerWatchMoment, markWatchSaid, watchAnswerOf, watchMomentForThread, type WatchMoment } from "@/server/watch/thread";
 import { cardId } from "./cards";
+import { readable } from "./refusal";
 import { byLine, record, step, type TurnRun } from "./pipeline";
 import type { WatchCard } from "./types";
 
@@ -93,7 +94,7 @@ export async function sayWatch(run: TurnRun, opts: { asked?: boolean; family?: s
     const text = {} as WatchCard["text"];
     for (const [i, l] of LANGS.entries()) {
       const m = moments[i] ?? en;
-      text[l] = { say: await shorten(run, m, l), ...(m.ask ? { ask: m.ask } : {}) };
+      text[l] = { say: readable(await shorten(run, m, l), l), ...(m.ask ? { ask: readable(m.ask, l) } : {}) };
     }
     const subs = ((en.facts.finding as { substitutes?: { name: string; why?: string }[] } | undefined)?.substitutes ?? []).map((s) => shortName(s.name));
     const card: WatchCard = {

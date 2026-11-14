@@ -13,7 +13,7 @@ export type Subject =
   | { kind: "menu"; turnId: string; planId: string; stage: string; covers: number | null; day?: string; dishes: string[] };
 
 /** Turns that only look things up leave the subject where it was. */
-const SIDE = new Set<Card["type"]>(["records", "rules", "today", "products", "standing", "deliveries", "memory_list", "offer", "watch"]);
+const SIDE = new Set<Card["type"]>(["records", "rules", "today", "products", "standing", "deliveries", "memory_list", "offer", "watch", "scenario"]);
 
 export function subjectOf(run: TurnRun): Subject | undefined {
   const turns = run.thread.turns;

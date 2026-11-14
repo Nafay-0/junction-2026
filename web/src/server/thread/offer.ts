@@ -1,6 +1,7 @@
 import { answerOffer, offerAnswerOf, offerForThread, offerOnSheet, type OfferAnswer } from "@/server/offers/thread";
 import { byLine, record, step, type TurnRun } from "./pipeline";
 import { cardId } from "./cards";
+import { readable } from "./refusal";
 import type { OfferCard } from "./types";
 
 /**
@@ -43,7 +44,7 @@ export async function sayOffer(run: TurnRun, opts: { asked?: boolean } = {}): Pr
       offerId: en.offerId,
       productId: en.productId,
       name: en.name,
-      text: { en: { say: en.say, ask: en.ask }, fi: { say: fi?.say ?? en.say, ask: fi?.ask ?? en.ask }, sv: { say: sv?.say ?? en.say, ask: sv?.ask ?? en.ask } },
+      text: { en: { say: readable(en.say, "en"), ask: readable(en.ask, "en") }, fi: { say: readable(fi?.say ?? en.say, "fi"), ask: readable(fi?.ask ?? en.ask, "fi") }, sv: { say: readable(sv?.say ?? en.say, "sv"), ask: readable(sv?.ask ?? en.ask, "sv") } },
       steps: en.steps,
       proof: { token: en.proof.token, keysUrl: en.proof.keysUrl, verified: en.proof.verified },
       validUntil: en.validUntil,

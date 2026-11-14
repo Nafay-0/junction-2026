@@ -35,6 +35,10 @@ export type TurnRun = {
   session: AgentSession;
   person?: ConsolePerson;
   door: ThreadDoor;
+  /** The menu scenario's reply to the buyer's answer (scenario.ts). */
+  scenarioReply?: string;
+  /** A menu scenario said this turn: its words are the reply (scenario.ts). */
+  scenarioSaid?: string;
   /** The watch's moment the buyer asked about this turn: its words are the reply (watch.ts). */
   watchAsked?: string;
   /** The wholesaler's offer the buyer asked for this turn: its own words are the reply (offer.ts). */

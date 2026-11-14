@@ -4,7 +4,7 @@ import { Check, ChevronDown, ScanFace, Sparkles } from "lucide-react";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useFormat, useText } from "../../_i18n/provider";
 import { clock, money } from "../../_ui/plain";
-import type { AgentTurn, BuyerTurn, GateCard as GateCardT, OfferCard, WatchCard, OptionView, OrderCard, Thread, ThreadAction, ThreadStep, TodayCard } from "@/server/thread/types";
+import type { AgentTurn, BuyerTurn, GateCard as GateCardT, OfferCard, ScenarioCard, WatchCard, OptionView, OrderCard, Thread, ThreadAction, ThreadStep, TodayCard } from "@/server/thread/types";
 import { usePortal } from "./portal";
 import { THREAD_LINE_TEXT } from "./thread-line.text";
 import { useSignOff } from "./thread-signoff";
@@ -184,6 +184,7 @@ function AgentNode({ turn, thread, tap, busy, latest }: { turn: AgentTurn; threa
         </p>
       )}
       {turn.status === "working" && (running || !text) && <p className="tl-sheen mt-1 text-[0.9rem] font-medium text-petrol">{running ? stepLabel(running, w, f.lang) : tx.working}</p>}
+      {cards.map((c) => (c.type === "scenario" && c.state === "open" && !(turn.line ?? "").includes(c.text[f.lang].say.slice(0, 24)) ? <ScenarioWords key={c.cardId} card={c} lang={f.lang} /> : null))}
       {cards.map((c) => (c.type === "watch" && c.state !== "answered" && !(turn.line ?? "").includes(c.text[f.lang].say.slice(0, 24)) ? <WatchWords key={c.cardId} card={c} lang={f.lang} /> : null))}
       {cards.map((c) => (c.type === "offer" && c.state === "open" && !(turn.line ?? "").includes(c.text[f.lang].say.slice(0, 24)) ? <OfferWords key={c.cardId} card={c} lang={f.lang} /> : null))}
       {latest && <Choices turn={turn} thread={thread} tap={tap} busy={busy} />}
@@ -466,6 +467,9 @@ function thinking(turn: AgentTurn, thread: Thread, tx: Tx, w: (typeof THREAD_WOR
       case "offer":
         out.push({ label: tx.step.offer, detail: c.steps.join(" "), tone: "live" });
         break;
+      case "scenario":
+        out.push({ label: c.kind === "event" ? tx.step.event : tx.step.season, detail: c.steps.slice(0, 12).join(" "), tone: "live" });
+        break;
       case "watch":
         out.push({ label: tx.step.watch, detail: [...c.steps, ...(c.others?.length ? [c.others.join(" · ")] : [])].join(" "), tone: "live" });
         break;
@@ -566,6 +570,16 @@ function OfferWords({ card, lang, big }: { card: OfferCard; lang: "en" | "fi" | 
   const t = card.text[lang] ?? card.text.en;
   return (
     <p data-offer={card.offerId} className={`mt-3 max-w-[38ch] leading-[1.6] text-ink [text-wrap:pretty] ${big ? "text-[1.1rem]" : "text-[1.02rem]"}`}>
+      <Rich text={`${t.say} ${t.ask}`} />
+    </p>
+  );
+}
+
+/** A menu scenario's words (a seasonal menu, a booking at short notice): its sentences and its question. */
+function ScenarioWords({ card, lang }: { card: ScenarioCard; lang: "en" | "fi" | "sv" }) {
+  const t = card.text[lang] ?? card.text.en;
+  return (
+    <p data-scenario={card.planId} className="mt-3 max-w-[38ch] text-[1.02rem] leading-[1.6] text-ink [text-wrap:pretty]">
       <Rich text={`${t.say} ${t.ask}`} />
     </p>
   );

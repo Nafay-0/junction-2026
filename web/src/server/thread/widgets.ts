@@ -74,6 +74,15 @@ export async function runWidget(run: TurnRun, a: ThreadAction, words?: string): 
       });
       return true;
     }
+    case "scenario_answer": {
+      const { answerScenarioIn, scenarioAnswerIn } = await import("./scenario");
+      const card = run.store.cards(run.thread).map((x) => x.card).find((c) => c.type === "scenario" && c.planId === a.planId && c.state === "open");
+      if (card?.type !== "scenario") return true;
+      const reply = await answerScenarioIn(run, card, (words && scenarioAnswerIn(card, words)) || a.answer, run.lang ?? "en");
+      run.facts.push({ scenarioReply: reply });
+      run.scenarioReply = reply;
+      return true;
+    }
     case "watch_answer": {
       const { answerWatchIn, watchAnswerIn } = await import("./watch");
       const card = run.store.cards(run.thread).map((x) => x.card).find((c) => c.type === "watch" && c.momentId === a.momentId);

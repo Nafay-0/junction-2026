@@ -55,3 +55,11 @@ describe("refusals in words", () => {
     expect(codeLeaks("1 000 L for 1 010,00 € on Monday 16 Nov, 12 × 1 L, 1.5 %")).toEqual([]);
   });
 });
+
+describe("readable", () => {
+  it("writes English days as people do, catalogue capitals in case, acronyms kept", async () => {
+    const { readable } = await import("./refusal");
+    expect(readable("For 40 covers on Fri 20.11., BEETROOT EU and CARROT VIOLET NL, before 13,5 % VAT.", "en")).toBe("For 40 covers on Fri 20 Nov, Beetroot EU and Carrot violet NL, before 13,5 % VAT.");
+    expect(readable("pe 20.11.? PUNAJUURI HOLLANTI", "fi")).toBe("pe 20.11? Punajuuri hollanti");
+  });
+});

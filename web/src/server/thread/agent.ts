@@ -43,7 +43,7 @@ How to work each turn:
 - The buyer's newest words answer something open (listed under OPEN DECISIONS): call buyer_reply with the matching ref. "the second one", "the cheaper one", "the soup" pick a choice; "make it 12" or "Monday is fine" change the order to confirm (pass amount or date); "yes, order it", "go ahead" confirm. Only use refs that are listed. A question is never a yes. If their words do not clearly pick one, ask one short question instead.
 - After an order waits for a named person's OK (status pending_approval), write your sentences and call await_sign_off with its orderId in the same reply.
 - The buyer wants to look around without ordering ("show me oat drinks"): find_products. About one product: product_facts. "What do I need to do today?", "our recurring orders", "what's arriving", "what do you remember about us": show_home.
-- A dish or a menu for a number of covers ("lunch for 10 tomorrow", "salmon soup for 300 on Friday", "chocolate cake"): plan_menu with their words. Open words get up to three menus to pick from.
+- A dish or a menu for a number of covers ("lunch for 10 tomorrow", "salmon soup for 300 on Friday", "chocolate cake"), a booking at short notice ("unexpected booking for 40 tomorrow") or a menu around what is in season: plan_menu with their words. Open words get up to three menus to pick from.
 - Every message is read in the light of the conversation so far (TALKING ABOUT NOW). A short follow-up fills in or changes that thing: "10 portions" after a dish sets its covers; "200 litres", "for Friday", "no, 200", "make it 40", "the organic one" complete or change the request on the table (call order with their words, code applies them); "and oat drink too" adds to the same order (order). Do it; do not ask them to confirm a change they just said. A new subject starts only when they clearly name a new thing. Never ask for what they already said in this conversation.
 - Past orders: order_history. Rules, limits, who gives the OK, or a change to them ("never nuts", "raise the limit to 800"): rules, with the change when they ask for one; the buyer then confirms it with a yes, through buyer_reply. Say "confirm", never "sign" or "mandate". An order's status: get_order or explain.
 - "Anything I should know about this week's orders?", "is this week's milk sorted?", "what's coming this week?": this_week. After the store said a watch moment (a product that cannot come, a held renewal), "yes", "switch", "the second one", "keep it", "the usual", "the new amount", "skip it" are buyer_reply with its watch: ref.
@@ -177,6 +177,14 @@ export async function openRefs(run: TurnRun): Promise<OpenRef[]> {
   }
   // The order sheet open now (several items, the usual, a menu or an option changed): ordered, or changed, in words.
   const { currentSheet } = await import("./sheet");
+  // A menu scenario's question (a booking at short notice, a seasonal menu): answered in words.
+  const { openScenario } = await import("./scenario");
+  const sc = openScenario(run);
+  if (sc) {
+    refs.push({ ref: "scenario:yes", label: sc.pending.earliest ? `yes: plan it for ${sc.pending.earliest}` : "yes: the best stand-ins, onto the order sheet", action: { type: "scenario_answer", planId: sc.planId, answer: sc.pending.earliest ? { kind: "day", date: sc.pending.earliest } : { kind: "yes" } }, confirm: true });
+    refs.push({ ref: "scenario:no", label: "no: order nothing for it", action: { type: "scenario_answer", planId: sc.planId, answer: { kind: "no" } } });
+    sc.pending.options.slice(0, 4).forEach((o, i) => refs.push({ ref: `scenario:o${i + 1}`, label: `use stand-in ${i + 1} (${o.words.slice(0, 3).join(" ")})`, action: { type: "scenario_answer", planId: sc.planId, answer: { kind: "choose", optionId: o.optionId } } }));
+  }
   // The watch's moment (a stock-out, a held renewal) said last turn or on the opening: answered in words.
   const { openWatch } = await import("./watch");
   const wc = openWatch(run);
@@ -380,6 +388,11 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
         // A widget's action (a menu picked, the order sheet changed or ordered, the rules confirmed): the same handler as a tap.
         const { runWidget } = await import("./widgets");
         if (await runWidget(run, r.action, words)) {
+          if (r.action.type === "scenario_answer") {
+            const { currentSheet } = await import("./sheet");
+            const sheet = currentSheet(run);
+            return { ok: true, done: "answered", say: run.scenarioReply, ...(sheet ? { orderToConfirm: { sheetId: sheet.sheetId, deliveryDate: sheet.deliveryDate } } : {}) };
+          }
           if (r.action.type === "watch_answer") {
             const id = r.action.momentId;
             const c = run.store.cards(run.thread).map((x) => x.card).find((x) => x.type === "watch" && x.momentId === id);
@@ -427,6 +440,17 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
           await runWidget(run, { type: "menu_covers", planId: subj.planId, covers: Number(n[1]) }, words);
           record(run, "subject_covers", `"${said.slice(0, 60)}" sets the covers of the menu on the table to ${n[1]}.`, { planId: subj.planId });
           return { ok: true, done: "covers set on the menu on the table", covers: Number(n[1]) };
+        }
+        // Valio's two menu scenarios: a booking at short notice, or a menu around what is in season (scenario.ts).
+        const { scenarioOf } = await import("@/server/agent/menu/thread");
+        const kind = scenarioOf(said);
+        if (kind) {
+          const { sayScenario } = await import("./scenario");
+          const c = await sayScenario(run, kind, said, run.lang ?? (/[äö]|huomen|lounas|varaus/i.test(said) ? "fi" : "en")).catch((err) => {
+            console.error("[thread] scenario", err);
+            return undefined;
+          });
+          if (c) return { said: c.kind, note: "the store shows the scenario's own words as your reply; write one short sentence only" };
         }
         const { menuFromWords } = await import("./menu");
         return menuFromWords(run, said);

@@ -71,6 +71,8 @@ export type ThreadAction =
   | { type: "menu_line_per_cover"; planId: string; lineId: string; dishId: string; amount: number }
   /** Menu builder: accept a doubt the planner raised on a line ("a different form than the recipe asks"). */
   | { type: "menu_accept"; planId: string; doubtId: string }
+  /** The buyer's answer to a menu scenario's question (server/agent/menu/thread.ts ScenarioAnswer). */
+  | { type: "scenario_answer"; planId: string; answer: { kind: "yes" } | { kind: "no" } | { kind: "choose"; optionId: string } | { kind: "day"; date: string } }
   /** The buyer's answer to the watch's moment (server/watch/thread.ts): switch, switch:<id>, keep, renew_new, usual, skip. */
   | { type: "watch_answer"; momentId: string; answer: string }
   /** The buyer's answer to the wholesaler's offer the agent said (server/offers/thread.ts). */
@@ -640,7 +642,21 @@ export type WatchCard = CardBase & {
   reply?: string;
 };
 
-export type Card = WatchCard | OfferCard | UnderstoodCard | AnomalyCard | QuestionCard | OptionsCard | PriceCard | GateCard | OrderCard | MemoryCard | RecordsCard | NoticeCard | SheetCard | AlternativesCard | MenuCard | TodayCard | ProductsCard | ProductCard | StandingCard | DeliveriesCard | MemoryListCard | RulesCard;
+/** One of Valio's menu scenarios (a seasonal menu, a booking at short notice), said in the conversation. */
+export type ScenarioCard = CardBase & {
+  type: "scenario";
+  kind: "seasonal" | "event";
+  planId: string;
+  text: Record<"en" | "fi" | "sv", { say: string; ask: string }>;
+  steps: string[];
+  /** What the answer is read against (server/agent/menu/thread.ts PendingScenario). */
+  pending: { kind: "seasonal" | "event"; planId: string; options: { optionId: string; lineId: string; words: string[] }[]; earliest?: string; words: string };
+  /** Each ingredient that cannot arrive, with its best stand-in (behind Show the list). */
+  others?: string[];
+  state: "open" | "answered";
+};
+
+export type Card = ScenarioCard | WatchCard | OfferCard | UnderstoodCard | AnomalyCard | QuestionCard | OptionsCard | PriceCard | GateCard | OrderCard | MemoryCard | RecordsCard | NoticeCard | SheetCard | AlternativesCard | MenuCard | TodayCard | ProductsCard | ProductCard | StandingCard | DeliveriesCard | MemoryListCard | RulesCard;
 // ---------- the kitchen's rules (docs/agent-thread.md "Widgets": rules) ----------
 
 /** The mandate as the rules card shows it: plain values. `groups` only where the kitchen has terms (an account). */

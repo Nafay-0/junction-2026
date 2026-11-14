@@ -44,7 +44,7 @@ async function seasonalBefore(url: string, lang: string): Promise<void> {
 }
 
 async function eventBefore(url: string, lang: string): Promise<void> {
-  const text = lang === "fi" ? "Yllättävä 40 hengen varaus huomiseksi, kolmen ruokalajin illallinen." : "Unexpected booking for 40 tomorrow, a three-course dinner.";
+  const text = lang === "fi" ? "Yllättävä 40 hengen varaus tiistaiksi, kolmen ruokalajin illallinen." : "Unexpected booking for 40 on Tuesday, a three-course dinner.";
   const r = await asOutsideAgent(url, "/api/v1/menus/event", { text, by: "Eval head chef" });
   facts.event = r.body.result;
   if (r.status !== 200) facts.error = `event ${r.status}: ${r.body?.error?.message ?? ""}`;
@@ -167,7 +167,7 @@ export const MENU_SCENARIO_CASES: Scenario[] = [
     kitchen: "kaari",
     lang: "en",
     before: (url) => eventBefore(url, "en"),
-    turns: [{ say: "Unexpected booking for 40 tomorrow, a three-course dinner." }],
+    turns: [{ say: "Unexpected booking for 40 on Tuesday, a three-course dinner." }],
     goal: "answer",
     expect: [flagged, byRole, eventOrdered, saidEvent],
     limitation: WIRING,
@@ -179,7 +179,7 @@ export const MENU_SCENARIO_CASES: Scenario[] = [
     kitchen: "kaari",
     lang: "fi",
     before: (url) => eventBefore(url, "fi"),
-    turns: [{ say: "Yllättävä 40 hengen varaus huomiseksi, kolmen ruokalajin illallinen." }],
+    turns: [{ say: "Yllättävä 40 hengen varaus tiistaiksi, kolmen ruokalajin illallinen." }],
     goal: "answer",
     expect: [flagged, byRole, eventOrdered, saidEvent],
     limitation: WIRING,

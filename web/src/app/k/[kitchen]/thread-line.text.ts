@@ -70,6 +70,8 @@ export const THREAD_LINE_TEXT = defineText({
       insideRules: "Inside your rules: I may order it alone.",
       offer: "Asked the wholesaler's selling agent",
       watch: "Checked the week's key products",
+      event: "Checked what can arrive in time, and stand-ins by each ingredient's role",
+      season: "Planned around what is in season, and what you already have",
     },
     fallback: {
       options: (n: number) => `${n} option${n === 1 ? "" : "s"}. Which one?`,
@@ -146,6 +148,8 @@ export const THREAD_LINE_TEXT = defineText({
       insideRules: "Sääntöjesi sisällä: voin tilata yksin.",
       offer: "Kysyin tukun myyntiagentilta",
       watch: "Tarkistin viikon tärkeät tuotteet",
+      event: "Tarkistin, mikä ehtii ajoissa, ja korvaajat raaka-aineen tehtävän mukaan",
+      season: "Suunnittelin sesongin mukaan ja sen, mitä teillä jo on",
     },
     fallback: {
       options: (n: number) => `${n} vaihtoehtoa. Mikä niistä?`,
@@ -222,6 +226,8 @@ export const THREAD_LINE_TEXT = defineText({
       insideRules: "Inom dina regler: jag får beställa själv.",
       offer: "Frågade grossistens säljagent",
       watch: "Kollade veckans viktiga produkter",
+      event: "Kollade vad som hinner fram, och ersättare efter ingrediensens roll",
+      season: "Planerade efter säsongen och det ni redan har",
     },
     fallback: {
       options: (n: number) => `${n} alternativ. Vilket?`,
