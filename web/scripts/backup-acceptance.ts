@@ -19,9 +19,9 @@ const url = opt("url") ?? "http://localhost:4733";
 const lang = (opt("lang") ?? "en") as "en" | "fi";
 
 const CASES = [
-  { slug: "hotel-lumo", productId: POOR_RECORD.lumo, en: "2 packs of Vaasan rye rice pies for Saturday", fi: "2 pakkausta Vaasan ruisriisipiirakoita lauantaiksi" },
-  { slug: "koulu-metsola", productId: POOR_RECORD.metsola, en: "3 kg of Finnish lollo rosso for Wednesday", fi: "3 kg suomalaista lollo rosso -salaattia keskiviikoksi" },
-  { slug: "kahvila-sointu", productId: POOR_RECORD.sointu, en: "2 kg of the Peltolan churned butter for Friday", fi: "2 kg Peltolan kirnuvoita perjantaiksi" },
+  { slug: "hotel-lumo", productId: POOR_RECORD.lumo, pick: { en: "the Vaasan rye rice pie", fi: "Vaasan ruisriisipiirakka" }, en: "16 kg of Vaasan rye rice pies for Thursday", fi: "16 kg Vaasan ruisriisipiirakoita torstaiksi" },
+  { slug: "koulu-metsola", productId: POOR_RECORD.metsola, pick: { en: "the Lollorosso FI", fi: "Lollorosso FI" }, en: "3 kg of Finnish lollo rosso for Wednesday", fi: "3 kg suomalaista lollo rosso -salaattia keskiviikoksi" },
+  { slug: "kahvila-sointu", productId: POOR_RECORD.sointu, pick: { en: "the Peltolan churned butter", fi: "Peltolan kirnuvoi" }, en: "2 kg of the Peltolan churned butter for Tuesday", fi: "2 kg Peltolan kirnuvoita tiistaiksi" },
 ];
 const WORDS = { en: { yes: "yes", choose: "you choose", know: "anything I should know this week?" }, fi: { yes: "kyllä", choose: "valitse sinä", know: "onko tällä viikolla jotain, mitä minun pitää tietää?" } };
 
@@ -46,7 +46,15 @@ async function main() {
       return "(no answer in 60 s)";
     };
     console.log(`\n=== ${c.slug} (${lang})`);
-    for (const text of [c[lang], WORDS[lang].yes, WORDS[lang].choose]) console.log(`   buyer: "${text}"\n   agent: ${await say(text)}`);
+    // The request, then whatever the conversation asks (yes; which one: the product), until the backup sentence; then "you choose".
+    let reply = await say(c[lang]);
+    console.log(`   buyer: "${c[lang]}"\n   agent: ${reply}`);
+    for (let i = 0; i < 4 && !reply.includes("[backup]"); i++) {
+      const next = /which one|mikä niistä|vilken/i.test(reply) ? c.pick[lang] : WORDS[lang].yes;
+      reply = await say(next);
+      console.log(`   buyer: "${next}"\n   agent: ${reply}`);
+    }
+    if (reply.includes("[backup]")) console.log(`   buyer: "${WORDS[lang].choose}"\n   agent: ${await say(WORDS[lang].choose)}`);
     await ops.req("POST", "/ops-api/watch", { action: "stage_stock_out", kitchen: c.slug, productId: c.productId });
     const run = (await ops.req("POST", "/ops-api/watch", { action: "run", kitchens: [c.slug], fresh: true })).body?.run?.[0];
     console.log(`   operations: staged ${c.productId} out of stock, ran the watch: ${run?.findings?.length ?? 0} findings`);

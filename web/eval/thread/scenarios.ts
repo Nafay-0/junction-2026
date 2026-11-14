@@ -1054,9 +1054,9 @@ const nothingExtraBought: Check = {
 };
 
 const BACKUP_TURNS: Record<string, { en: string[]; fi: string[] }> = {
-  "hotel-lumo": { en: ["2 packs of Vaasan rye rice pies for Saturday", "yes", "you choose"], fi: ["2 pakkausta Vaasan ruisriisipiirakoita lauantaiksi", "kyllä", "valitse sinä"] },
+  "hotel-lumo": { en: ["16 kg of Vaasan rye rice pies for Thursday", "yes", "you choose"], fi: ["16 kg Vaasan ruisriisipiirakoita torstaiksi", "kyllä", "valitse sinä"] },
   "koulu-metsola": { en: ["3 kg of Finnish lollo rosso for Wednesday", "yes", "you choose"], fi: ["3 kg suomalaista lollo rosso -salaattia keskiviikoksi", "kyllä", "valitse sinä"] },
-  "kahvila-sointu": { en: ["2 kg of the Peltolan churned butter for Friday", "yes", "you choose"], fi: ["2 kg Peltolan kirnuvoita perjantaiksi", "kyllä", "valitse sinä"] },
+  "kahvila-sointu": { en: ["2 kg of the Peltolan churned butter for Tuesday", "yes", "you choose"], fi: ["2 kg Peltolan kirnuvoita tiistaiksi", "kyllä", "valitse sinä"] },
 };
 
 for (const slug of ["hotel-lumo", "koulu-metsola", "kahvila-sointu"] as const) {

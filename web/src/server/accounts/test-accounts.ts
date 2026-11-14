@@ -46,8 +46,8 @@ export const TEST_ACCOUNTS: TestAccountSeed[] = [
         ...series(boxes[0], pastDays(now, [1, 4], 10), [400, 380, 420, 400, 440, 400, 380, 400, 420, 400], `ord_t_lumo_m`),
         // The breakfast cream creeps up week by week: the watch's standing-order drift has something real to hold.
         ...creeping(cream, pastDays(now, [4], 5), 16, `ord_t_lumo_c`),
-        // Breakfast rye rice pies every Saturday: a product whose delivery record is poor (a backup can be lined up).
-        ...series(byId(products, POOR_RECORD.lumo), pastDays(now, [6], 5), [16.2, 16.2, 16.2, 16.2, 16.2], `ord_t_lumo_p`),
+        // Breakfast rye rice pies every Thursday: a product whose delivery record is poor (a backup can be lined up).
+        ...series(byId(products, POOR_RECORD.lumo), pastDays(now, [4], 5), [16.2, 16.2, 16.2, 16.2, 16.2], `ord_t_lumo_p`),
       ];
       return {
         ...emptyProfile(orgId, name),
@@ -107,8 +107,8 @@ export const TEST_ACCOUNTS: TestAccountSeed[] = [
       // The milk creeps up on both delivery days (the watch's standing-order drift); the oat drink stays as usual.
       const milkDays = pastDays(now, [2, 5], 10);
       const history = [...series(oat, pastDays(now, [2, 5], 10), [12, 12, 10, 12, 14, 12, 12, 10, 12, 12], `ord_t_sointu_o`), ...creeping(milk, milkDays.filter((_, i) => i % 2 === 0), 8, `ord_t_sointu_ma`), ...creeping(milk, milkDays.filter((_, i) => i % 2 === 1), 8, `ord_t_sointu_mb`),
-        // Churned butter for the Friday baking: a product whose delivery record is poor (a backup can be lined up).
-        ...series(byId(products, POOR_RECORD.sointu), pastDays(now, [5], 5), [2, 2, 2, 2, 2], `ord_t_sointu_b`)];
+        // Churned butter for the week's baking, every Tuesday: a product whose delivery record is poor (a backup can be lined up).
+        ...series(byId(products, POOR_RECORD.sointu), pastDays(now, [2], 5), [2, 2, 2, 2, 2], `ord_t_sointu_b`)];
       return {
         ...emptyProfile(orgId, name),
         deliveryWeekdays: [2, 5],

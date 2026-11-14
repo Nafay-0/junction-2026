@@ -31,7 +31,7 @@ process.env.DOCK_WATCH_MINUTES = "0";
 const args = process.argv.slice(2);
 const opt = (n: string) => (args.includes(`--${n}`) ? args[args.indexOf(`--${n}`) + 1] : undefined);
 const slug = opt("kitchen") ?? "kahvila-sointu";
-const SEEDED: Record<string, { id: string; packs: number; weekday: number }> = { "hotel-lumo": { id: POOR_RECORD.lumo, packs: 2, weekday: 6 }, "koulu-metsola": { id: POOR_RECORD.metsola, packs: 3, weekday: 3 }, "kahvila-sointu": { id: POOR_RECORD.sointu, packs: 2, weekday: 5 } };
+const SEEDED: Record<string, { id: string; packs: number; weekday: number }> = { "hotel-lumo": { id: POOR_RECORD.lumo, packs: 2, weekday: 4 }, "koulu-metsola": { id: POOR_RECORD.metsola, packs: 3, weekday: 3 }, "kahvila-sointu": { id: POOR_RECORD.sointu, packs: 2, weekday: 2 } };
 const productId = opt("product") ?? SEEDED[slug]?.id ?? POOR_RECORD.sointu;
 const packs = Number(opt("packs") ?? SEEDED[slug]?.packs ?? 2);
 
