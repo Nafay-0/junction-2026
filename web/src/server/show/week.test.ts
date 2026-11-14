@@ -92,9 +92,9 @@ describe("a week in a kitchen", () => {
     // Tuesday: ten times the usual is caught with its reason, the scripted answer is labelled, the usual is ordered.
     const slip = step(run, "slip");
     expect(slip.concern).toMatchObject({ code: "quantity_tenfold", scripted: true });
-    expect(slip.concern!.message).toMatch(/600 L where you usually order about \d+ L: did you mean 60 L\?/);
+    expect(slip.concern!.message).toMatch(/800 L where you usually order about \d+ L: did you mean 80 L\?/);
     expect(slip.order).toMatchObject({ status: "committed" });
-    expect(slip.order!.lines.reduce((n, l) => n + Number(l.amount.split(" ")[0]), 0)).toBeLessThan(80);
+    expect(slip.order!.lines.reduce((n, l) => n + Number(l.amount.split(" ")[0]), 0)).toBeLessThan(100);
 
     // Wednesday: the usual product is out of stock (simulated, labelled), alternatives ranked, all lactose-free.
     const out = step(run, "stockout");

@@ -61,7 +61,7 @@ export async function castWeek(input: { agent: ShowAgent; catalog: CatalogueSear
   const allowed = (p: Product) => mandate.requiredAttributes.every((a) => p.attributes.includes(a)) && mandate.allowedCategories.includes(p.category);
   const safe = (p: Product) => !p.allergens.some((a) => mandate.forbiddenAllergens.includes(a)) && p.allergensDeclared !== false;
   const plants = mandate.allowedCategories.includes("plant_drink") ? await catalog.searchProducts({ category: "plant_drink", attributes: mandate.requiredAttributes, limit: 100 }) : [];
-  const plantPool = plants.filter((p) => allowed(p) && safe(p) && p.unit === "L" && plain(p)).sort((a, b) => a.packSize - b.packSize || a.id.localeCompare(b.id)).slice(0, 2);
+  const plantPool = plants.filter((p) => allowed(p) && safe(p) && p.unit === "L" && plain(p)).sort((a, b) => a.packSize - b.packSize || a.id.localeCompare(b.id)).slice(0, 5);
   const risky: Product[] = [];
   for (const cat of mandate.allowedCategories) {
     for (const p of await catalog.searchProducts({ category: cat, attributes: mandate.requiredAttributes, limit: 100 })) {
@@ -70,7 +70,8 @@ export async function castWeek(input: { agent: ShowAgent; catalog: CatalogueSear
   }
   const refusalPool = risky.sort((a, b) => a.packSize - b.packSize || a.id.localeCompare(b.id)).slice(0, 2);
 
-  // One planning request, two short live lookups: the earliest day for the milk, the latest for the rest.
+  // One planning request, two short live lookups: the earliest day for the milk, Friday's renewal day for the rest.
+  const driftDay = plannedDriftDate(dates);
   const plan = await agent.openRequest("Planning the week ahead: which products can be delivered on the kitchen's days.", dates.at(-1));
   if (plan.status !== 201) throw new Error(plan.body.error?.message ?? `Could not open the planning request (HTTP ${plan.status}).`);
   const requestId = String(plan.body.request.requestId);
@@ -83,11 +84,12 @@ export async function castWeek(input: { agent: ShowAgent; catalog: CatalogueSear
     return new Map((r.body.offers ?? []).map((o: Json) => [String(o.productId), o]));
   };
   const early = await offersAt(milkPool.map((p) => p.id), dates[0]);
-  const late = await offersAt([...plantPool, ...refusalPool].map((p) => p.id), dates.at(-1)!);
-  const roomy = (p: Product, o: Json) => o.stockKnown === false || Number(o.availablePacks) * p.packSize >= 500;
-  const milk = milkPool.find((p) => early.has(p.id) && roomy(p, early.get(p.id)!)) ?? milkPool.find((p) => early.has(p.id));
+  const late = await offersAt([...plantPool, ...refusalPool].map((p) => p.id), driftDay);
+  // Enough in stock for the week's biggest order of it (real stock can be a single carton).
+  const roomy = (p: Product, o: Json, litres: number) => o.stockKnown === false || Number(o.availablePacks) * p.packSize >= litres;
+  const milk = milkPool.find((p) => early.has(p.id) && roomy(p, early.get(p.id)!, 700)) ?? milkPool.find((p) => early.has(p.id));
   if (!milk) throw new Error("No lactose-free milk the kitchen allows can be delivered on its next delivery day right now.");
-  const plant = plantPool.find((p) => late.has(p.id));
+  const plant = plantPool.find((p) => late.has(p.id) && roomy(p, late.get(p.id)!, 60));
   const cast: Cast = {
     milk,
     milkPriceCents: Number(early.get(milk.id)!.unitPriceCents),
@@ -114,6 +116,11 @@ export function forgetCast(): void {
  */
 export type DatePlan = { lastminute: string; standing?: string; slip?: string; stockout: string; drift?: string; refusal: string };
 
+/** The day a plant-drink standing order is renewed (and Saturday's swap is tried): the third delivery day. */
+export function plannedDriftDate(dates: string[]): string {
+  return dates[2] ?? dates[dates.length - 1];
+}
+
 export function planDates(dates: string[], driftIsMilk: boolean): DatePlan {
   const n = dates.length;
   const stockout = dates[n - 1];
@@ -124,7 +131,7 @@ export function planDates(dates: string[], driftIsMilk: boolean): DatePlan {
     standing,
     slip,
     stockout,
-    drift: driftIsMilk ? fourth : (dates[2] ?? dates[n - 1]),
-    refusal: dates[n - 1],
+    drift: driftIsMilk ? fourth : plannedDriftDate(dates),
+    refusal: plannedDriftDate(dates),
   };
 }

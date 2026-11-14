@@ -325,7 +325,9 @@ export class WeekDirector {
   }
 
   private async lastminute(step: WeekStep, date: string) {
-    const litres = Math.round(USUAL_MILK_LITRES * 7.5);
+    // Big enough to be over the €500 the agent may spend alone at the cheapest live price seen (about €1 a litre),
+    // and under eight times the usual, so it is not mistaken for a slip of a zero.
+    const litres = Math.round(USUAL_MILK_LITRES * 7.75);
     step.delivery = date;
     step.asked = `A conference just booked breakfast for 300 guests: ${litres} L of lactose-free milk for ${formatDay(date)}, cheapest that can make it.`;
     this.changed();
@@ -462,8 +464,9 @@ export class WeekDirector {
       }),
     );
     const simulatedId = step.simulated.length ? this.cast!.milk.id : undefined;
+    // What availability took away (sold out, cut-off passed, too late): the products of another kind are left out.
     step.excluded = (v.excluded as Json[])
-      .filter((e) => e.code !== "compromise")
+      .filter((e) => e.code && e.code !== "compromise" && e.code !== "blocked")
       .slice(0, 4)
       .map((e): ExcludedView => ({ name: shortName(this.products.get(e.productId) ?? String(e.productId)), reason: say(String(e.reason), this.names()), code: e.code, simulated: e.productId === simulatedId }));
     this.changed();
@@ -471,6 +474,20 @@ export class WeekDirector {
 
   /** From the intake's last state to a decided order: choose when the agent may, quote, place, wait if needed. */
   private async finishIntake(step: WeekStep, v: Json, signOffTimeoutMs = this.o.sideSignOffTimeoutMs ?? 12_000) {
+    if (v.state === "needs_confirmation" && (v.concerns as Json[]).length) {
+      // A check the plan did not expect (live prices moved, say): confirm it as asked, scripted and labelled. A
+      // confirmation that matters, relayed by an agent, sends the order to the named person (policy human_confirmation).
+      const c = (v.concerns as Json[])[0];
+      step.concern ??= { code: String(c.code), message: say(String(c.message), this.names()), answer: c.confirmable ? "Yes, that is what we need" : String(c.corrections?.[0]?.label ?? ""), answeredBy: this.o.kitchen.approverName, scripted: true };
+      step.askedPerson += 1;
+      step.decisions += 1;
+      step.did.push("Asked the kitchen to confirm before going on (answer scripted for the demo).");
+      this.changed();
+      await this.pause(this.pace.beatMs);
+      v = this.viewOf(await this.locked(() => this.agent.concerns(v.requestId, this.by(), (v.concerns as Json[]).map((x) => ({ key: x.key, choice: x.confirmable ? "confirm" : (x.corrections?.[0]?.id ?? "confirm") })))), step);
+      this.readIntake(step, v);
+      return this.finishIntake(step, v, signOffTimeoutMs);
+    }
     if (v.state === "options_ready") {
       const pick = v.preselected?.optionId ?? (v.options as Json[]).find((o) => o.match === "full")?.optionId ?? (v.options as Json[])[0]?.optionId;
       v = this.viewOf(await this.locked(() => this.agent.choose(v.requestId, this.by(), pick)), step);

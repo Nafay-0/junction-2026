@@ -12,9 +12,9 @@ import { addDaysIso, emptyMemory, isoWeekday, localNow, type HistoryEntry, type 
  *
  * Products come from the catalogue the server runs on, chosen by attribute (see cast.ts), never by id.
  */
-export const USUAL_MILK_LITRES = 60;
+export const USUAL_MILK_LITRES = 80;
 /** Litres of the past milk orders, oldest first: a steady pattern around USUAL_MILK_LITRES. */
-const MILK_PATTERN = [60, 55, 60, 65, 60, 60, 55, 60, 65, 60];
+const MILK_PATTERN = [80, 75, 80, 85, 80, 80, 75, 80, 85, 80];
 
 export type DriftPlan = {
   family: string;
