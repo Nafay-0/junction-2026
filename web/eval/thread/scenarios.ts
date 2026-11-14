@@ -769,6 +769,8 @@ ALL.push({
 const watched: { finding?: Json; renewal?: Json; product?: string } = {};
 
 async function opsBrowser(url: string) {
+  const { loadLocalEnv } = await import("../../scripts/lib/env");
+  loadLocalEnv(); // the operations passcode and the demo kitchen's key, as the server has them
   const { Browser } = await import("./lib");
   const b = new Browser(url);
   await b.req("POST", "/ops-api/session", { name: "Eval operations", ...(process.env.DOCK_OPS_PASSCODE ? { passcode: process.env.DOCK_OPS_PASSCODE } : {}) });
@@ -792,8 +794,6 @@ async function driftForKaari(url: string): Promise<void> {
   const b = await opsBrowser(url);
   Object.assign(watched, { finding: undefined, renewal: undefined });
   await b.req("POST", "/ops-api/watch", { action: "stage_drift", kitchen: "kaari", family: "milk" });
-  const { loadLocalEnv } = await import("../../scripts/lib/env");
-  loadLocalEnv();
   const { signMandate } = await import("@/core/mandate");
   const { KITCHEN_ORG, demoKitchenKeyPair, demoKitchenMandate } = await import("@/server/demo-kitchen");
   const mandate = await signMandate(demoKitchenMandate(new Date()), await demoKitchenKeyPair());
