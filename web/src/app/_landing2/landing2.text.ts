@@ -7,7 +7,7 @@
 
 export const L2 = {
   meta: {
-    title: "AimoPilot: your AI buyer orders, plain code decides",
+    title: "AimoPilot: let AI do the buying, keep the last word",
     description:
       "Any company's purchasing agent can order from a food-service wholesaler under a mandate it signed. Plain code checks every order; a named person signs anything beyond it on their phone. Built for Valio Aimo's Trusted Trade Agents challenge at Junction 2026.",
   },
@@ -26,7 +26,7 @@ export const L2 = {
   },
 
   hero: {
-    title: "Your AI buyer orders. Plain code decides.",
+    title: "Let AI do the buying. Keep the last word.",
     line: "Any company's purchasing agent orders from the wholesaler under a mandate it signed; anything beyond it waits for a named person's passkey.",
     built: "Built for Valio Aimo's Trusted Trade Agents challenge, Junction 2026.",
     reelLabel: "The real conversation, playing itself: 1,000 litres of lactose-free milk by Monday, from the request to the signed order.",
