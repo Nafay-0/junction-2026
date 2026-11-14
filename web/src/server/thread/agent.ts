@@ -41,8 +41,8 @@ How to work each turn:
 - The buyer's newest words answer something open (listed under OPEN DECISIONS): call buyer_reply with the matching ref. "the second one" is o2. "yes", "that's right", "the chef said yes" confirm a check. Only use refs that are listed. If their words do not clearly pick one, ask one short question instead.
 - After an order waits for a named person's sign-off (status pending_approval), write your one sentence (who signs, on their phone) and call await_sign_off with its orderId in the same reply. Do not try to place, retry or split it.
 - The buyer wants to look around the assortment without ordering yet ("show me oat drinks"): find_products. About one product shown: product_facts. "What do I need to do today?", "our recurring orders", "what's arriving", "what do you remember about us": show_home.
-- Questions about past orders: order_history. About rules, limits or who signs off: read_mandate or read_kitchen_memory. About an order's status or why something happened: get_order or explain.
 - A dish or a menu for a number of covers ("salmon soup for 300 on Friday", "plan lunch for 40 around beetroot"): call plan_menu with their words. The menu card forms as the planner works (open words get two or three menus to pick from); the buyer edits it in place and puts it on the order sheet with one tap (or "yes, put it on the sheet": buyer_reply menu; "the second menu": buyer_reply menu_p2). Do not list its lines or prices.
+- Questions about past orders: order_history. About rules, limits or who signs off ("what are our rules?"), or a change to them ("never nuts", "raise the limit to 800", "Maija signs from now on"): call rules, with the change in the mandate's terms when they ask for one. It shows the rules card with before and after; only the kitchen's signed-in person signs it there, never you. About an order's status or why something happened: get_order or explain.
 - Anything else (a greeting, small talk, something outside buying food): one short sentence, no tool.
 
 Your sentence:
@@ -313,6 +313,32 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
         return { shown: what, items: n, ...(card?.type === "today" ? { kinds: card.items.map((i) => i.kind) } : {}) };
       },
     }),
+    rules: tool({
+      description: "The kitchen's rules: its signed mandate (limits, budget, product groups, required claims, forbidden allergens, who signs, lead days) and its stated rules, as a rules card. With a change, the card shows before and after and waits for the kitchen's signed-in person to sign it; nothing is signed by this tool.",
+      inputSchema: z.object({
+        change: z
+          .object({
+            forbidAdd: z.array(z.string().max(40)).max(14).optional().describe("Allergens to forbid, e.g. nuts, peanuts, sesame"),
+            forbidRemove: z.array(z.string().max(40)).max(14).optional(),
+            requireAdd: z.array(z.string().max(40)).max(5).optional().describe("Claims every product must have: lactose_free, gluten_free, organic, vegan, vegetarian"),
+            requireRemove: z.array(z.string().max(40)).max(5).optional(),
+            perOrderLimitEur: z.number().optional().describe("The most the agent may spend on one order alone, in euros, exactly as the buyer said"),
+            weeklyBudgetEur: z.number().optional(),
+            maxLeadDays: z.number().int().optional(),
+            signer: z.string().max(60).optional().describe("Who signs off, as the buyer named them"),
+            substitution: z.enum(["within_preferences", "needs_approval", "none"]).optional(),
+          })
+          .optional()
+          .describe("Only when the buyer asks for a change. Leave out to show the rules."),
+      }),
+      execute: async ({ change }) => {
+        const { groundedChange, showRules } = await import("./rules");
+        const { change: kept, dropped } = change ? groundedChange(change, words) : { change: undefined, dropped: [] as string[] };
+        const card = await showRules(run, kept && Object.keys(kept).length ? kept : undefined);
+        return { shown: card.proposal ? "proposal" : "rules", ...(card.proposal ? { kind: card.proposal.kind, canSign: card.proposal.canSign, ...(card.proposal.why ? { why: card.proposal.why } : {}), changes: card.diff.map((d) => `${d.field}: ${d.before || "none"} -> ${d.after || "none"}`) } : {}), ...(dropped.length ? { notInTheirWords: dropped } : {}), signedBy: "nobody yet: the kitchen's person signs on the card" };
+      },
+      toModelOutput: ({ output }) => ({ type: "text", value: compact(output) }),
+    }),
     await_sign_off: tool({
       description: "Wait for the named person to sign the order off on their own phone. Call it once, right after an order is pending_approval. The loop pauses until they decide.",
       inputSchema: z.object({ orderId: z.string().min(1).max(60) }),
@@ -343,7 +369,7 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
       { role: "system", content: context },
     ],
     tools,
-    activeTools: [...PUBLISHED_FOR_MODEL, "order", "plan_menu", "buyer_reply", "order_history", "find_products", "product_facts", "show_home", "await_sign_off"],
+    activeTools: [...PUBLISHED_FOR_MODEL, "order", "plan_menu", "buyer_reply", "order_history", "find_products", "product_facts", "show_home", "rules", "await_sign_off"],
     toolApproval: {
       ...Object.fromEntries(BUYERS_OR_ENGINES.map((n) => [n, deny(`${n} is the buyer's decision or the engine's step in the store: use buyer_reply or order.`)])),
       // The pause for a person's sign-off. Only the server answers it, when the passkey sign-off is recorded.

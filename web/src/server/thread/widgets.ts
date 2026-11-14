@@ -1,6 +1,7 @@
 import { DockError } from "@/core/errors";
 import { cardId } from "./cards";
 import { record, type TurnRun } from "./pipeline";
+import { cancelRules, showRules, signRules } from "./rules";
 import { createSheet, currentSheet, editSheet, openAlternatives, pickAlternative, placeSheet } from "./sheet";
 import type { ThreadAction } from "./types";
 import { runHomeAction } from "./home";
@@ -76,6 +77,18 @@ export async function runWidget(run: TurnRun, a: ThreadAction, words?: string): 
       const { runMenuAction } = await import("./menu");
       return runMenuAction(run, a);
     }
+    case "rules_show":
+      await showRules(run);
+      return true;
+    case "rules_propose":
+      await showRules(run, a.change);
+      return true;
+    case "rules_sign":
+      await signRules(run, a.proposalId);
+      return true;
+    case "rules_cancel":
+      await cancelRules(run, a.proposalId);
+      return true;
     default:
       return runHomeAction(run, a);
   }

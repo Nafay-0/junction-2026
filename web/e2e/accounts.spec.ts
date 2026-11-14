@@ -12,6 +12,49 @@ const shot = async (page: Page, name: string) => {
 const stamp = Date.now().toString(36).slice(-6);
 const PASSWORD = "e2e-password-123";
 
+/**
+ * The set-up interview (the sign-up's second step): the kind of kitchen only when the name does not say it, then
+ * diet, allergens, days, the usual order, the spend-alone limit (€300, as the tests below rely on), the weekly
+ * budget and who signs; the last card is the mandate as signed. Returns the taps it took.
+ */
+async function setUpInterview(page: Page, restaurant: string): Promise<number> {
+  let taps = 0;
+  const tap = async (name: string | RegExp) => {
+    await page.getByRole("button", { name, exact: typeof name === "string" }).last().click();
+    taps++;
+  };
+  const ask = (q: string) => expect(page.getByText(q, { exact: true }).last()).toBeVisible({ timeout: 15_000 });
+  const named = /ravintola|bistro|restaurant/i.test(restaurant);
+  if (named) await expect(page.getByText(/^.+ is a restaurant: from “.+” in your name\.$/)).toBeVisible({ timeout: 15_000 });
+  else {
+    await ask("What kind of kitchen is it?");
+    await tap("Restaurant");
+  }
+  await ask("Must every product be one of these?");
+  await tap("Next");
+  await ask("Anything the agent must never buy?");
+  await tap("nuts");
+  await tap("Next");
+  await ask("Which days do you usually want deliveries?");
+  await tap("Next");
+  await ask("About how much is a usual order?");
+  await tap("300 €");
+  await tap("Next");
+  await ask("Up to how much may the agent order alone?");
+  await tap("300 €");
+  await tap("Next");
+  await ask("And the most in a whole week?");
+  await tap("Next");
+  await ask("Who signs orders above that?");
+  await page.getByRole("textbox", { name: "Who signs orders above that?" }).fill("Aino Virtanen");
+  await tap("Next");
+  await expect(page.getByText("This is what you sign")).toBeVisible();
+  await expect(page.getByText("300 €").first()).toBeVisible();
+  await shot(page, "03-signup-interview");
+  await tap("Sign and continue");
+  return taps;
+}
+
 async function signUp(page: Page, username: string, restaurant: string) {
   await page.goto("/k");
   await expect(page.getByRole("heading", { name: "Your kitchen's shop" })).toBeVisible();
@@ -24,10 +67,7 @@ async function signUp(page: Page, username: string, restaurant: string) {
   await form.getByLabel("Password", { exact: true }).fill(PASSWORD);
   await shot(page, "02-signup-step1");
   await page.getByRole("button", { name: "Continue" }).click();
-  await expect(page.getByLabel("The agent may spend alone, per order (€)")).toHaveValue("300");
-  await page.getByRole("checkbox", { name: "nuts", exact: true }).check();
-  await shot(page, "03-signup-mandate");
-  await page.getByRole("button", { name: "Sign the mandate and open the shop" }).click();
+  await setUpInterview(page, restaurant);
   await expect(page.getByRole("heading", { name: "Add a signing device now?" })).toBeVisible();
   await shot(page, "04-signup-device-offer");
   await page.getByRole("link", { name: "Open my shop" }).click();

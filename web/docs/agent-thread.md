@@ -63,6 +63,23 @@ sentence the buyer has to type or another page. The design lead builds the widge
 | `options` | Unchanged, plus "Edit before ordering" on any option: it becomes a sheet | `choose` (order now), `sheet_from_option` |
 | `price`, `order` | **In place, not elsewhere**: the proof of a fixed price (`price.proof`: the signed quote and the signed claims it rests on, verifiable in the browser) and the order's details and signed confirmation open inside the card | none (expansion is presentation) |
 | `memory` | Remember this in the kitchen's own words, then keep or drop each proposal | `remember_this`, `remember` |
+| `rules` | **The kitchen's rules** (live): the signed mandate (`current`: per-order limit, weekly budget, product groups, required claims, forbidden allergens, who signs, lead days, substitution) and the rules its people stated (`stated`), from records. A change (tapped on the card, or typed: "never nuts", "raise the limit to 800", the agent's `rules` tool) is first a `proposal` with `after` and a field-by-field `diff` (`widens` marks what lets the agent do more), worked out in plain code; nothing is signed until the kitchen's own signed-in person taps sign. `editable` says what this browser may sign and `why` not | `rules_show`, `rules_propose { change }`, `rules_sign { proposalId }`, `rules_cancel { proposalId }` |
+
+**Changing the rules: what each kind of kitchen can sign** (`server/thread/rules.ts`)
+- *Narrowing* (adding a forbidden allergen or a required claim) is the reissue the security review made
+  (`server/mandate-reissue.ts`): any kitchen (built-in demo, visitor, account), signed by its signed-in person (not a
+  relayed name, not a call-code phone, not another account's session). Every earlier mandate of the kitchen is refused
+  from that second on.
+- *Everything else* (the per-order limit, the weekly budget, who signs, lead days, substitution, product groups, and
+  taking a rule away) is new terms, signed the way the account page signs them (`accounts.signKitchen`: checked by
+  `parseTerms`, a new key, the old mandate retired at the gate). Only an account's kitchen has terms, and only that
+  account's own full session can sign them. A built-in demo kitchen's terms are fixed for the stage, and a visitor's
+  sandbox has no way to sign wider terms: the card shows the change, says why it cannot be signed there, and the
+  sign action is refused (`403`) and recorded.
+- What the model may do: map the buyer's words to a `change`; code keeps only amounts the buyer wrote and a signer
+  they named (`groundedChange`), maps words to the mandate's vocabulary, and never signs.
+- The ledger: the mechanism's own entry (`mandate_reissued` / `mandate_signed`) plus the conversation's agent entries
+  `rules_proposed`, `rules_signed` (before, after, by, mechanism), `rules_refused`, `rules_cancelled`.
 
 **How the engine feeds them**
 - A sheet appears when the buyer edits an option (`sheet_from_option`), adds a second item (words or `sheet_add`), a
@@ -112,6 +129,30 @@ ledger (`today`, `products`, `order_again`, `memory_write`) and in the operation
 
 *(not yet)*: the widgets above this subsection are the contract for agent-thread-3; this line goes when the engine for each
 widget lands, and the table says per widget what is live.
+
+## Set-up interview (agent-thread-3, live)
+
+A new account's second step is a short interview in the agent's thread form instead of a form
+(`app/k/signup/thread-interview.tsx`, `server/accounts/interview.ts`, `POST /ui-api/account/interview`). Step 1
+(restaurant, username, password) and the signing-device step after it are unchanged.
+
+- The questions, their order, options and suggested amounts are plain code: kind of kitchen, "must every product be"
+  (claims), "never buy" (allergens), delivery days, a usual order, the spend-alone limit (suggested: a usual order and
+  a half), the weekly budget (suggested from the usual order and the days), who signs. The browser only words them
+  (en/fi/sv). No model is asked anything.
+- Never asked what the records answer: the kind of kitchen when the restaurant's name says it ("Päiväkoti Satu",
+  "Laakso Catering", "Ravintola …"; shown as "from your name", with "Not right?" to change it), and anything already
+  answered (stateless: the browser sends the answers so far, so a reload resumes). An account that already has a
+  kitchen is not interviewed.
+- Answer widgets, the `question` card's input kinds plus two the interview adds: chips (`choice`, `multi: true` for
+  several), weekday chips (`weekdays`), a stepper with suggested amounts (`amount`), a short text with suggestions
+  (`text`). One tap on Next accepts the suggestion.
+- It ends in the mandate as it will be signed; "Sign and continue" signs it with the account's own `signKitchen`
+  (the same key, mandate, signer and ledger entry the form made), writes the answers to the kitchen's memory
+  (diet and allergens as rules, delivery days and the usual order as habits, the kind as a note), and appends one
+  ledger entry `setup_interview` with every question asked, what was skipped and why, the answers and the seconds.
+- Evaluation: `eval/thread/interview.ts` (EN and FI): taps and seconds to a signed mandate, checks that it carries the
+  answers and that nothing the name answers was asked.
 
 ## The thread
 

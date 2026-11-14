@@ -8,11 +8,15 @@ import { ArrowRight, Check } from "lucide-react";
 import { Card, IconDisc, Steps, buttonClass, type StepState } from "../../_ui/kit";
 import { ACCOUNT_TEXT } from "../[kitchen]/account.text";
 import { DOOR_TEXT } from "../door.text";
-import { DevicePanel, MandateForm, SignUpForm } from "../_account/forms";
+import { DevicePanel, SignUpForm } from "../_account/forms";
+import { SetUpInterview } from "./thread-interview";
 
 type Step = "account" | "rules" | "device";
 
-/** The two steps, then the one-time offer of a signing device. A reload resumes at the right step (the session says). */
+/**
+ * The two steps (the account, then the set-up interview with the agent that ends in the signed mandate), then the
+ * one-time offer of a signing device. A reload resumes at the right step (the session says).
+ */
 export function SignUpFlow({ signedIn }: { signedIn?: { restaurant: string; kitchen?: string; kind: string } }) {
   const tx = useText(DOOR_TEXT);
   const atx = useText(ACCOUNT_TEXT);
@@ -49,15 +53,13 @@ export function SignUpFlow({ signedIn }: { signedIn?: { restaurant: string; kitc
         </>
       )}
       {step === "rules" && (
-        <Card pad>
-          <MandateForm
-            onSigned={(r) => {
-              setShop(r.next);
-              setStep("device");
-              router.refresh();
-            }}
-          />
-        </Card>
+        <SetUpInterview
+          onSigned={(r) => {
+            setShop(r.next);
+            setStep("device");
+            router.refresh();
+          }}
+        />
       )}
       {step === "device" && (
         <>
