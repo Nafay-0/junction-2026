@@ -19,6 +19,7 @@ import type { MenuKitchen } from "./kitchens";
 import { findCandidates, type CandidateSet, type MenuCatalog } from "./match";
 import { checkSafety, withRequestRules, type DietRules } from "./safety";
 import {
+  packAmount,
   buildSpecs,
   computePlan,
   formatAmt,
@@ -804,6 +805,25 @@ export function createPlanService(deps: PlanDeps) {
           reprice = true;
           break;
         }
+        case "repack": {
+          // Only a large, dear pack was found for a small need: a wider search for the same ingredient, and the packs
+          // nearest the need priced too, so the price ranking can take the smaller one (6 l of stock: not a 333 l tub).
+          const spec = line!;
+          const covers = p.settings.covers ?? 0;
+          const wide = await findCandidates(catalog, { ...spec.ingredient, avoid: [] }, withRequestRules(k.diet, p.draft), allowedFor(k), 16);
+          const have = new Map((p.candidates[spec.lineId]?.candidates ?? []).map((c) => [c.product.id, c]));
+          for (const c of wide.candidates) if (!have.has(c.product.id) && !c.why.some((w) => /stand-in/.test(w))) have.set(c.product.id, c);
+          const unit = spec.ingredient.perCover.unit === "g" ? "kg" : spec.ingredient.perCover.unit === "ml" ? "L" : "pcs";
+          const need = covers ? toBase(spec.ingredient.perCover.amount * covers, spec.ingredient.perCover.unit).amount : 0;
+          const sized = [...have.values()].map((c) => ({ c, size: packAmount(c.product, unit) ?? Infinity })).filter((x) => x.size !== Infinity);
+          // The packs nearest the need from above first, then the largest below it (two of those can still be cheaper).
+          sized.sort((a, b) => (a.size >= need ? 0 : 1) - (b.size >= need ? 0 : 1) || (a.size >= need ? a.size - b.size : b.size - a.size));
+          p.candidates[spec.lineId] = { ...(p.candidates[spec.lineId] ?? { rejected: [], searched: [] }), candidates: [...have.values()] };
+          const room = dock.liveAllowance.remaining(agentKeyOf(s.mandate.issuer.orgId, s.agentId)).newProductsLeft;
+          await price(p, s, sized.slice(0, Math.min(4, room)).map((x) => x.c.product.id));
+          delete p.edits[spec.lineId]?.optionId;
+          break;
+        }
         case "dropDish": {
           const dish = p.draft.dishes.find((x) => x.id === e.dishId);
           if (!dish) throw new DockError(404, "dish_not_found", `No dish ${e.dishId} on this plan.`);
@@ -1007,6 +1027,8 @@ export type PlanEdit =
   /** One ingredient replaced by another the buyer named, same amount and role. */
   | { op: "ingredient"; lineId: string; name: string; searchTerms?: string[] }
   /** A dish taken off the plan: every line only it uses is struck. */
-  | { op: "dropDish"; dishId: string };
+  | { op: "dropDish"; dishId: string }
+  /** A line where only a large, dear pack was found: a wider search, and the packs nearest the need priced. */
+  | { op: "repack"; lineId: string };
 
 export type PlanService = ReturnType<typeof createPlanService>;

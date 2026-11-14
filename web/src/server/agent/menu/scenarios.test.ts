@@ -32,7 +32,7 @@ const LIVE: Record<string, FakeScenario> = {
   // The crème fraîche is shipped from the supplier: its cut-off for Monday passed on Thursday.
   "810002": { price: 6.9, amount: 500, date: "2026-11-16", closingTime: "2026-11-12T15:00:00", unit: "ST", logisticModel: "Terminal" },
   "810003": { price: 6.5, amount: 500, date: "2026-11-16", closingTime: "2026-11-15T17:00:00", unit: "ST" },
-  "810004": { price: 21.0, amount: 500, date: "2026-11-16", closingTime: "2026-11-15T17:00:00", unit: "ST" },
+  "810004": { price: 30.0, amount: 500, date: "2026-11-16", closingTime: "2026-11-15T17:00:00", unit: "ST" },
   "810005": { price: 8.4, amount: 500, date: "2026-11-16", closingTime: "2026-11-15T17:00:00", unit: "ST" },
   "810007": { price: 30, noLines: true },
   "810008": { price: 41, amount: 500, date: "2026-11-16", closingTime: "2026-11-15T17:00:00", unit: "ST" },
@@ -56,6 +56,7 @@ const ROOTS = draft([
 const BRAISE = draft([
   dish("Braised beef cheeks", [ing("beef_cheek", "Beef cheek", ["naudan poski", "beef cheek"], 200, "g", { role: "main protein, braised", form: "fresh", avoid: ["pakaste", "frozen"] }), ing("beetroot", "Beetroot", ["punajuuri", "beetroot"], 100, "g")]),
 ]);
+const TUB_ONLY = draft([dish("Beetroot soup", [ing("vegetable_bouillon", "Vegetable bouillon powder", ["kasvisliemijauhe", "bouillon powder"], 2, "g", { role: "seasoning", form: "dried", avoid: ["500 g"] })])]);
 const BOOKING = draft([
   dish("Beetroot with crème fraîche and dill", [
     ing("beetroot", "Beetroot", ["punajuuri", "beetroot"], 150, "g", { role: "the body of the dish" }),
@@ -85,7 +86,7 @@ async function setup() {
     now: () => MENU_NOW,
     store: new InMemoryPlanStore(),
     draft: async (text) => {
-      const raw = text.startsWith("Lunch for 40 on Monday around root vegetables") ? ROOTS : text.startsWith("Unexpected booking") ? BOOKING : text.startsWith("Dinner booking") ? BRAISE : undefined;
+      const raw = text.startsWith("Lunch for 40 on Monday around root vegetables. tub only") ? TUB_ONLY : text.startsWith("Lunch for 40 on Monday around root vegetables") ? ROOTS : text.startsWith("Unexpected booking") ? BOOKING : text.startsWith("Dinner booking") ? BRAISE : undefined;
       if (!raw) throw new Error(`no draft for ${text}`);
       return { draft: sanitiseDraft(raw), raw, model: "scripted:menu", ms: 1, tokens: { input: 0, output: 0, cachedInput: 0, reasoning: 0 }, costUsd: 0, calls: [] };
     },
@@ -127,6 +128,18 @@ describe("scenario 1: a menu around what is in season, buying only what is missi
     const sheet = await scenarios.seasonalSheet(kaari, r.planId, "Sanna Koskinen (test)");
     expect(sheet.lines.map((x) => x.productId)).not.toContain("810006");
     expect(sheet.lines.find((x) => x.productId === "810005")?.packs).toBe(1);
+  });
+
+  it("only a large, dear pack found: a wider search takes the smaller one (the 5 kg / 333 l bouillon on the walkthrough's sheet)", async () => {
+    const { service, kaari } = await setup();
+    // The draft's own words rule the 500 g jar out, as a search can miss it: only the 1.5 kg tub is found at first.
+    const first = await service.plan(kaari, "Lunch for 40 on Monday around root vegetables. tub only", "chef");
+    const line = (v: typeof first.view) => v.lines.find((l) => l.lineId === "vegetable_bouillon")!;
+    expect(line(first.view).chosen!.products[0].productId).toBe("810004");
+    expect(line(first.view).doubts.map((d) => d.doubtId)).toContain("vegetable_bouillon:amount_check:large_pack");
+    const { view } = await service.edit(kaari, first.record.planId, [{ op: "repack", lineId: "vegetable_bouillon" }], "chef");
+    expect(line(view).chosen!.products[0].productId).toBe("810005");
+    expect(line(view).doubts.map((d) => d.doubtId)).not.toContain("vegetable_bouillon:amount_check:large_pack");
   });
 
   it("the shortlist prices the small pack first for a small need (the 1.5 kg defect)", async () => {

@@ -262,6 +262,8 @@ export function createScenarios(deps: ScenarioDeps) {
     let planned = await service.get(k, first.record.planId);
     const edits = await onHandEdits(k, planned.record, planned.view, said);
     if (edits.length) planned = await service.edit(k, planned.record.planId, edits, by);
+    const large = planned.view.lines.filter((l) => l.doubts.some((d) => !d.accepted && d.doubtId.endsWith(":large_pack"))).map((l) => l.lineId);
+    if (large.length) planned = await service.edit(k, planned.record.planId, large.map((lineId) => ({ op: "repack" as const, lineId })), by);
     const p = planned.record;
     if (anchor) {
       const built = planned.view.lines.filter((l) => l.chosen && anchorMatch(anchor, l));
@@ -506,6 +508,9 @@ export function createScenarios(deps: ScenarioDeps) {
     // A line not priced yet is not "cannot arrive": ask the wholesaler for it first (one short batched call).
     // Up to three rounds of ten: a three-course menu has more lines than one call holds.
     for (let round = 0; round < 3 && planned.view.lines.some((l) => l.doubts.some((d) => !d.accepted && d.kind === "not_priced")); round++) planned = await service.edit(k, first.record.planId, [{ op: "price" }], by);
+    // A small need that found only a large, dear pack: look wider for a smaller one before anything is said.
+    const large = planned.view.lines.filter((l) => l.doubts.some((d) => !d.accepted && d.doubtId.endsWith(":large_pack"))).map((l) => l.lineId);
+    if (large.length) planned = await service.edit(k, first.record.planId, large.map((lineId) => ({ op: "repack" as const, lineId })), by);
     const p = planned.record;
     const view = planned.view;
     const want = p.settings.deliverBy ?? addDaysIso(today(deps.now()), 1);
