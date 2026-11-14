@@ -485,6 +485,11 @@ export async function openNeed(run: TurnRun, need: NeedInput, words: string, opt
     const text = /barista/i.test(nn.item.text) ? nn.item.text : `${nn.item.text.replace(/\s+(for|to|in)\s+(the\s+)?coffee(\s+(machine|maker|bar|machines))?|\s+(kahviin|kahvikoneeseen)|\s+till kaffe(maskinen)?/i, "")} barista`;
     need = { ...need, ...(nn.requiredClaims ? { requiredClaims: nn.requiredClaims.filter((c) => !COFFEE.test(c)) } : {}), item: { ...need.item, text, ...(nn.item.attributes ? { attributes: nn.item.attributes.filter((c) => !COFFEE.test(c)) } : {}) } } as NeedInput;
   }
+  // "An oat-based one", "kaurajogurttia": a plant yoghurt is its own family, never the dairy yoghurts with a word added.
+  {
+    const it = need as { item: { text: string; category?: string } };
+    if (/\b(oat|oats|kaura\w*|soy|soya|soija\w*|plant|kasvi\w*|vegan\w*|havre|växt\w*)\b/i.test(it.item.text) && /(yog|jog|gurt|gurtti|jugurt)/i.test(it.item.text)) need = { ...need, item: { ...it.item, category: "plant_yoghurt" } } as NeedInput;
+  }
   const n = need as { deliverBy?: string; deliverOn?: string };
   // No day said, and the kitchen receives only on some days (a café on Tuesdays and Fridays): its next delivery day,
   // so nothing is offered for a day it cannot take in.
