@@ -1,0 +1,404 @@
+[
+ {
+  "match": "\"\"\"\nsame again but 200 litres",
+  "output": {
+   "isPurchaseRequest": true,
+   "notPurchaseReason": null,
+   "item": {
+    "text": "lactose-free milk",
+    "category": "milk",
+    "attributes": [
+     "lactose_free"
+    ],
+    "excludedAttributes": [],
+    "productId": null
+   },
+   "quantity": {
+    "amount": 200,
+    "unit": "L"
+   },
+   "deliverBy": "{{weekday:1}}",
+   "requiredClaims": [],
+   "forbiddenAllergens": [],
+   "optimise": "price",
+   "sameAsLastTime": false,
+   "basedOnRequestId": "{{earlier:0}}",
+   "takenFromEarlier": [
+    "item",
+    "attributes",
+    "deliverBy",
+    "optimise"
+   ]
+  }
+ },
+ {
+  "match": "\"\"\"\nSame as “",
+  "output": {
+   "isPurchaseRequest": true,
+   "notPurchaseReason": null,
+   "item": {
+    "text": "lactose-free milk",
+    "category": "milk",
+    "attributes": [
+     "lactose_free"
+    ],
+    "excludedAttributes": [],
+    "productId": null
+   },
+   "quantity": {
+    "amount": 200,
+    "unit": "L"
+   },
+   "deliverBy": "{{weekday:1}}",
+   "requiredClaims": [],
+   "forbiddenAllergens": [],
+   "optimise": "price",
+   "sameAsLastTime": false,
+   "basedOnRequestId": "{{earlier:0}}",
+   "takenFromEarlier": [
+    "item",
+    "attributes",
+    "deliverBy",
+    "optimise"
+   ]
+  }
+ },
+ {
+  "match": "\"\"\"\nSame again as “",
+  "output": {
+   "isPurchaseRequest": true,
+   "notPurchaseReason": null,
+   "item": {
+    "text": "milk",
+    "category": "milk",
+    "attributes": [],
+    "excludedAttributes": [],
+    "productId": null
+   },
+   "quantity": null,
+   "deliverBy": null,
+   "requiredClaims": [],
+   "forbiddenAllergens": [],
+   "optimise": "unstated",
+   "sameAsLastTime": true,
+   "basedOnRequestId": "{{earlier:0}}",
+   "takenFromEarlier": [
+    "item",
+    "quantity",
+    "attributes",
+    "deliverBy"
+   ]
+  }
+ },
+ {
+  "match": "\"\"\"\nSame as last time, for Friday",
+  "output": {
+   "isPurchaseRequest": true,
+   "notPurchaseReason": null,
+   "item": {
+    "text": "milk",
+    "category": "milk",
+    "attributes": [],
+    "excludedAttributes": [],
+    "productId": null
+   },
+   "quantity": null,
+   "deliverBy": "{{weekday:5}}",
+   "requiredClaims": [],
+   "forbiddenAllergens": [],
+   "optimise": "unstated",
+   "sameAsLastTime": true,
+   "basedOnRequestId": null,
+   "takenFromEarlier": []
+  }
+ },
+ {
+  "match": "\"\"\"\nI need 1,000 litres of lactose-free milk by Monday",
+  "output": {
+   "isPurchaseRequest": true,
+   "notPurchaseReason": null,
+   "item": {
+    "text": "lactose-free milk",
+    "category": "milk",
+    "attributes": [
+     "lactose_free"
+    ],
+    "excludedAttributes": [],
+    "productId": null
+   },
+   "quantity": {
+    "amount": 1000,
+    "unit": "L"
+   },
+   "deliverBy": "{{weekday:1}}",
+   "requiredClaims": [],
+   "forbiddenAllergens": [],
+   "optimise": "price",
+   "sameAsLastTime": false,
+   "basedOnRequestId": null,
+   "takenFromEarlier": []
+  }
+ },
+ {
+  "match": "\"\"\"\n1,000 litres of lactose-free milk by Monday",
+  "output": {
+   "isPurchaseRequest": true,
+   "notPurchaseReason": null,
+   "item": {
+    "text": "lactose-free milk",
+    "category": "milk",
+    "attributes": [
+     "lactose_free"
+    ],
+    "excludedAttributes": [],
+    "productId": null
+   },
+   "quantity": {
+    "amount": 1000,
+    "unit": "L"
+   },
+   "deliverBy": "{{weekday:1}}",
+   "requiredClaims": [],
+   "forbiddenAllergens": [],
+   "optimise": "price",
+   "sameAsLastTime": false,
+   "basedOnRequestId": null,
+   "takenFromEarlier": []
+  }
+ },
+ {
+  "match": "\"\"\"\n100 litres of milk for Thursday",
+  "output": {
+   "isPurchaseRequest": true,
+   "notPurchaseReason": null,
+   "item": {
+    "text": "milk",
+    "category": "milk",
+    "attributes": [],
+    "excludedAttributes": [],
+    "productId": null
+   },
+   "quantity": {
+    "amount": 100,
+    "unit": "L"
+   },
+   "deliverBy": "{{weekday:4}}",
+   "requiredClaims": [],
+   "forbiddenAllergens": [],
+   "optimise": "unstated",
+   "sameAsLastTime": false,
+   "basedOnRequestId": null,
+   "takenFromEarlier": []
+  }
+ },
+ {
+  "match": "\"\"\"\n100 L milk for Wednesday, lowest CO2",
+  "output": {
+   "isPurchaseRequest": true,
+   "notPurchaseReason": null,
+   "item": {
+    "text": "milk",
+    "category": "milk",
+    "attributes": [],
+    "excludedAttributes": [],
+    "productId": null
+   },
+   "quantity": {
+    "amount": 100,
+    "unit": "L"
+   },
+   "deliverBy": "{{weekday:3}}",
+   "requiredClaims": [],
+   "forbiddenAllergens": [],
+   "optimise": "co2",
+   "sameAsLastTime": false,
+   "basedOnRequestId": null,
+   "takenFromEarlier": []
+  }
+ },
+ {
+  "match": "\"\"\"\n200 litres of lactose-free milk for Wednesday, cheapest",
+  "output": {
+   "isPurchaseRequest": true,
+   "notPurchaseReason": null,
+   "item": {
+    "text": "lactose-free milk",
+    "category": "milk",
+    "attributes": [
+     "lactose_free"
+    ],
+    "excludedAttributes": [],
+    "productId": null
+   },
+   "quantity": {
+    "amount": 200,
+    "unit": "L"
+   },
+   "deliverBy": "{{weekday:3}}",
+   "requiredClaims": [],
+   "forbiddenAllergens": [],
+   "optimise": "price",
+   "sameAsLastTime": false,
+   "basedOnRequestId": null,
+   "takenFromEarlier": []
+  }
+ },
+ {
+  "match": "\"\"\"\n60 litres of oat drink for Tuesday",
+  "output": {
+   "isPurchaseRequest": true,
+   "notPurchaseReason": null,
+   "item": {
+    "text": "oat drink",
+    "category": "plant_drink",
+    "attributes": [],
+    "excludedAttributes": [],
+    "productId": null
+   },
+   "quantity": {
+    "amount": 60,
+    "unit": "L"
+   },
+   "deliverBy": "{{weekday:2}}",
+   "requiredClaims": [],
+   "forbiddenAllergens": [],
+   "optimise": "unstated",
+   "sameAsLastTime": false,
+   "basedOnRequestId": null,
+   "takenFromEarlier": []
+  }
+ },
+ {
+  "match": "\"\"\"\n100 litres of lactose-free milk for Thursday",
+  "output": {
+   "isPurchaseRequest": true,
+   "notPurchaseReason": null,
+   "item": {
+    "text": "lactose-free milk",
+    "category": "milk",
+    "attributes": [
+     "lactose_free"
+    ],
+    "excludedAttributes": [],
+    "productId": null
+   },
+   "quantity": {
+    "amount": 100,
+    "unit": "L"
+   },
+   "deliverBy": "{{weekday:4}}",
+   "requiredClaims": [],
+   "forbiddenAllergens": [],
+   "optimise": "unstated",
+   "sameAsLastTime": false,
+   "basedOnRequestId": null,
+   "takenFromEarlier": []
+  }
+ },
+ {
+  "match": "\"\"\"\n100 L lactose-free milk for Thursday",
+  "output": {
+   "isPurchaseRequest": true,
+   "notPurchaseReason": null,
+   "item": {
+    "text": "lactose-free milk",
+    "category": "milk",
+    "attributes": [
+     "lactose_free"
+    ],
+    "excludedAttributes": [],
+    "productId": null
+   },
+   "quantity": {
+    "amount": 100,
+    "unit": "L"
+   },
+   "deliverBy": "{{weekday:4}}",
+   "requiredClaims": [],
+   "forbiddenAllergens": [],
+   "optimise": "unstated",
+   "sameAsLastTime": false,
+   "basedOnRequestId": null,
+   "takenFromEarlier": []
+  }
+ },
+ {
+  "match": "\"\"\"\nTwo hundred litres of oat drink for Wednesday.",
+  "output": {
+   "isPurchaseRequest": true,
+   "notPurchaseReason": null,
+   "item": {
+    "text": "oat drink",
+    "category": "plant_drink",
+    "attributes": [],
+    "excludedAttributes": [],
+    "productId": null
+   },
+   "quantity": {
+    "amount": 200,
+    "unit": "L"
+   },
+   "deliverBy": "{{weekday:3}}",
+   "requiredClaims": [],
+   "forbiddenAllergens": [],
+   "optimise": "unstated",
+   "sameAsLastTime": false,
+   "basedOnRequestId": null,
+   "takenFromEarlier": []
+  }
+ },
+ {
+  "match": "\"\"\"\nA hundred litres of lactose-free milk for Wednesday.",
+  "output": {
+   "isPurchaseRequest": true,
+   "notPurchaseReason": null,
+   "item": {
+    "text": "lactose-free milk",
+    "category": "milk",
+    "attributes": [
+     "lactose_free"
+    ],
+    "excludedAttributes": [],
+    "productId": null
+   },
+   "quantity": {
+    "amount": 100,
+    "unit": "L"
+   },
+   "deliverBy": "{{weekday:3}}",
+   "requiredClaims": [],
+   "forbiddenAllergens": [],
+   "optimise": "unstated",
+   "sameAsLastTime": false,
+   "basedOnRequestId": null,
+   "takenFromEarlier": []
+  }
+ },
+ {
+  "match": "What did we order last week?",
+  "agent": {
+   "calls": [
+    {
+     "name": "order_history",
+     "args": {
+      "from": "{{today-7}}",
+      "to": "{{today}}"
+     }
+    }
+   ],
+   "line": "Your orders from the last seven days are below."
+  }
+ },
+ {
+  "match": "What may the agent buy alone?",
+  "agent": {
+   "calls": [
+    {
+     "name": "read_mandate",
+     "args": {}
+    }
+   ],
+   "line": "Your mandate sets what the agent may buy alone."
+  }
+ }
+]

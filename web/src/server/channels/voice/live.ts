@@ -80,8 +80,24 @@ function transcriptionMode(): string | undefined {
 
 export type LiveToken = { token: string; expiresAt: string; startBy: string };
 
+/**
+ * Test-only: DOCK_VOICE_SCRIPTED=1 (with DOCK_SCRIPTED_MODELS=1, the recorded-model switch) mints a token here
+ * instead of at Google, so a browser suite that answers the Live socket itself (Playwright's routeWebSocket) runs
+ * the whole call with no key and no network. Off by default; refused outright on a deployed server (DOCK_PUBLIC_URL
+ * or VERCEL set), where a token nobody can use would only hide a missing key.
+ */
+export function scriptedVoice(env: Record<string, string | undefined> = process.env): boolean {
+  if (env.DOCK_VOICE_SCRIPTED !== "1") return false;
+  if (env.DOCK_PUBLIC_URL || env.VERCEL) throw new DockError(503, "voice_unavailable", "Scripted voice tokens are for local tests only and are refused on a deployed server. Type the request instead.");
+  return env.DOCK_SCRIPTED_MODELS === "1";
+}
+
 /** Mint a one-use token whose locked setup is `setup`. Throws a DockError the routes return as is. */
 export async function mintLiveToken(setup: ReturnType<typeof liveSetup>, opts: { seconds: number; now?: Date; apiKey?: string; fetchImpl?: typeof fetch }): Promise<LiveToken> {
+  if (!opts.apiKey && !opts.fetchImpl && scriptedVoice()) {
+    const now = (opts.now ?? new Date()).getTime();
+    return { token: `scripted-${Math.random().toString(36).slice(2, 12)}`, expiresAt: new Date(now + opts.seconds * 1000).toISOString(), startBy: new Date(now + 60_000).toISOString() };
+  }
   const apiKey = opts.apiKey ?? (process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY);
   if (!apiKey) throw new DockError(503, "voice_unavailable", "Voice calls are not configured on this server (no Gemini API key). Type the request instead.");
   const now = (opts.now ?? new Date()).getTime();

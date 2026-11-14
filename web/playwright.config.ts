@@ -9,8 +9,9 @@ import { defineConfig, devices, type Project } from "@playwright/test";
  *   pnpm e2e --project=webkit-phone e2e/demo/approval.spec.ts    one engine, one file
  *   E2E_BASE_URL=https://<host> pnpm exec playwright test --project=chromium-phone e2e/demo   a deployed server
  *
- * Servers: e2e/support/start-server.mjs starts a hermetic production server (seed catalogue, no model, no partner,
- * no Aiven, no secrets from .env.local) on E2E_PORT (default 4601), and a second one with the public rate limits on,
+ * Servers: e2e/support/start-server.mjs starts a hermetic production server (seed catalogue, recorded model answers
+ * from e2e/fixtures/recordings.json and no provider key, voice on with test-only scripted tokens, no partner, no
+ * Aiven, no secrets from .env.local) on E2E_PORT (default 4601), and a second one with the public rate limits on,
  * on E2E_PORT + 1, for the crowd tests in e2e/room. Both from the existing `.next` build.
  * Needs the browsers once: `pnpm exec playwright install chromium webkit firefox`.
  */

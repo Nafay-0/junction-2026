@@ -5,7 +5,14 @@
  *
  *   - `__NEXT_PROCESSED_ENV=true` stops Next reading `.env*`; `web/.env.local` (shared secrets) never reaches it.
  *   - every variable name in `.env.example` is set to "" unless set below or by E2E_SERVER_ENV.
- *   - seed catalogue, no model, no partner, no Aiven, no voice, no radar polling; demo passcode `e2e-ops`.
+ *   - seed catalogue, no partner, no Aiven, no radar polling; demo passcode `e2e-ops`.
+ *   - models: no provider key at all. The request reader and the store's agent are the scripted provider
+ *     (`scripted:e2e`, src/server/agent/scripted.ts) answering from e2e/fixtures/recordings.json, so the thread runs
+ *     end to end with zero spend and the same result every time; every other model (photo reader, assistant, memory
+ *     writer, second reader, menu planner) has none and says so.
+ *   - voice: on, with test-only scripted tokens (DOCK_VOICE_SCRIPTED=1, src/server/channels/voice/live.ts): the
+ *     server reserves the line and "mints" a token without Google; the browser's Gemini Live socket is answered by
+ *     the test (page.routeWebSocket). The call caps are lifted so a full run never meets them.
  *
  * Usage: node e2e/support/start-server.mjs <port>     (Playwright's webServer runs it; see playwright.config.ts)
  * Extra variables: E2E_SERVER_ENV='{"DOCK_RATE_LIMITS":"on"}'. A server you start yourself: E2E_BASE_URL instead.
@@ -32,8 +39,23 @@ Object.assign(env, {
   NODE_ENV: "production",
   NEXT_TELEMETRY_DISABLED: "1",
   DOCK_CATALOG: "seed",
-  DOCK_LLM: "off",
-  DOCK_VOICE: "off",
+  // Scripted models only (no key is set, so nothing else can answer): the reader and the agent from recordings.
+  DOCK_LLM: "",
+  DOCK_LLM_DAILY_CALLS: "1000000",
+  DOCK_LLM_DAILY_USD: "1",
+  DOCK_SCRIPTED_MODELS: "1",
+  DOCK_SCRIPTED_RECORDINGS: path.join(web, "e2e/fixtures/recordings.json"),
+  DOCK_INTERPRET_MODEL: "scripted:e2e",
+  DOCK_AGENT_MODEL: "scripted:e2e",
+  DOCK_INTERPRET_FALLBACK_MODEL: "off",
+  DOCK_MEMORY_LLM: "off",
+  // Voice on, tokens scripted (refused if DOCK_PUBLIC_URL were set), caps lifted for a whole run.
+  DOCK_VOICE: "on",
+  DOCK_VOICE_SCRIPTED: "1",
+  DOCK_VOICE_CALLS_PER_KITCHEN_HOUR: "100",
+  DOCK_VOICE_CALLS_PER_HOUR: "1000",
+  DOCK_VOICE_CALLS_PER_KITCHEN_DAY: "200",
+  DOCK_VOICE_CALLS_PER_DAY: "2000",
   RADAR_POLL: "off",
   RADAR_STATE_FILE: "off",
   DOCK_RATE_LIMITS: "off",
@@ -47,10 +69,11 @@ Object.assign(env, {
 });
 if (process.env.E2E_SERVER_ENV) Object.assign(env, JSON.parse(process.env.E2E_SERVER_ENV));
 
-// E2E_MODEL=1: the model on, with the provider keys and model names from web/.env.local (copied into the server's
-// environment, never printed) and a hard cap of $0.50 and 60 calls for the run. Used for the few tests that check
-// what the model says (assistant, "repeat with a change"); every other test runs with the model off.
+// E2E_MODEL=1 (opt-in, never in a default run): real models instead of the recordings, with the provider keys and
+// model names from web/.env.local (copied into the server's environment, never printed) and a hard cap of $0.50 and
+// 60 calls for the run.
 if (process.env.E2E_MODEL) {
+  Object.assign(env, { DOCK_SCRIPTED_MODELS: "", DOCK_SCRIPTED_RECORDINGS: "", DOCK_VOICE_SCRIPTED: "", DOCK_INTERPRET_MODEL: "", DOCK_AGENT_MODEL: "" });
   const names = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "DOCK_INTERPRET_MODEL", "DOCK_ASSISTANT_MODEL", "DOCK_MEMORY_MODEL"];
   try {
     for (const line of readFileSync(path.join(web, ".env.local"), "utf8").split("\n")) {
