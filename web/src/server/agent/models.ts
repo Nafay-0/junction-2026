@@ -4,6 +4,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { LanguageModel } from "ai";
 import { priceOf, type Price } from "./pricing";
+import { scriptedEnabled, scriptedModel } from "./scripted";
 
 /**
  * One string picks a model: `provider:model-id`.
@@ -19,8 +20,8 @@ import { priceOf, type Price } from "./pricing";
  * new model needs no code change; only its price (pricing.ts) is needed for the cost estimate.
  */
 
-export type Provider = "anthropic" | "openai" | "google" | "compat" | "verda" | "nvidia";
-const PROVIDERS: Provider[] = ["anthropic", "openai", "google", "compat", "verda", "nvidia"];
+export type Provider = "anthropic" | "openai" | "google" | "compat" | "verda" | "nvidia" | "scripted";
+const PROVIDERS: Provider[] = ["anthropic", "openai", "google", "compat", "verda", "nvidia", "scripted"];
 
 /** Cheapest suitable model per provider, checked against each provider's model list and pricing page on 2026-11-13. */
 export const CHEAP_DEFAULTS: Record<"anthropic" | "openai" | "google", string> = {
@@ -60,6 +61,8 @@ const ENDPOINTS: Record<Provider, Endpoint> = {
   compat: { keyVars: ["OPENAI_COMPATIBLE_API_KEY"], baseVar: "OPENAI_COMPATIBLE_BASE_URL" },
   verda: { keyVars: ["VERDA_API_KEY"], baseVar: "VERDA_BASE_URL" },
   nvidia: { keyVars: ["NVIDIA_API_KEY"], baseVar: "NVIDIA_BASE_URL", defaultBase: "https://integrate.api.nvidia.com/v1" },
+  // Recorded answers for the end-to-end demo (scripted.ts): opt-in with DOCK_SCRIPTED_MODELS=1 and a recordings file.
+  scripted: { keyVars: ["DOCK_SCRIPTED_RECORDINGS"] },
 };
 
 function keyFor(provider: Provider, env: Record<string, string | undefined>): string | undefined {
@@ -69,6 +72,7 @@ function keyFor(provider: Provider, env: Record<string, string | undefined>): st
 
 /** True when the environment holds a key (and, for compatible endpoints, a base URL) for this provider. */
 export function hasCredentials(provider: Provider, env: Record<string, string | undefined> = process.env): boolean {
+  if (provider === "scripted") return scriptedEnabled(env);
   const e = ENDPOINTS[provider];
   return !!keyFor(provider, env) && (!e.baseVar || !!(env[e.baseVar] || e.defaultBase));
 }
@@ -76,6 +80,10 @@ export function hasCredentials(provider: Provider, env: Record<string, string | 
 export function createModel(spec: string | ModelSpec, opts: ModelOptions = {}): { model: LanguageModel; spec: ModelSpec; price: Price | undefined } {
   const s = typeof spec === "string" ? parseModelSpec(spec) : spec;
   const env = opts.env ?? process.env;
+  if (s.provider === "scripted") {
+    if (!scriptedEnabled(env)) throw new ModelConfigError("Scripted models need DOCK_SCRIPTED_MODELS=1 and DOCK_SCRIPTED_RECORDINGS.", "model_key_missing");
+    return { model: scriptedModel(s.modelId), spec: s, price: { inputPerM: 0, outputPerM: 0 } };
+  }
   const apiKey = opts.apiKey ?? keyFor(s.provider, env);
   if (!apiKey) throw new ModelConfigError(`No API key for ${s.provider}: set ${ENDPOINTS[s.provider].keyVars.join(" or ")}.`, "model_key_missing");
   const e = ENDPOINTS[s.provider];
