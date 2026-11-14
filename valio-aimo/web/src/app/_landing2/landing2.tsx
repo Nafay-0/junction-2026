@@ -755,7 +755,8 @@ export function Landing2() {
             {film.video ? (
               <video controls preload="none" playsInline poster={film.poster ? `/landing/${film.poster}` : undefined} className="h-full w-full" aria-label={t.film.label}>
                 <source src={film.video} type="video/mp4" />
-                {film.captions && <track kind="captions" src={film.captions} srcLang="en" label="Captions" default />}
+                {/* Captions are offered, not switched on: the film carries its own words on screen. */}
+                {film.captions && <track kind="captions" src={film.captions} srcLang="en" label="Captions" />}
               </video>
             ) : (
               <div className="l2-poster" role="img" aria-label={`${t.film.label}. ${t.film.note}`}>
