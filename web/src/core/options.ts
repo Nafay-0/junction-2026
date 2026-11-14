@@ -122,7 +122,8 @@ export type OptionReason = { code: ReasonCode; tone: ReasonTone; params: Record<
 export type Reference = { productId: string; name: string; source: "named" | "last" | "usual" };
 
 export type OptionsInput = {
-  amount: { amount: number; unit: BaseUnit };
+  /** `packs`: the buyer counted packs (cases, boxes) of products in several sizes: that many of the chosen product. */
+  amount: { amount: number; unit: BaseUnit; packs?: number };
   candidates: Product[];
   offers: LiveOffer[];
   /** One live status per priced product: why a product has no usable offer (cut-off passed, sales block, ...). */
@@ -239,7 +240,9 @@ type Plan = { primary: Viable; lines: PlanLine[]; split?: { have: number; rest: 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 /** How many packs of a product make the amount, using the partner's pack data when there is some. */
-function sizeFor(p: Product, amount: { amount: number; unit: BaseUnit }, estimates: string[]): Sized | { error: string; code: ExclusionCode } {
+function sizeFor(p: Product, amount: { amount: number; unit: BaseUnit; packs?: number }, estimates: string[]): Sized | { error: string; code: ExclusionCode } {
+  // The buyer counted packs: that many of this product's sales unit, whatever it holds.
+  if (amount.packs && amount.packs > 0) return { perPack: p.packSize, unit: p.unit, packs: Math.ceil(amount.packs - 1e-9), estimated: false };
   if (amount.unit === "pcs" || !p.packContent) {
     if (p.unit !== amount.unit) return { error: `sold by ${p.unit}, not ${amount.unit}`, code: "wrong_unit" };
     return { perPack: p.packSize, unit: p.unit, packs: Math.ceil(amount.amount / p.packSize - 1e-9), estimated: false };
