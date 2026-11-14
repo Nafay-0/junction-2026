@@ -24,10 +24,17 @@ import { LOGS, sleep, startDock, WEB, type Dock } from "../lib/server";
 
 export type AivenService = Exclude<ServiceName, never>;
 
-const APP_PORT = 4633;
+// Ports and schema can be moved for a second engineer on the same machine (DEPS_APP_PORT, DEPS_PROXY_PORT,
+// DEPS_PG_SCHEMA). With DEPS_PROXY_PORT the proxy listens there and the preload rewrites the app's connections to
+// the service's host:port onto it (DEPS_CONNECT_MAP), instead of listening on the service's own port.
+const APP_PORT = Number(process.env.DEPS_APP_PORT || 4633);
+const PROXY_PORT = process.env.DEPS_PROXY_PORT ? Number(process.env.DEPS_PROXY_PORT) : undefined;
 const PARTNER_PORT = 4693;
 const PARTNER_CONTROL = 4694;
-export const TEST_SCHEMA = "dock_testinfra";
+/** The only schemas this harness ever creates or drops. */
+const TEST_SCHEMAS = ["dock_testinfra", "dock_limits"] as const;
+export const TEST_SCHEMA = process.env.DEPS_PG_SCHEMA || "dock_testinfra";
+if (!(TEST_SCHEMAS as readonly string[]).includes(TEST_SCHEMA)) throw new Error(`DEPS_PG_SCHEMA must be one of ${TEST_SCHEMAS.join(", ")}`);
 const TEST_TOPIC = "dock.actions.testinfra";
 const OUTAGE_PROBE_TIMEOUT_MS = 45_000;
 
@@ -55,12 +62,12 @@ async function noteSchemaBefore(): Promise<void> {
   schemaExistedBefore = await withPool(async (p) => (await p.query("select 1 from information_schema.schemata where schema_name = $1", [TEST_SCHEMA])).rowCount! > 0);
 }
 
-/** Drop dock_testinfra, only if this run created it. Never any other schema. */
+/** Drop the test schema, only if this run created it. Never any schema outside TEST_SCHEMAS. */
 export async function dropTestSchemaIfCreated(results: Results): Promise<void> {
   if (schemaExistedBefore !== false || !process.env.DATABASE_URL) return;
-  if (TEST_SCHEMA !== "dock_testinfra") throw new Error("refusing to drop a schema other than dock_testinfra");
-  await withPool((p) => p.query("drop schema if exists dock_testinfra cascade"));
-  results.note("aiven: dropped schema dock_testinfra (created by this run)");
+  if (!(TEST_SCHEMAS as readonly string[]).includes(TEST_SCHEMA)) throw new Error(`refusing to drop a schema other than ${TEST_SCHEMAS.join(", ")}`);
+  await withPool((p) => p.query(`drop schema if exists ${TEST_SCHEMA} cascade`));
+  results.note(`aiven: dropped schema ${TEST_SCHEMA} (created by this run)`);
 }
 
 // ---------- probes ----------
@@ -86,7 +93,8 @@ export async function aivenScenario(results: Results, service: AivenService): Pr
   if (!reach.ok) return results.skip(service, `the service does not answer from this machine (${reach.error}); powered off or unreachable`);
   const [target] = await resolveTargets(targets(service).slice(0, 1));
   if (targets(service).length > 1) results.note(`${service}: ${targets(service).length} bootstrap addresses; only the first is proxied`);
-  if (!(await portFree(target.port))) return results.skip(service, "the service's port is in use on 127.0.0.1, so the proxy cannot listen there");
+  const listenPort = PROXY_PORT ?? target.port;
+  if (!(await portFree(listenPort))) return results.skip(service, "the proxy's port is in use on 127.0.0.1, so the proxy cannot listen there");
   if (service === "pg" || service === "kafka") await noteSchemaBefore();
 
   // Kafka: the bootstrap address hands out the brokers as IP addresses on the same port; each gets a proxy of its
@@ -94,7 +102,7 @@ export async function aivenScenario(results: Results, service: AivenService): Pr
   const brokers = service === "kafka" ? await kafkaBrokerHosts().catch(() => [] as string[]) : [];
   const brokerProxies = brokers.map((ip, i) => ({ key: `${ip}:${target.port}`, proxy: new FaultProxy(4695 + i, ip, target.port) }));
   if (service === "kafka") results.note(`kafka: ${brokers.length} advertised broker address(es) besides the bootstrap host, each behind its own proxy`);
-  const proxy = new FaultProxy(target.port, target.ip!, target.port);
+  const proxy = new FaultProxy(listenPort, target.ip!, target.port);
   for (const b of brokerProxies) await b.proxy.start();
   const setAll = async (m: FaultMode) => {
     await proxy.setMode(m);
@@ -104,8 +112,11 @@ export async function aivenScenario(results: Results, service: AivenService): Pr
   const preloadLog = path.join(LOGS, `preload-${service}.log`);
   const common = {
     NODE_OPTIONS: `--require ${path.join(WEB, "tests-live/deps/dns-preload.cjs")}`,
-    DEPS_DNS_MAP: JSON.stringify({ [target.host]: "127.0.0.1" }),
-    DEPS_CONNECT_MAP: JSON.stringify(Object.fromEntries(brokerProxies.map((b, i) => [b.key, 4695 + i]))),
+    DEPS_DNS_MAP: JSON.stringify(PROXY_PORT ? {} : { [target.host]: "127.0.0.1" }),
+    DEPS_CONNECT_MAP: JSON.stringify({
+      ...Object.fromEntries(brokerProxies.map((b, i) => [b.key, 4695 + i])),
+      ...(PROXY_PORT ? { [`${target.host}:${target.port}`]: PROXY_PORT } : {}),
+    }),
     DEPS_DROP_TELEMETRY: "1",
     DEPS_PRELOAD_LOG: preloadLog,
     DOCK_PG_SCHEMA: TEST_SCHEMA,
