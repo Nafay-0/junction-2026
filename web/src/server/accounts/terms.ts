@@ -15,10 +15,10 @@ import generated from "../catalog-categories.json";
 const DATA = generated as { departments: Record<string, string>; categories: Record<string, { label: string }> };
 
 /** The shop's departments as product groups; the two household departments are one group. */
-export const PRODUCT_GROUPS: { id: string; prefixes: string[] }[] = (() => {
+export const PRODUCT_GROUPS: { id: string; name: string; prefixes: string[] }[] = (() => {
   const byName = new Map<string, string[]>();
   for (const [prefix, name] of Object.entries(DATA.departments)) byName.set(name, [...(byName.get(name) ?? []), prefix]);
-  return [...byName.values()].map((prefixes) => ({ id: prefixes[0], prefixes }));
+  return [...byName.entries()].map(([name, prefixes]) => ({ id: prefixes[0], name, prefixes }));
 })();
 
 /** Claims a kitchen can require of every product (core/vocabulary.ts slugs). */

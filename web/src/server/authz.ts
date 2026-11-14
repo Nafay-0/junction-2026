@@ -92,7 +92,7 @@ export async function consoleKitchen(req: Request, rt: Runtime, slug: string) {
         ? new DockError(403, "not_your_kitchen", "This is another restaurant's kitchen. You are signed in to a different account.", "data_access")
         : new DockError(401, "not_signed_in", "This kitchen belongs to an account. Sign in to it at /k.", "data_access");
     }
-    if (mine) {
+    if (mine && signedIn) {
       requireSameOrigin(req, { json: false });
       console.person = { channel: "portal_session", name: `${signedIn.account.restaurant} (${signedIn.account.username})`, account: signedIn.account.username };
     }

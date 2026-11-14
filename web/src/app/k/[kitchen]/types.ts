@@ -13,7 +13,7 @@ export type Order = PublicOrder;
 export type KitchenMemory = ReturnType<typeof kitchenView>;
 export type Entry = LedgerEntry;
 export type KitchenInfo = ConsoleKitchenInfo;
-export type KitchenChoice = { slug: string; name: string; kind: "demo" | "visitor"; approverName?: string };
+export type KitchenChoice = { slug: string; name: string; kind: "demo" | "visitor" | "account"; approverName?: string };
 
 export type LedgerReply = {
   verification: { ok: boolean; length?: number; message?: string };
@@ -21,7 +21,7 @@ export type LedgerReply = {
   entries: LedgerEntry[];
 };
 
-export type ApprovalQr = { mode: "passkey" | "demo_link" | "enrol" | "view_only"; approver: { name: string; role: string }; status: string; orderId?: string; url: string; qrSvg: string };
+export type ApprovalQr = { mode: "passkey" | "demo_link" | "enrol" | "view_only" | "no_device"; approver: { name: string; role: string }; status: string; orderId?: string; url: string; qrSvg: string };
 
 // ---------- the kitchen portal ----------
 export type { CutoffReply, LiveReply, LiveResult, Overview, PortalOrder, PortalRequest, Standing, WeekNumbers, ShopCategory, ShopDepartment };

@@ -15,7 +15,7 @@ export async function GET(req: Request) {
         account: rt.accounts.view(a),
         defaults: DEFAULT_TERMS,
         current: a.kitchen?.terms ?? null,
-        vocabulary: { groups: PRODUCT_GROUPS.map((g) => g.id), require: REQUIRE_CLAIMS, forbid: FORBID_ALLERGENS, substitution: SUBSTITUTION_RULES },
+        vocabulary: { groups: PRODUCT_GROUPS.map((g) => ({ id: g.id, name: g.name })), require: REQUIRE_CLAIMS, forbid: FORBID_ALLERGENS, substitution: SUBSTITUTION_RULES },
         editable: a.kind !== "demo",
       },
       { headers: noStore },
