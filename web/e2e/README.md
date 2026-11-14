@@ -1,8 +1,13 @@
 # Browser suite and live-condition tests
 
 Everything here runs against production builds started by the tests themselves, with a hermetic environment
-(`e2e/support/start-server.mjs`: seed catalogue, model off, partner off, Aiven off, no value from `.env.local`,
-operations passcode `e2e-ops`). Nothing touches the public deployment. Defects found are written as `test.fail` tests in the specs (each with steps, cause and file) and in the test-infra report on branch `claude/test-infra`.
+(`e2e/support/start-server.mjs`: seed catalogue, partner off, Aiven off, no value from `.env.local`, operations
+passcode `e2e-ops`). No provider key is set: the request reader and the store's agent are the scripted provider
+(`DOCK_SCRIPTED_MODELS=1`, `DOCK_SCRIPTED_RECORDINGS=e2e/fixtures/recordings.json`, `DOCK_INTERPRET_MODEL` and
+`DOCK_AGENT_MODEL` = `scripted:e2e`; src/server/agent/scripted.ts streams tool calls for the agent), every other model
+(photo reader, assistant, memory writer) has none and says so. Voice is on with test-only scripted tokens
+(`DOCK_VOICE_SCRIPTED=1`, refused when `DOCK_PUBLIC_URL` or `VERCEL` is set): the server reserves the line and mints a
+token locally, and the browser's Gemini Live socket is answered by the test (`page.routeWebSocket`). Zero model spend. Nothing touches the public deployment. Defects found are written as `test.fail` tests in the specs (each with steps, cause and file) and in the test-infra report on branch `claude/test-infra`.
 
 ## Commands (from `web/`)
 
@@ -26,9 +31,11 @@ the known-defect tests as ordinary tests, to confirm a fix), `E2E_CROWD_MAX=20,3
 (software passkey on Chromium too). A failed test keeps its trace: `pnpm exec playwright show-trace test-results/<test>/trace.zip`.
 Run two suites at once only with different `E2E_PORT` and `--output` (each run clears `test-results/`).
 
-Tests marked `test.fixme(...)` drive screens that main replaced while this suite was written (the order lane and
-agent panel became one conversation thread in b9f934e; the call moved into it in acb274e; the operations desk was
-redesigned): each says so and is to be rewritten once those screens settle. Visual baselines are not committed
+The store tests drive the conversation thread (main b9f934e; `e2e/support/thread.ts`: the log, its turns, the cards by
+their kind label, the composer). Kaari and Laakso have one thread each for the whole server: a test that talks to one
+takes a cross-process lock and starts it over (`stageThread`); everything else uses the visitor's own kitchen. A new
+request needs a recording in `e2e/fixtures/recordings.json` (matched on the words after `"""`); the scripted agent
+sends any words with a digit or more than four words to the `order` tool. Visual baselines are not committed
 yet: take them with `pnpm e2e:visual:update` once the interface settles (CI writes missing Linux ones and uploads
 them as an artifact). Known-defect tests are written as `test.fail(...)`: the suite stays green while the defect is there and turns red
 ("expected to fail, but passed") when it is fixed, so whoever fixes it flips the test.
@@ -44,7 +51,7 @@ them as an artifact). Known-defect tests are written as `test.fail(...)`: the su
 | `room` | Chromium phone | `e2e/room/*`: network, lifecycle, crowd (uses the limits-on server) |
 | `a11y` | Chromium, 390x844 / 1440x900 / 1920x1080 | `e2e/a11y/*`: axe, focus, motion, keyboard, legibility |
 | `visual` | Chromium, phone / laptop / wall | `e2e/visual/*`; baselines in `e2e/visual/__screenshots__/<platform>/` |
-| `legacy` | Chromium phone | `e2e/*.spec.ts` kept by other branches (portal, accounts); restart and show need `E2E_BASE_URL` |
+| `legacy` | Chromium phone | `e2e/*.spec.ts` kept by other branches (portal, accounts, call); restart and show need `E2E_BASE_URL` |
 
 ## What runs where
 
@@ -60,16 +67,18 @@ prompt, iCloud Keychain sync): that is the manual check below.
 | Scan the join code, passkey, land as approver | yes | yes (soft passkey) | yes (soft passkey) | `demo/approval` |
 | Order over the limit reaches the phone by itself, sign, signed order on the wall | yes | yes | yes | `demo/approval` |
 | Decline with a reason; a dismissed passkey prompt | yes | yes | yes | `demo/approval` |
-| Store order lane: understood, mistake check, options, fixed price countdown, gate, sign-off, order; reload and back mid-way | yes | yes | yes | `demo/store` |
+| Store thread: understood, mistake check, options, fixed price and how long it holds, gate, sign-off on the phone, signed order; reload and back mid-way | yes | yes | yes | `demo/store` |
 | Catalogue, product page with live price, basket to the gate | yes | yes | yes | `demo/catalogue` |
-| Assistant panel from records (model off: honest fallback; `E2E_MODEL=1`: an answer) | yes | yes | yes | `demo/assistant` |
-| Repeat; repeat with a change | yes | yes | yes | `demo/store` |
+| The dock: a question answered from records; an order request goes through the same thread | yes | yes | yes | `demo/assistant` |
+| Mistake check on Kaari; one-tap repeat; repeat with a change (in the dock) | yes | yes | yes | `demo/store` |
 | Presenter enrols as a demo kitchen's approver with the operations passcode | yes | yes | yes | `demo/presenter` |
 | Operations portal: trace replay, safeguards, suspend, refused on next call, resume | yes | yes | yes | `demo/ops` |
 | Recall drill: publish, hold, refused with `recall_hold`, end | yes | yes | yes | `demo/recall` |
-| Call screen: microphone granted (fake device) | yes | **no**: Playwright's WebKit has no fake media device | yes | `demo/call` |
-| Call screen: microphone refused; connection lost | yes | yes (getUserMedia stubbed to refuse) | yes | `demo/call` |
-| Photo door with a fixture image (model off: honest message; recorded reading: lines to the lane) | yes | yes | yes | `demo/photo` |
+| Call screen: microphone granted (fake device), connects with the server's scripted token | yes | **no**: Playwright's WebKit has no fake media device | yes | `demo/call` |
+| Call screen: microphone refused or missing; call endpoint fails or unreachable | yes | yes (getUserMedia stubbed to refuse) | yes | `demo/call` |
+| Speaking in the thread: no answer, a drop that stays down, the time limit, offline; typing on in the same composer | yes | yes (silent WebAudio stream) | yes | `demo/call` |
+| The full voice door on Chromium phone (read-back, provider refuses, in the thread, a judge's phone) | yes | no | no | `call.spec.ts` (legacy) |
+| Photo door with a fixture image (no reader: honest message; recorded reading: lines to the thread) | yes | yes | yes | `demo/photo` |
 | Slow lossy network, page frozen (phone locked), hidden tab, stream blip, two tabs, clock skew, reload/back at each stage | yes | **no**: network emulation and page freezing are DevTools-only | **no** | `room/conditions` |
 | Ten visitors behind one address with the public limits on | yes | no (one engine is enough for a server limit) | no | `room/crowd` |
 
