@@ -46,6 +46,7 @@ export async function GET(req: Request) {
         "GET /api/v1/watch?fresh": "What may not arrive (ranked substitutes, signed availability claim), learned recurring orders and drift, renewals placed or held.",
         "POST /api/v1/watch/answer": "Answer { findingId|renewalId, choice: switch|keep|renew_new|usual|skip, productId?, by }: an ordinary order through the gate.",
         "POST /api/v1/watch/auto-renew": "Auto-renew { family, on, by }: the kitchen's choice, recorded with who. Off by default.",
+        "POST /api/v1/watch/backup": "Backup { orderId, productId?, choice?: productId|best|none, by? }: for a product with a poor delivery record; bought only if it cannot come.",
         "GET /api/v1/kitchen": "The kitchen's memory: order history, usual amounts, stated and learned preferences.",
         "GET /api/v1/ledger?requestId&orderId": "Audit trail with chain verification and plain-language explanation.",
         "GET /api/v1/keys": "Wholesaler public key (JWKS) to verify quotes and order confirmations.",

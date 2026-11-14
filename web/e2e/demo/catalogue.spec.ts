@@ -21,6 +21,8 @@ test("catalogue, product page with a live price, basket, fixed price, through th
   const errors = watchErrors(page);
   const kitchen = await visitorKitchen(page);
   await page.goto(`/k/${kitchen}/catalogue`);
+  // How the list was made (no live call) is folded under a quiet disclosure, not the hero's subtitle.
+  await page.getByText("How this page was made").first().click();
   await expect(
     page.getByText(/products from the product files/).first(),
   ).toBeVisible();

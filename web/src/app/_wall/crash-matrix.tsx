@@ -78,6 +78,12 @@ function useStory(rows: BoardRow[], ms = 5000) {
   return items.length ? items[i % items.length] : undefined;
 }
 
+/**
+ * On the wall (big), the model rows that give way first on a short screen, so the yardstick row below them and the
+ * table's foot stay whole: from the second model at 760 px of height or less, the third at 820, the fourth at 1100.
+ */
+const SHORT_SCREEN = ["", "[@media(max-height:760px)]:hidden", "[@media(max-height:820px)]:hidden", "[@media(max-height:1100px)]:hidden"];
+
 export function CrashMatrix({ board, dark = false, big = false, maxRows = 8, yardsticks: keep = ["reference", "reckless"], legend = true }: { board: Board; dark?: boolean; big?: boolean; maxRows?: number; yardsticks?: string[]; legend?: boolean }) {
   const models = board.rows.filter((r) => !r.scripted);
   const yardsticks = board.rows.filter((r) => r.scripted && keep.includes(r.agent));
@@ -96,7 +102,7 @@ export function CrashMatrix({ board, dark = false, big = false, maxRows = 8, yar
             <col key={h.id} className={big ? "w-[max(1.75rem,1.85vw)]" : "w-8"} />
           ))}
           <col className="w-[3.4em]" />
-          <col className={big ? "w-[11.5em]" : "w-[17em]"} />
+          <col className={big ? "w-[4.4em] min-[1400px]:w-[7.4em]" : "w-[17em]"} />
         </colgroup>
         <thead>
           <tr>
@@ -109,13 +115,13 @@ export function CrashMatrix({ board, dark = false, big = false, maxRows = 8, yar
               </th>
             ))}
             <th className={`pl-[0.8vw] text-right align-bottom font-normal ${soft}`}>Rating</th>
-            <th className={`pl-[0.8vw] text-left align-bottom font-normal ${soft}`}>{big ? "Licence, alone up to" : "Licence: what it may buy alone"}</th>
+            <th className={`pl-[0.8vw] text-left align-bottom font-normal ${soft}`}>{big ? "Licence" : "Licence: what it may buy alone"}</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => (
-            <tr key={r.agent} className={`border-t ${dark ? "border-paper/10" : "border-line/70"} ${r.scripted ? (dark ? "text-paper/70" : "text-ink-soft") : ""}`}>
-              <th scope="row" className="truncate py-[0.35vh] pr-2 text-left font-normal">
+          {rows.map((r, i) => (
+            <tr key={r.agent} className={`border-t ${dark ? "border-paper/10" : "border-line/70"} ${r.scripted ? (dark ? "text-paper/70" : "text-ink-soft") : ""} ${big && !r.scripted ? SHORT_SCREEN[Math.min(i, SHORT_SCREEN.length - 1)] : ""}`}>
+              <th scope="row" className={`truncate py-[0.35vh] pr-2 text-left font-normal ${big ? "max-[1399px]:whitespace-normal max-[1399px]:leading-tight" : ""}`}>
                 <span className="font-bold" title={`${r.name}, ${r.scripted ? "scripted" : r.maker}`}>{r.name}</span>{!big && <span className={soft}> {r.scripted ? "scripted" : r.maker}</span>}
               </th>
               {cols.map((h) => (
@@ -129,8 +135,16 @@ export function CrashMatrix({ board, dark = false, big = false, maxRows = 8, yar
               <td className="truncate whitespace-nowrap pl-[0.8vw]">
                 {big ? (
                   <>
-                    <span className={`inline-block rounded-full px-[0.6em] font-semibold ${r.level === "L2" || r.level === "L3" ? "bg-lime text-ink" : r.level === "L1" ? "bg-paper/12 text-paper" : soft}`}>{r.level ? `${r.level} ${r.levelName}` : "None"}</span>{" "}
-                    <span className="tabular">{r.level ? (r.limitCents ? moneyShort(r.limitCents) : "0 €") : ""}</span>
+                    <span title={r.level ? `${r.level} ${r.levelName}` : undefined} className={`inline-block rounded-full px-[0.6em] font-semibold ${r.level === "L2" || r.level === "L3" ? "bg-lime text-ink" : r.level === "L1" ? "bg-paper/12 text-paper" : soft}`}>
+                      {r.level ? (
+                        <>
+                          {r.level}
+                        </>
+                      ) : (
+                        "None"
+                      )}
+                    </span>{" "}
+                    <span className="tabular max-[1399px]:hidden">{r.level ? (r.limitCents ? moneyShort(r.limitCents) : "0 €") : ""}</span>
                   </>
                 ) : (
                   <span className={`inline-block rounded-full px-2.5 text-[0.9em] font-semibold leading-6 ${r.level === "L2" || r.level === "L3" ? "bg-petrol text-paper" : r.level === "L1" ? "bg-petrol-soft text-petrol-deep" : `bg-surface ${soft}`}`}>{licenceLine(r)}</span>
@@ -157,7 +171,7 @@ export function CrashMatrix({ board, dark = false, big = false, maxRows = 8, yar
       </div>
       )}
       {story && (
-        <p key={`${story.agent}-${story.id}`} className={`mt-[0.6vh] truncate ${dark ? "text-paper" : "text-ink"}`} aria-live="polite">
+        <p key={`${story.agent}-${story.id}`} className={`mt-[0.6vh] truncate ${dark ? "text-paper" : "text-ink"} ${big ? "[@media(max-height:760px)]:hidden" : ""}`} aria-live="polite">
           <b>{story.name}</b>, {hazardOf(story.id).short.toLowerCase()}: {story.reason}
         </p>
       )}

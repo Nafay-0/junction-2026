@@ -43,7 +43,7 @@ test("enter a kitchen's shop, browse the catalogue, read the rules", async ({ pa
   await expect(page.locator("text=/demo built for the Junction 2026|Demo on synthetic data/ >> visible=true").first()).toBeVisible();
 
   await page.getByRole("navigation", { name: "Shop" }).getByRole("link", { name: "Catalogue" }).click();
-  await expect(page.getByText(/products from the product files/)).toBeVisible();
+  await expect(page.getByText(/^\d+\+? products$/).first()).toBeVisible();
   await expect(page.locator("main ul li").first()).toBeVisible();
 
   // On a phone the sections sit in the tab bar; "Agent and rules" is one tap further, under More.

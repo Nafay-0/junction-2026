@@ -18,13 +18,15 @@ export async function GET(req: Request) {
  * `{ requestId, quoteToken, lines }`. `replaces`: the orderId this one changes; `replaced` says what happened to it.
  */
 export async function POST(req: Request) {
-  return handle(async ({ dock }) => {
+  return handle(async (rt) => {
+    const { dock } = rt;
     const session = await authenticate(req, dock);
     const { replaced, ...order } = await dock.placeOrder(session, (await readJson(req)) as never);
     if (order.status === "rejected") {
       const rule = decidingRule(order.decision);
       return Response.json({ ...errorBody("policy_rejected", order.decision.reasons.join(" "), rule?.rule), ...restOrder(order) }, { status: 422 });
     }
-    return Response.json({ ...restOrder(order), ...(replaced ? { replaced } : {}) }, { status: order.status === "committed" ? 201 : 202 });
+    const { withDeliveryRecords } = await import("@/server/reliability/service");
+    return Response.json(await withDeliveryRecords(rt, session.mandate.issuer.orgId, { ...restOrder(order), ...(replaced ? { replaced } : {}) }), { status: order.status === "committed" ? 201 : 202 });
   });
 }

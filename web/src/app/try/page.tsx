@@ -17,8 +17,6 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: TRY_TEXT[await requestLang()].title };
 }
 
-const REPO = "https://github.com/Nafay-0/junction-2026/blob/main/web/docs";
-
 /**
  * /try: an outside agent orders, shown to someone who has never heard of MCP. Two paths (an address pasted into a
  * consumer assistant, or one command that runs a stock MCP client), where the result shows up, and the open documents.
@@ -41,8 +39,9 @@ async function Try() {
     { href: "/.well-known/api-catalog", label: "/.well-known/api-catalog", what: tx.docs.catalog },
     { href: "/api/v1/openapi.json", label: "/api/v1/openapi.json", what: tx.docs.openapi },
     { href: "/.well-known/dock.json", label: "/.well-known/dock.json", what: tx.docs.manifest },
-    { href: `${REPO}/connect-an-agent.md`, label: "connect-an-agent.md", what: tx.docs.guide, external: true },
-    { href: `${REPO}/assumptions.md`, label: "assumptions.md", what: tx.docs.assumptions, external: true },
+    { href: "/docs/connect-an-agent", label: "/docs/connect-an-agent", what: tx.docs.guide },
+    { href: "/docs/assumptions", label: "/docs/assumptions", what: tx.docs.assumptions },
+    { href: "/docs", label: "/docs", what: tx.docs.all },
   ];
   return (
     <LangProvider initial={chosen}>
