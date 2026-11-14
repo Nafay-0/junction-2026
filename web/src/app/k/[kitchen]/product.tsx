@@ -4,15 +4,17 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api } from "../../_client/api";
 import { Plate, Skeleton, Tag, Working } from "../../_ui/kit";
-import { attr } from "../../_ui/plain";
+import { useFormat, useText } from "../../_i18n/provider";
 import { usePortal } from "./portal";
-import { BuyBox, Facts, PackPlate, TempMark, Tile, nameIn, readable, useProfile } from "./shop";
+import { PRODUCT_TEXT } from "./product.text";
+import { BuyBox, Facts, PackPlate, TempMark, Tile, allergenText, nameIn, readable, useProfile } from "./shop";
 import { ErrorPlate } from "./ui";
 import type { ProductPage as Page } from "./types";
 
 /** A product page: the pack and the facts as the data states them, the live buy box, alternatives by kitchen use. */
 export function ProductPage({ id }: { id: string }) {
   const { ui, base, lang } = usePortal();
+  const tx = useText(PRODUCT_TEXT);
   const [page, setPage] = useState<Page>();
   const [error, setError] = useState<string>();
   const prof = useProfile(id);
@@ -28,10 +30,10 @@ export function ProductPage({ id }: { id: string }) {
     };
   }, [id, ui]);
 
-  if (error) return <ErrorPlate title="This product did not load" message={`${error} Go back to the catalogue and pick it again.`} />;
+  if (error) return <ErrorPlate title={tx.loadFailed} message={tx.loadFailedMessage(error)} />;
   if (!page)
     return (
-      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_26rem]" aria-label="Loading the product">
+      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_26rem]" aria-label={tx.loading}>
         <Skeleton className="h-[30rem]" />
         <Skeleton className="h-[24rem]" />
       </div>
@@ -40,9 +42,9 @@ export function ProductPage({ id }: { id: string }) {
   const grid = "repeat(auto-fill, minmax(min(100%, 15rem), 1fr))";
   return (
     <div className="mt-5">
-      <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1.5 text-[0.95rem]">
+      <nav aria-label={tx.breadcrumb} className="flex flex-wrap items-center gap-1.5 text-[0.95rem]">
         <Link href={`${base}/catalogue`} className="text-petrol underline decoration-1 underline-offset-4 hover:decoration-2">
-          Catalogue
+          {tx.catalogue}
         </Link>
         <span aria-hidden className="text-ink-soft">
           /
@@ -59,11 +61,14 @@ export function ProductPage({ id }: { id: string }) {
               <TempMark t={p.temperatureClass} />
               <span className="text-ink-soft">{p.brand !== "unknown" ? p.brand : p.vendor}</span>
             </p>
-            <h1 className="display mt-2 max-w-[24ch] text-[2.6rem] leading-[1] text-ink sm:text-[3.1rem]">{readable(nameIn(p, lang))}</h1>
+            <h1 className="display mt-2 max-w-[24ch] break-words text-[2.6rem] leading-[1] text-ink sm:text-[3.1rem]">{readable(nameIn(p, lang))}</h1>
             {prof && (
               <p className="mt-3 max-w-[60ch] text-[1.08rem] leading-snug">
                 <strong>{prof.kind.charAt(0).toUpperCase() + prof.kind.slice(1)}</strong>
-                {prof.uses.length > 0 && <span className="text-ink-soft">, for {prof.uses.map((u) => u.text).join(", ")}</span>}.
+                {prof.uses.length > 0 && <span className="text-ink-soft">
+                    {tx.forUses}
+                    {prof.uses.map((u) => u.text).join(", ")}
+                  </span>}.
               </p>
             )}
             <div className="mt-6 border-t border-line pt-5">
@@ -81,7 +86,7 @@ export function ProductPage({ id }: { id: string }) {
       {page.substitutes.length > 0 && (
         <section aria-labelledby="subs" className="mt-10">
           <h2 id="subs" className="display text-[1.9rem] text-ink">
-            Substitutes the wholesaler lists for this
+            {tx.substitutes}
           </h2>
           <ul className="mt-3 grid gap-3" style={{ gridTemplateColumns: grid }}>
             {page.substitutes.map((s) => (
@@ -93,7 +98,7 @@ export function ProductPage({ id }: { id: string }) {
       {page.similar.length > 0 && (
         <section aria-labelledby="more" className="mt-10">
           <h2 id="more" className="display text-[1.9rem] text-ink">
-            More in {page.category.label}
+            {tx.moreIn(page.category.label)}
           </h2>
           <ul className="mt-3 grid gap-3" style={{ gridTemplateColumns: grid }}>
             {page.similar.map((s) => (
@@ -123,7 +128,7 @@ type Alt = {
 };
 type Alts = { available: true; product: { uses: string[]; kindLabel: string | null }; use: string | null; substitutes: Alt[]; packAlternatives: Alt[]; none?: string };
 
-const TIER: Record<string, { label: string; n: number }> = { best: { label: "Best", n: 3 }, better: { label: "Better", n: 2 }, good: { label: "Good", n: 1 } };
+const TIER: Record<string, { n: number }> = { best: { n: 3 }, better: { n: 2 }, good: { n: 1 } };
 
 /**
  * What else fits the same job in the kitchen: ranked substitutes for one use, each with why it fits and what
@@ -131,7 +136,9 @@ const TIER: Record<string, { label: string; n: number }> = { best: { label: "Bes
  * honest "no good alternative" when there is none.
  */
 function Alternatives({ productId }: { productId: string }) {
-  const { kitchen, base } = usePortal();
+  const { kitchen, base, lang } = usePortal();
+  const tx = useText(PRODUCT_TEXT);
+  const f = useFormat();
   const prof = useProfile(productId);
   const [use, setUse] = useState<string>();
   const [data, setData] = useState<{ key: string; alts?: Alts; error?: string }>();
@@ -155,22 +162,23 @@ function Alternatives({ productId }: { productId: string }) {
   const uses = prof?.uses ?? [];
   const shownUse = use ?? a?.use ?? uses[0]?.id;
   const textOfUse = (u?: string | null) => uses.find((x) => x.id === u)?.text ?? (u ?? "").replaceAll("_", " ");
-  const rules = [...m.requiredAttributes.map(attr), ...m.forbiddenAllergens.map((x) => `no ${attr(x)}`)];
+  const rules = [...m.requiredAttributes.map(f.attr), ...m.forbiddenAllergens.map((x) => tx.noAllergen(allergenText(x, lang)))];
 
   return (
     <section aria-labelledby="alts" className="mt-10">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 id="alts" className="display text-[1.9rem] text-ink">
-            If this is not there: alternatives by use
+            {tx.altsTitle}
           </h2>
           <p className="max-w-[70ch] text-ink-soft">
-            Ranked for the job the product does in the kitchen, from the product data.{rules.length ? ` Checked against ${kitchen.name}'s rules: ${rules.join(", ")}.` : ""}
+            {tx.altsIntro}
+            {rules.length ? tx.checkedAgainst(kitchen.name, rules.join(", ")) : ""}
           </p>
         </div>
       </div>
       {uses.length > 1 && (
-        <div role="tablist" aria-label="Use in the kitchen" className="mt-3 flex flex-wrap gap-1">
+        <div role="tablist" aria-label={tx.useTabs} className="mt-3 flex flex-wrap gap-1">
           {uses.map((u) => (
             <button
               key={u.id}
@@ -179,19 +187,22 @@ function Alternatives({ productId }: { productId: string }) {
               onClick={() => setUse(u.id)}
               className={`min-h-10 px-3 text-[0.95rem] font-semibold ${shownUse === u.id ? "bg-petrol text-paper" : "bg-paper text-petrol outline-1 outline-line hover:outline-petrol"}`}
             >
-              For {u.text}
+              {tx.forUse(u.text)}
             </button>
           ))}
         </div>
       )}
       <div className="mt-3 grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <Plate>
-          {!current && <Working className="p-4">Ranking alternatives…</Working>}
-          {current?.error && <p className="p-4 text-ink-soft">Alternatives are not available right now: {current.error}</p>}
+          {!current && <Working className="p-4">{tx.ranking}</Working>}
+          {current?.error && <p className="p-4 text-ink-soft">{tx.altsFailed(current.error)}</p>}
           {a && a.substitutes.length === 0 && (
             <div className="p-5">
-              <p className="text-[1.15rem] font-semibold">No good alternative{shownUse ? ` for ${textOfUse(shownUse)}` : ""}.</p>
-              <p className="mt-1 max-w-[60ch] leading-snug text-ink-soft">{a.none ?? "Nothing else in the catalogue does this job well enough to offer."} The agent will not swap this product on its own; it asks.</p>
+              <p className="text-[1.15rem] font-semibold">{tx.noGood(shownUse ? textOfUse(shownUse) : undefined)}</p>
+              <p className="mt-1 max-w-[60ch] leading-snug text-ink-soft">
+                {a.none ?? tx.noneFallback}
+                {tx.agentAsks}
+              </p>
             </div>
           )}
           {a && a.substitutes.length > 0 && (
@@ -199,7 +210,7 @@ function Alternatives({ productId }: { productId: string }) {
               {a.substitutes.map((s) => (
                 <li key={s.productId} className="grid gap-x-4 gap-y-1 px-4 py-3.5 sm:grid-cols-[5.5rem_minmax(0,1fr)]">
                   <p className="flex items-center gap-2 sm:flex-col sm:items-start">
-                    <span className="display text-[1.35rem]">{TIER[s.tier]?.label}</span>
+                    <span className="display text-[1.35rem]">{tx.tier[s.tier]}</span>
                     <span aria-hidden className="flex items-end gap-0.5">
                       {[1, 2, 3].map((i) => (
                         <span key={i} className={`w-2 ${i <= (TIER[s.tier]?.n ?? 0) ? "bg-petrol" : "bg-line"}`} style={{ height: 5 + i * 4 }} />
@@ -221,7 +232,7 @@ function Alternatives({ productId }: { productId: string }) {
                         {s.conditions.map((c) => (
                           <Tag key={c.code}>{c.text}</Tag>
                         ))}
-                        {s.partnerListed && <Tag tone="petrol">Also listed by the wholesaler</Tag>}
+                        {s.partnerListed && <Tag tone="petrol">{tx.alsoListed}</Tag>}
                       </p>
                     )}
                   </div>
@@ -232,9 +243,9 @@ function Alternatives({ productId }: { productId: string }) {
         </Plate>
         <Plate>
           <div className="p-4">
-            <h3 className="font-semibold">The same product, other pack sizes</h3>
+            <h3 className="font-semibold">{tx.otherPacks}</h3>
             {!a && !current?.error && <Skeleton className="mt-2 h-16" />}
-            {a && a.packAlternatives.length === 0 && <p className="mt-1 text-ink-soft">No other pack size in the catalogue.</p>}
+            {a && a.packAlternatives.length === 0 && <p className="mt-1 text-ink-soft">{tx.noOtherPacks}</p>}
             {a && a.packAlternatives.length > 0 && (
               <ul className="mt-2 space-y-2">
                 {a.packAlternatives.map((s) => (
@@ -247,7 +258,7 @@ function Alternatives({ productId }: { productId: string }) {
                 ))}
               </ul>
             )}
-            <p className="mt-3 text-[0.85rem] leading-snug text-ink-soft">A pack size is not a substitute: the agent changes it only when the amount asks for it.</p>
+            <p className="mt-3 text-[0.85rem] leading-snug text-ink-soft">{tx.packNote}</p>
           </div>
         </Plate>
       </div>

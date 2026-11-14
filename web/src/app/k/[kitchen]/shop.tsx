@@ -6,9 +6,12 @@ import { useSyncExternalStore } from "react";
 import { api } from "../../_client/api";
 import { Glyph, TempGlyph, type GlyphKind } from "../../_ui/glyphs";
 import { Spinner, Tag, Working } from "../../_ui/kit";
-import { attr, clock, day, helsinkiToday, money, num } from "../../_ui/plain";
+import { attr, clock, helsinkiToday, money, num } from "../../_ui/plain";
+import { useFormat, useLang, useText } from "../../_i18n/provider";
+import { attrL } from "../../_i18n/format";
 import { usePortal, type Lang } from "./portal";
 import { Quantity } from "./qty";
+import { SHOP_TEXT } from "./shop.text";
 import { Button, Missing } from "./ui";
 import { contentOf, quantityText, stepOf, unitWord } from "./units";
 import type { LiveResult, Product } from "./types";
@@ -19,20 +22,27 @@ import { cutoffMs, cutoffText, untilText } from "./when";
  * with a band in the colour of its storage temperature), the live box and the claim and allergen words.
  */
 
+/** Colours per storage temperature; `label` is the English word (the screens use `tempLabel` for the buyer's language). */
 export const TEMP: Record<string, { label: string; color: string; tint: string }> = {
   frozen: { label: "Frozen", color: "var(--color-frozen)", tint: "#e8ecf7" },
   chilled: { label: "Chilled", color: "var(--color-chilled)", tint: "#e2f1f3" },
   ambient: { label: "Ambient", color: "var(--color-ambient)", tint: "#f5efe4" },
 };
 
+/** "Chilled", "Kylmä", "Kyld"; undefined for an unknown class. */
+export function tempLabel(t: string | null | undefined, lang: Lang = "en"): string | undefined {
+  return TEMP[t ?? ""] ? SHOP_TEXT[lang].temp[t ?? ""] : undefined;
+}
+
 /** The temperature as a quiet code: glyph and word in the class colour. */
 export function TempMark({ t, className = "" }: { t?: string | null; className?: string }) {
+  const tx = useText(SHOP_TEXT);
   const x = TEMP[t ?? ""];
-  if (!x) return <span className={`text-ink-soft ${className}`}>Storage: no data</span>;
+  if (!x) return <span className={`text-ink-soft ${className}`}>{tx.storageNoData}</span>;
   return (
     <span className={`inline-flex items-center gap-1 font-semibold ${className}`} style={{ color: x.color }}>
       <TempGlyph t={t ?? ""} size={13} />
-      {x.label}
+      {tx.temp[t ?? ""]}
     </span>
   );
 }
@@ -55,9 +65,11 @@ export function packGlyph(p: Product): GlyphKind {
 
 /** The pack is the picture: the drawn pack, and what one sales unit holds, set large. */
 export function PackPlate({ p, size = "md" }: { p: Product; size?: "md" | "lg" }) {
+  const tx = useText(SHOP_TEXT);
+  const { lang } = useLang();
   const t = TEMP[p.temperatureClass ?? ""];
   const m = contentOf(p, 1);
-  const big = m ? (m.unit === "pcs" ? `${num(m.amount)} pcs` : `${num(m.amount)} ${m.unit}`) : unitWord(p, 1);
+  const big = m ? (m.unit === "pcs" ? tx.pcs(num(m.amount)) : `${num(m.amount)} ${m.unit}`) : unitWord(p, 1, lang);
   const lg = size === "lg";
   return (
     <div className={`flex items-center gap-3 ${lg ? "px-6 py-8" : "px-3 py-3"}`} style={{ background: t?.tint ?? "var(--color-mist)" }}>
@@ -65,8 +77,8 @@ export function PackPlate({ p, size = "md" }: { p: Product; size?: "md" | "lg" }
       <div className="min-w-0">
         <p className={`display text-petrol-deep tabular ${lg ? "text-[4.2rem]" : "text-[2rem]"}`}>{big}</p>
         <p className={`text-ink-soft ${lg ? "mt-1 text-[1.05rem]" : "text-[0.82rem]"}`}>
-          per {unitWord(p, 1)}
-          {m && !m.certain ? ", about" : ""}
+          {tx.per(unitWord(p, 1, lang))}
+          {m && !m.certain ? tx.about : ""}
         </p>
       </div>
     </div>
@@ -113,33 +125,23 @@ export function useProfile(id: string): Profile | null | undefined {
   return profiles.get(id);
 }
 
-export const CLAIM_LABEL: Record<string, string> = {
-  lactose_free: "Lactose-free",
-  low_lactose: "Low lactose",
-  gluten_free: "Gluten-free",
-  vegan: "Vegan",
-  vegetarian: "Vegetarian",
-  organic: "Organic",
-  egg_free: "Egg-free",
-  soy_free: "Soy-free",
-  milk_free: "Milk-free",
-  fat_free: "Fat-free",
-  fat_1_5: "1.5 % fat",
-  fat_3_5: "3.5 % fat",
-};
+/** Dietary claim words in English (the words in every language are `CLAIM_LABELS[lang]`). */
+export const CLAIM_LABEL: Record<string, string> = SHOP_TEXT.en.claim;
+export const CLAIM_LABELS: Record<Lang, Record<string, string>> = { en: SHOP_TEXT.en.claim, fi: SHOP_TEXT.fi.claim, sv: SHOP_TEXT.sv.claim };
 
-export const PROBLEM: Record<string, string> = {
-  unknown_product: "not in the catalogue",
-  no_price: "no price from the wholesaler",
-  price_not_valid: "the price is not valid today",
-  sales_block: "sales block: cannot be ordered now",
-  not_deliverable: "cannot be delivered on any date now",
-  out_of_stock: "out of stock",
-  stock_unknown: "stock not confirmed",
-  later_than_requested: "arrives later than asked",
-  cutoff_passed: "the order cut-off for the next delivery has passed",
-  unit_mismatch: "sold in another unit than listed",
-};
+/** Why a product cannot be ordered, by the live check's problem code, in English (`PROBLEMS[lang]` for the others). */
+export const PROBLEM: Record<string, string> = SHOP_TEXT.en.problem;
+export const PROBLEMS: Record<Lang, Record<string, string>> = { en: SHOP_TEXT.en.problem, fi: SHOP_TEXT.fi.problem, sv: SHOP_TEXT.sv.problem };
+
+/** The live check's problem codes as words; a code it does not know is shown as it came. */
+export function problemsText(codes: string[], lang: Lang = "en"): string {
+  return codes.map((x) => PROBLEMS[lang][x] ?? x).join("; ");
+}
+
+/** An allergen word ("milk", "maito", "mjölk"); English keeps the shared word list. */
+export function allergenText(a: string, lang: Lang = "en"): string {
+  return lang === "en" ? attr(a) : (SHOP_TEXT[lang].allergen[a] ?? attrL(a, lang));
+}
 
 export function nameIn(p: Product, lang: Lang): string {
   return (p.names?.[lang] ?? p.names?.en ?? p.name).replace(/[®™]/g, "").replace(/\s+/g, " ").trim();
@@ -161,19 +163,19 @@ export function claimsOf(p: Product): string[] {
   return p.attributes.filter((a) => CLAIM_LABEL[a]);
 }
 
-const ORIGIN: Record<string, string> = { fi: "Finland", se: "Sweden", ee: "Estonia", dk: "Denmark", de: "Germany", nl: "Netherlands", es: "Spain", it: "Italy", fr: "France", pl: "Poland", no: "Norway", be: "Belgium", il: "Israel", us: "USA", gb: "UK", lt: "Lithuania", lv: "Latvia", at: "Austria", ie: "Ireland", gr: "Greece", pt: "Portugal", cn: "China", th: "Thailand", vn: "Vietnam", in: "India", br: "Brazil", cl: "Chile", za: "South Africa", nz: "New Zealand", ma: "Morocco", tr: "Turkey", ec: "Ecuador", cr: "Costa Rica", co: "Colombia", pe: "Peru" };
-export function originText(code: string | null | undefined): string | undefined {
+export function originText(code: string | null | undefined, lang: Lang = "en"): string | undefined {
   if (!code) return undefined;
-  return ORIGIN[code.toLowerCase()] ?? code.toUpperCase();
+  return SHOP_TEXT[lang].origin[code.toLowerCase()] ?? code.toUpperCase();
 }
 
 export function Tile({ p }: { p: Product }) {
   const { base, lang, live, basket } = usePortal();
+  const tx = useText(SHOP_TEXT);
   const r = live.results[p.id];
   const line = basket.lines.find((l) => l.productId === p.id);
   const href = `${base}/catalogue/${encodeURIComponent(p.id)}`;
   const prof = useProfile(p.id);
-  const origin = originText(p.countryOfOrigin);
+  const origin = originText(p.countryOfOrigin, lang);
   return (
     <li className="group relative flex flex-col bg-paper outline-petrol hover:outline-2">
       <p className="flex items-baseline justify-between gap-2 px-3 pt-2.5 text-[0.8rem]">
@@ -189,11 +191,11 @@ export function Tile({ p }: { p: Product }) {
         </Link>
         <p className="mt-1 text-[0.86rem] leading-snug text-ink-soft">
           {prof?.kind ? <span className="font-semibold text-ink">{prof.kind}</span> : null}
-          {prof?.uses.length ? <>{prof.kind ? ", for " : "For "}{prof.uses.slice(0, 3).map((u) => u.text).join(", ")}</> : null}
+          {prof?.uses.length ? <>{tx.forUses(!!prof.kind)}{prof.uses.slice(0, 3).map((u) => u.text).join(", ")}</> : null}
           {prof === undefined && <span className="inline-block h-3 w-28 animate-pulse bg-mist align-middle" />}
         </p>
         <p className="mt-1 text-[0.86rem] text-ink-soft">
-          {quantityText(p, 1)}
+          {quantityText(p, 1, lang)}
           {origin ? `, ${origin}` : ""}
         </p>
         {claimsOf(p).length > 0 && (
@@ -201,7 +203,7 @@ export function Tile({ p }: { p: Product }) {
             {claimsOf(p)
               .slice(0, 4)
               .map((c) => (
-                <Tag key={c}>{CLAIM_LABEL[c]}</Tag>
+                <Tag key={c}>{tx.claim[c]}</Tag>
               ))}
           </p>
         )}
@@ -210,33 +212,33 @@ export function Tile({ p }: { p: Product }) {
             {r?.offer ? (
               <>
                 <span className="display text-[1.45rem] tabular">{money(r.offer.unitPriceCents)}</span>
-                <span className="block text-ink-soft">per {unitWord(p, 1)}</span>
+                <span className="block text-ink-soft">{tx.per(unitWord(p, 1, lang))}</span>
               </>
             ) : r ? (
-              <span className="text-ink-soft">Not orderable now</span>
+              <span className="text-ink-soft">{tx.notOrderableNow}</span>
             ) : live.busy.includes(p.id) ? (
               <span className="flex items-center gap-1.5 text-ink-soft">
-                <Spinner size={12} /> Asking
+                <Spinner size={12} /> {tx.asking}
               </span>
             ) : (
-              <span className="text-ink-soft">Price when opened</span>
+              <span className="text-ink-soft">{tx.priceWhenOpened}</span>
             )}
           </span>
           {line ? (
             <Link href={`${base}/basket`} className="flex min-h-10 items-center gap-1.5 bg-petrol-soft px-2.5 text-[0.92rem] font-semibold text-petrol-deep">
-              <span aria-hidden>✓</span> {line.packs} in basket
+              <span aria-hidden>✓</span> {tx.inBasket(line.packs)}
             </Link>
           ) : (
             <Button
               kind="primary"
               size="sm"
-              className="min-h-10 whitespace-nowrap"
+              className={`min-h-10 ${lang === "en" ? "whitespace-nowrap" : "text-balance"}`}
               onClick={() => {
                 basket.add(p, stepOf(p));
                 void live.check([p.id]);
               }}
             >
-              {stepOf(p) > 1 || p.salesUnit === "KG" ? `Add ${stepOf(p)} ${unitWord(p, stepOf(p))}` : `Add a ${unitWord(p, 1)}`}
+              {stepOf(p) > 1 || p.salesUnit === "KG" ? tx.addN(stepOf(p), unitWord(p, stepOf(p), lang)) : tx.addOne(unitWord(p, 1, lang))}
             </Button>
           )}
         </div>
@@ -246,16 +248,18 @@ export function Tile({ p }: { p: Product }) {
 }
 
 export function LiveBox({ r, busy, p }: { r?: LiveResult & { checkedAt: string }; busy: boolean; p: Product }) {
+  const tx = useText(SHOP_TEXT);
+  const f = useFormat();
   const [now] = useState(() => Date.now());
-  if (busy && !r) return <Working>Asking the wholesaler for today&apos;s price, stock and cut-off…</Working>;
+  if (busy && !r) return <Working>{tx.askingWholesaler}</Working>;
   if (!r) return null;
   const o = r.offer;
   if (!o)
     return (
       <div className="border-l-[6px] border-ink bg-mist px-3 py-2">
-        <p className="font-semibold">Not orderable right now</p>
-        <p className="text-[0.95rem] text-ink-soft">{r.problems.length ? r.problems.map((x) => PROBLEM[x] ?? x).join("; ") : r.message}</p>
-        <p className="mt-1 text-[0.82rem] text-ink-soft">Checked live, {day(helsinkiToday(new Date(r.checkedAt)))} {clock(r.checkedAt)}</p>
+        <p className="font-semibold">{tx.notOrderableRightNow}</p>
+        <p className="text-[0.95rem] text-ink-soft">{r.problems.length ? problemsText(r.problems, f.lang) : r.message}</p>
+        <p className="mt-1 text-[0.82rem] text-ink-soft">{tx.checkedLiveOn(f.day(helsinkiToday(new Date(r.checkedAt))), clock(r.checkedAt))}</p>
       </div>
     );
   const cut = cutoffMs(o.orderBy);
@@ -263,96 +267,100 @@ export function LiveBox({ r, busy, p }: { r?: LiveResult & { checkedAt: string }
     <div>
       <p className="display text-[3rem] text-ink tabular">{money(o.unitPriceCents)}</p>
       <p className="text-[0.95rem] text-ink-soft">
-        per {unitWord(p, 1)}, VAT 0 %
+        {tx.perVat(unitWord(p, 1, f.lang))}
         {o.comparisonPriceCents !== undefined && o.comparisonUnit && (
           <>
             {"; "}
-            <span className="tabular">{money(o.comparisonPriceCents)}</span> per {o.comparisonUnit.toLowerCase() === "l" ? "litre" : o.comparisonUnit.toLowerCase()}
+            <span className="tabular">{money(o.comparisonPriceCents)}</span>
+            {tx.comparisonPer(o.comparisonUnit.toLowerCase())}
           </>
         )}
       </p>
       <dl className="mt-3 grid grid-cols-2 gap-px bg-line">
-        <div className="bg-paper py-2 pr-2">
-          <dt className="text-[0.8rem] text-ink-soft">Order by</dt>
+        <div className="min-w-0 bg-paper py-2 pr-2">
+          <dt className="text-[0.8rem] text-ink-soft">{tx.orderBy}</dt>
           <dd className="font-semibold leading-snug">
-            {o.orderBy ? (cutoffText(o.orderBy) ?? o.orderBy) : "No cut-off stated"}
-            {cut !== undefined && <span className={`block text-[0.88rem] ${cut - now < 6 * 3_600_000 ? "font-bold text-ink" : "font-medium text-ink-soft"}`}>{untilText(cut, now)}</span>}
+            {o.orderBy ? (cutoffText(o.orderBy, f.lang) ?? o.orderBy) : tx.noCutoff}
+            {cut !== undefined && <span className={`block text-[0.88rem] ${cut - now < 6 * 3_600_000 ? "font-bold text-ink" : "font-medium text-ink-soft"}`}>{untilText(cut, now, f.lang)}</span>}
           </dd>
         </div>
-        <div className="bg-paper py-2 pl-3">
-          <dt className="text-[0.8rem] text-ink-soft">Earliest delivery</dt>
-          <dd className="font-semibold">{day(o.deliveryDate)}</dd>
+        <div className="min-w-0 bg-paper py-2 pl-3">
+          <dt className="text-[0.8rem] text-ink-soft">{tx.earliestDelivery}</dt>
+          <dd className="font-semibold">{f.day(o.deliveryDate)}</dd>
         </div>
         <div className="col-span-2 bg-paper py-2">
-          <dt className="text-[0.8rem] text-ink-soft">Stock</dt>
-          <dd className="font-semibold">{o.stockKnown === false ? "Not confirmed by the wholesaler" : `${num(o.availablePacks, 0)} ${unitWord(p, o.availablePacks)}`}</dd>
+          <dt className="text-[0.8rem] text-ink-soft">{tx.stock}</dt>
+          <dd className="font-semibold">{o.stockKnown === false ? tx.stockNotConfirmed : `${num(o.availablePacks, 0)} ${unitWord(p, o.availablePacks, f.lang)}`}</dd>
         </div>
       </dl>
-      <p className="mt-2 text-[0.82rem] text-ink-soft">Checked live with the wholesaler at {clock(r.checkedAt)}.</p>
+      <p className="mt-2 text-[0.82rem] text-ink-soft">{tx.checkedLiveAt(clock(r.checkedAt))}</p>
     </div>
   );
 }
 
 /** Product facts as a waybill: every field present, "no data" where the data does not say. */
 export function Facts({ p, lang }: { p: Product; lang: Lang }) {
+  const tx = SHOP_TEXT[lang];
+  const t = tx.facts;
   const a = p.allergenInfo;
+  const al = (x: string) => allergenText(x, lang);
   return (
-    <dl className="grid grid-cols-[10rem_1fr] gap-x-4 gap-y-1.5 text-[0.98rem]">
-      <dt className="text-ink-soft">Product code</dt>
+    <dl className="grid grid-cols-[10rem_1fr] gap-x-4 gap-y-1.5 text-[0.98rem] [&>dd]:min-w-0 [&>dd]:break-words [&>dt]:hyphens-auto">
+      <dt className="text-ink-soft">{t.productCode}</dt>
       <dd className="tabular">{p.id}</dd>
-      <dt className="text-ink-soft">Sold per</dt>
+      <dt className="text-ink-soft">{t.soldPer}</dt>
       <dd>
-        {unitWord(p, 1)}: {quantityText(p, 1).split(" = ")[1] ?? "content: no data"}
-        {p.packContent && !p.packContent.certain && <span className="block text-[0.88rem] text-ink-soft">The pack content is not certain in the data.</span>}
+        {unitWord(p, 1, lang)}: {quantityText(p, 1, lang).split(" = ")[1] ?? t.contentNoData}
+        {p.packContent && !p.packContent.certain && <span className="block text-[0.88rem] text-ink-soft">{t.contentUncertain}</span>}
       </dd>
-      <dt className="text-ink-soft">Brand</dt>
-      <dd>{p.brand !== "unknown" ? p.brand : <Missing>No data</Missing>}</dd>
-      <dt className="text-ink-soft">Supplier</dt>
-      <dd>{p.vendor ?? <Missing>No data</Missing>}</dd>
-      <dt className="text-ink-soft">Origin</dt>
-      <dd>{originText(p.countryOfOrigin) ?? <Missing>No data</Missing>}</dd>
-      <dt className="text-ink-soft">Storage</dt>
-      <dd>{TEMP[p.temperatureClass ?? ""]?.label ?? <Missing>No data</Missing>}</dd>
-      <dt className="text-ink-soft">Dietary claims</dt>
-      <dd>{claimsOf(p).length ? claimsOf(p).map((c) => CLAIM_LABEL[c]).join(", ") : "none stated"}</dd>
-      <dt className="text-ink-soft">Labels</dt>
-      <dd>{p.certificates.length ? p.certificates.map(labelText).join(", ") : "none stated"}</dd>
-      <dt className="text-ink-soft">Allergens</dt>
+      <dt className="text-ink-soft">{t.brand}</dt>
+      <dd>{p.brand !== "unknown" ? p.brand : <Missing>{tx.noData}</Missing>}</dd>
+      <dt className="text-ink-soft">{t.supplier}</dt>
+      <dd>{p.vendor ?? <Missing>{tx.noData}</Missing>}</dd>
+      <dt className="text-ink-soft">{t.origin}</dt>
+      <dd>{originText(p.countryOfOrigin, lang) ?? <Missing>{tx.noData}</Missing>}</dd>
+      <dt className="text-ink-soft">{t.storage}</dt>
+      <dd>{tempLabel(p.temperatureClass, lang) ?? <Missing>{tx.noData}</Missing>}</dd>
+      <dt className="text-ink-soft">{t.claims}</dt>
+      <dd>{claimsOf(p).length ? claimsOf(p).map((c) => tx.claim[c]).join(", ") : t.noneStated}</dd>
+      <dt className="text-ink-soft">{t.labels}</dt>
+      <dd>{p.certificates.length ? p.certificates.map(labelText).join(", ") : t.noneStated}</dd>
+      <dt className="text-ink-soft">{t.allergens}</dt>
       <dd>
         {!a || !a.declared ? (
           <>
-            <Missing>No data</Missing>
-            <span className="block text-[0.88rem] text-ink-soft">The manufacturer sent no allergen data: every allergen is unknown, not absent.</span>
+            <Missing>{tx.noData}</Missing>
+            <span className="block text-[0.88rem] text-ink-soft">{t.noAllergenData}</span>
           </>
         ) : (
           <>
-            {a.contains.length ? `Contains ${a.contains.map(attr).join(", ")}` : "Contains none of the declared allergens"}
-            {a.mayContain.length > 0 && <span className="block">May contain {a.mayContain.map(attr).join(", ")}</span>}
-            {a.freeFrom.length > 0 && <span className="block text-ink-soft">Stated free from {a.freeFrom.map(attr).join(", ")}</span>}
+            {a.contains.length ? t.contains(a.contains.map(al).join(", ")) : t.containsNone}
+            {a.mayContain.length > 0 && <span className="block">{t.mayContain(a.mayContain.map(al).join(", "))}</span>}
+            {a.freeFrom.length > 0 && <span className="block text-ink-soft">{t.freeFrom(a.freeFrom.map(al).join(", "))}</span>}
           </>
         )}
       </dd>
-      <dt className="text-ink-soft">Delivered in full</dt>
-      <dd>{p.deliveryReliabilityKnown === false || (p.source === "valio" && p.deliveryReliabilityKnown === undefined) ? <Missing>No data</Missing> : `${Math.round(p.deliveryReliability * 100)} % of past deliveries`}</dd>
-      <dt className="text-ink-soft">Carbon</dt>
+      <dt className="text-ink-soft">{t.deliveredInFull}</dt>
+      <dd>{p.deliveryReliabilityKnown === false || (p.source === "valio" && p.deliveryReliabilityKnown === undefined) ? <Missing>{tx.noData}</Missing> : t.pastDeliveries(Math.round(p.deliveryReliability * 100))}</dd>
+      <dt className="text-ink-soft">{t.carbon}</dt>
       <dd>
         {p.carbonGroupAvgKgCo2ePerKg != null ? (
           <>
-            {num(p.carbonGroupAvgKgCo2ePerKg, 2)} kg CO2e per kg
-            <span className="block text-[0.88rem] text-ink-soft">The average of the product group, not a measurement of this product.</span>
+            {t.carbonPerKg(num(p.carbonGroupAvgKgCo2ePerKg, 2))}
+            <span className="block text-[0.88rem] text-ink-soft">{t.carbonGroupNote}</span>
           </>
         ) : p.source === "valio" ? (
-          <Missing>No data</Missing>
+          <Missing>{tx.noData}</Missing>
         ) : (
-          `${p.carbonKgPerUnit} kg CO2e per ${p.unit}`
+          t.carbonPer(String(p.carbonKgPerUnit), p.unit)
         )}
       </dd>
       {(["fi", "sv", "en"] as const)
         .filter((l) => l !== lang && p.names?.[l])
         .map((l) => (
           <div key={l} className="contents">
-            <dt className="text-ink-soft">{l === "fi" ? "Suomeksi" : l === "sv" ? "På svenska" : "In English"}</dt>
-            <dd>{p.names![l]}</dd>
+            <dt className="text-ink-soft">{t.nameIn[l]}</dt>
+            <dd className="min-w-0 break-words">{p.names![l]}</dd>
           </div>
         ))}
     </dl>
@@ -361,7 +369,8 @@ export function Facts({ p, lang }: { p: Product; lang: Lang }) {
 
 /** The buy box on a product page: live price on open, quantity in the sales unit with what it means, basket or agent. */
 export function BuyBox({ p }: { p: Product }) {
-  const { live, basket, agent } = usePortal();
+  const { live, basket, agent, lang } = usePortal();
+  const tx = useText(SHOP_TEXT);
   const [n, setN] = useState(stepOf(p));
   const check = live.check;
   useEffect(() => {
@@ -374,18 +383,18 @@ export function BuyBox({ p }: { p: Product }) {
       <div aria-hidden className="h-1.5 bg-petrol" />
       <div className="space-y-5 p-5">
         <LiveBox r={r} busy={live.busy.includes(p.id)} p={p} />
-        {live.error && !r && <p className="text-ink-soft">The live check failed: {live.error}</p>}
+        {live.error && !r && <p className="text-ink-soft">{tx.liveFailed(live.error)}</p>}
         <div className="border-t border-line pt-4">
           <Quantity p={p} value={n} onChange={setN} id={`qty-${p.id}`} />
           {r?.offer && (
             <p key={n} className="changed mt-2 inline-block px-1 text-[1.1rem] font-semibold tabular">
-              {money(r.offer.unitPriceCents * n)} for {quantityText(p, n)}
+              {tx.priceFor(money(r.offer.unitPriceCents * n), quantityText(p, n, lang))}
             </p>
           )}
         </div>
         <div className="flex flex-col gap-2">
           <Button kind="go" size="lg" onClick={() => basket.add(p, n)}>
-            {line ? "Add more to the basket" : "Add to basket"}
+            {line ? tx.addMore : tx.add}
           </Button>
           <button
             type="button"
@@ -396,16 +405,19 @@ export function BuyBox({ p }: { p: Product }) {
               agent.open();
             }}
           >
-            Order with the agent
+            {tx.orderWithAgent}
           </button>
         </div>
         {line && (
           <p className="flex items-center gap-2 bg-petrol-soft px-3 py-2 text-[0.95rem] text-petrol-deep">
-            <span aria-hidden>✓</span> In the basket: {quantityText(p, line.packs)}.
+            <span aria-hidden>✓</span> {tx.inBasketQty(quantityText(p, line.packs, lang))}
           </p>
         )}
         <p className="border-t border-line pt-3 text-[0.85rem] leading-snug text-ink-soft">
-          <span className="font-semibold text-ink tabular">{live.calls}</span> live call{live.calls === 1 ? "" : "s"} to the wholesaler on this visit, for <span className="tabular">{live.products}</span> product{live.products === 1 ? "" : "s"} you opened or added. Everything else on this page is master data.
+          <span className="font-semibold text-ink tabular">{live.calls}</span>
+          {tx.callsA(live.calls)}
+          <span className="tabular">{live.products}</span>
+          {tx.callsB(live.products)}
         </p>
       </div>
     </div>

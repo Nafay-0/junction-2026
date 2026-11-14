@@ -5,9 +5,13 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, type ApiResult } from "../../_client/api";
 import { useLive, type Live } from "../../_client/use-live";
-import { DEMO_NOTE, PRODUCT_NAME } from "../../_ui/brand";
+import { DEMO_NOTES, PRODUCT_NAME } from "../../_ui/brand";
 import { Kbd } from "../../_ui/kit";
-import { day, helsinkiToday, money, shortProduct } from "../../_ui/plain";
+import { helsinkiToday, money, shortProduct } from "../../_ui/plain";
+import { LangSwitch, useLang, useText } from "../../_i18n/provider";
+import { dayL, weekdaysL } from "../../_i18n/format";
+import type { Lang } from "../../_i18n/lang";
+import { PORTAL_TEXT } from "./portal.text";
 import { Target } from "../../_ui/target";
 import { Wordmark } from "../../_ui/wordmark";
 import { RecallNotice } from "../../_radar/recall-notice";
@@ -20,7 +24,7 @@ import type { KitchenChoice, KitchenInfo, LiveReply, LiveResult, Overview, Porta
  * purchasing agent working in the shop: one field, then its work as cards on the Order page. Not a chat.
  */
 
-export type Lang = "en" | "fi" | "sv";
+export type { Lang };
 export type BasketLine = { productId: string; packs: number; product: Product };
 
 /** What the agent bar hands to the Order page. */
@@ -85,13 +89,13 @@ export function usePortal(): Ctx {
   return c;
 }
 
-const NAV: { href: string; label: string }[] = [
-  { href: "", label: "Home" },
-  { href: "/order", label: "Order" },
-  { href: "/catalogue", label: "Catalogue" },
-  { href: "/menu", label: "Menu planner" },
-  { href: "/orders", label: "Orders" },
-  { href: "/agent", label: "Agent and rules" },
+const NAV: { href: string; key: keyof (typeof PORTAL_TEXT)["en"]["nav"] }[] = [
+  { href: "", key: "home" },
+  { href: "/order", key: "order" },
+  { href: "/catalogue", key: "catalogue" },
+  { href: "/menu", key: "menu" },
+  { href: "/orders", key: "orders" },
+  { href: "/agent", key: "agent" },
 ];
 
 export function readSession<T>(key: string): T | undefined {
@@ -130,8 +134,9 @@ export function Portal({ kitchen, kitchens, children }: { kitchen: KitchenInfo; 
     { events: `/api/v1/events?orgId=${encodeURIComponent(kitchen.orgId)}`, pollMs: 15_000, pollMsStreaming: 30_000 },
   );
 
-  // ----- language (product names, speech) -----
-  const [lang, setLang] = useState<Lang>("en");
+  // ----- language: the whole store, product names and speech (one choice, kept in a cookie by LangProvider) -----
+  const { lang, setLang } = useLang();
+  const tx = useText(PORTAL_TEXT);
 
   // ----- basket, kept for this browser tab -----
   const [lines, setLines] = useState<BasketLine[]>([]);
@@ -226,12 +231,6 @@ export function Portal({ kitchen, kitchens, children }: { kitchen: KitchenInfo; 
       const saved = readSession<{ open?: boolean; turns?: Turn[] }>(`dock-agent:${slug}`);
       setPanelOpen(wide ? (saved?.open ?? true) : false);
       if (saved?.turns) setTurns(saved.turns.filter((t) => t.kind !== "pending"));
-      try {
-        const l = localStorage.getItem("dock-lang");
-        if (l === "fi" || l === "sv" || l === "en") setLang(l);
-      } catch {
-        // storage blocked: English
-      }
       restored.current = true;
     });
   }, [slug]);
@@ -239,11 +238,10 @@ export function Portal({ kitchen, kitchens, children }: { kitchen: KitchenInfo; 
     if (!restored.current) return;
     try {
       sessionStorage.setItem(`dock-agent:${slug}`, JSON.stringify({ open: panelOpen, turns: turns.slice(-12) }));
-      localStorage.setItem("dock-lang", lang);
     } catch {
       // private window: the conversation lives as long as the page
     }
-  }, [panelOpen, turns, lang, slug]);
+  }, [panelOpen, turns, slug]);
   const focus = useCallback(() => {
     setPanelOpen(true);
     setTimeout(() => inputRef.current?.focus(), 30);
@@ -253,7 +251,7 @@ export function Portal({ kitchen, kitchens, children }: { kitchen: KitchenInfo; 
     [draft, followUp, product, busy, pending, send, take, focus, panelOpen, turns],
   );
 
-  const value = useMemo<Ctx>(() => ({ kitchen, kitchens, base, call, ui, overview, lang, setLang, basket, live, agent, fieldRef: inputRef }), [kitchen, kitchens, base, call, ui, overview, lang, basket, live, agent]);
+  const value = useMemo<Ctx>(() => ({ kitchen, kitchens, base, call, ui, overview, lang, setLang, basket, live, agent, fieldRef: inputRef }), [kitchen, kitchens, base, call, ui, overview, lang, setLang, basket, live, agent]);
 
   // ----- the keyboard: the agent from anywhere (Ctrl or Cmd + K), the catalogue search with "/" -----
   useEffect(() => {
@@ -275,11 +273,11 @@ export function Portal({ kitchen, kitchens, children }: { kitchen: KitchenInfo; 
 
   return (
     <PortalContext.Provider value={value}>
-      <div className={`min-h-dvh overflow-x-clip bg-mist text-ink ${panelOpen ? "xl:pr-[25rem]" : ""}`}>
+      <div className={`relative min-h-dvh overflow-x-clip bg-mist text-ink ${panelOpen ? "xl:pr-[25rem]" : ""}`}>
         <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:bg-paper focus:p-2">
-          Skip to the page
+          {tx.skip}
         </a>
-        <p className="on-dark bg-petrol-deep px-4 py-1 text-center text-[0.8rem] leading-snug text-paper/85 sm:px-6">{DEMO_NOTE}</p>
+        <p className="on-dark bg-petrol-deep px-4 py-1 text-center text-[0.8rem] leading-snug text-paper/85 sm:px-6">{DEMO_NOTES[lang]}</p>
         <Header />
         <main id="main" className="mx-auto min-w-0 max-w-[1440px] px-4 pb-24 sm:px-6 xl:px-8">
           <RecallNotice kitchen={slug} />
@@ -287,12 +285,10 @@ export function Portal({ kitchen, kitchens, children }: { kitchen: KitchenInfo; 
         </main>
         <footer className="border-t border-line bg-paper">
           <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-3 px-4 py-5 text-[0.85rem] text-ink-soft sm:px-6 xl:px-8">
-            <p>
-              {PRODUCT_NAME}, a demo for the Junction 2026 challenge. Synthetic kitchens; the catalogue and prices come from the partner&apos;s test interface.
-            </p>
+            <p className="max-w-[80ch]">{tx.footer(PRODUCT_NAME)}</p>
             <p className="hidden items-center gap-2 md:flex">
               <Kbd>Ctrl</Kbd>
-              <Kbd>K</Kbd> the agent, <Kbd>/</Kbd> search
+              <Kbd>K</Kbd> {tx.keysAgent}, <Kbd>/</Kbd> {tx.keysSearch}
             </p>
           </div>
         </footer>
@@ -304,16 +300,14 @@ export function Portal({ kitchen, kitchens, children }: { kitchen: KitchenInfo; 
 
 // ---------- header and navigation ----------
 
-const WEEKDAY = ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-export function weekdaysText(days: number[]): string {
-  const s = [...days].sort();
-  if (s.length >= 3 && s.every((d, i) => i === 0 || d === s[i - 1] + 1)) return `${WEEKDAY[s[0]]}–${WEEKDAY[s.at(-1)!]}`;
-  return s.map((d) => WEEKDAY[d]).join(" and ");
+/** "Mon–Fri" in the given language (default English). */
+export function weekdaysText(days: number[], lang: Lang = "en"): string {
+  return weekdaysL(days, lang);
 }
 
 function Header() {
-  const { kitchen, kitchens, base, overview, basket, live, agent } = usePortal();
+  const { kitchen, kitchens, base, overview, basket, live, agent, lang } = usePortal();
+  const tx = useText(PORTAL_TEXT);
   const router = useRouter();
   const pathname = usePathname() ?? base;
   const params = useSearchParams();
@@ -332,12 +326,13 @@ function Header() {
   return (
     <header className="bg-paper">
       <div className="mx-auto grid max-w-[1440px] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-3 px-4 py-3 sm:px-6 lg:grid-cols-[auto_minmax(13rem,1fr)_minmax(14rem,28rem)_auto] xl:px-8">
-        <Link href="/k" className="flex shrink-0 items-center" aria-label={`${PRODUCT_NAME}: all demo kitchens`}>
+        <Link href="/k" className="flex shrink-0 items-center" aria-label={`${PRODUCT_NAME}: ${tx.allKitchens}`}>
           <Wordmark size={34} />
         </Link>
-        <div className="col-span-2 row-start-2 min-w-0 lg:col-span-1 lg:row-start-auto lg:border-l lg:border-line lg:pl-4">
+        <div className="col-span-2 row-start-2 flex min-w-0 items-center gap-3 lg:col-span-1 lg:row-start-auto lg:border-l lg:border-line lg:pl-4">
+          <div className="min-w-0 flex-1">
           <label htmlFor="kitchen-switch" className="sr-only">
-            Kitchen
+            {tx.kitchen}
           </label>
           <select
             id="kitchen-switch"
@@ -352,15 +347,19 @@ function Header() {
               </option>
             ))}
           </select>
-          <p className="truncate text-[0.85rem] text-ink-soft">
-            {days ? `Deliveries ${weekdaysText(days)}. ` : ""}
-            {approver ? `Signs off: ${approver.name}.` : ""}
-            {kitchen.kind === "visitor" && kitchen.expiresAt ? " Your demo kitchen, open for 90 minutes." : ""}
+          <p className="line-clamp-2 text-[0.85rem] leading-snug text-ink-soft">
+            {days ? tx.deliveries(weekdaysText(days, lang)) : ""}
+            {approver ? tx.signsOff(approver.name) : ""}
+            {kitchen.kind === "visitor" && kitchen.expiresAt ? tx.visitor : ""}
           </p>
+          </div>
+          <div className="lg:hidden">
+            <LangSwitch />
+          </div>
         </div>
         <form
           role="search"
-          aria-label="Catalogue"
+          aria-label={tx.searchRegion}
           className="col-span-2 row-start-3 flex border-2 border-petrol bg-paper focus-within:outline-[3px] focus-within:outline-offset-2 focus-within:outline-petrol lg:col-span-1 lg:row-start-auto"
           onSubmit={(e) => {
             e.preventDefault();
@@ -369,21 +368,24 @@ function Header() {
           }}
         >
           <label htmlFor="shop-search" className="sr-only">
-            Search the catalogue
+            {tx.searchLabel}
           </label>
           <input
             id="shop-search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search 17 546 products: maito, mjölk, milk"
+            placeholder={tx.searchPlaceholder}
             autoComplete="off"
             className="min-h-11 min-w-0 flex-1 bg-transparent px-3 text-[1rem] placeholder:text-ink-soft focus:outline-none"
           />
-          <button type="submit" className="flex min-h-11 items-center bg-petrol px-4 font-semibold text-paper hover:bg-petrol-deep" aria-label="Search">
+          <button type="submit" className="flex min-h-11 items-center bg-petrol px-4 font-semibold text-paper hover:bg-petrol-deep" aria-label={tx.search}>
             <SearchIcon />
           </button>
         </form>
         <div className="col-start-2 row-start-1 flex items-center justify-end gap-2 lg:col-start-auto lg:row-start-auto">
+          <div className="hidden lg:block">
+            <LangSwitch />
+          </div>
           <button
             type="button"
             onClick={() => (agent.panelOpen ? agent.setPanelOpen(false) : agent.open())}
@@ -393,7 +395,7 @@ function Header() {
             className={`flex min-h-11 items-center gap-2 px-3 font-semibold ${agent.panelOpen ? "bg-lavender-deep text-paper" : "bg-lavender text-lavender-deep hover:bg-[#e3daf0]"}`}
           >
             <AgentIcon />
-            <span className="hidden sm:inline">Agent</span>
+            <span className="hidden sm:inline">{tx.agentButton}</span>
             <span className="hidden items-center gap-0.5 2xl:flex">
               <Kbd dark={agent.panelOpen}>Ctrl K</Kbd>
             </span>
@@ -402,30 +404,30 @@ function Header() {
             href={`${base}/basket`}
             aria-current={pathname === `${base}/basket` ? "page" : undefined}
             className="flex min-h-11 items-center gap-2 bg-petrol px-3 font-semibold text-paper hover:bg-petrol-deep"
-            aria-label={`Basket, ${basket.lines.length} product${basket.lines.length === 1 ? "" : "s"}${priced ? `, ${money(basketTotal)}` : ""}`}
+            aria-label={tx.basketLabel(basket.lines.length, priced ? money(basketTotal) : undefined)}
           >
             <BasketIcon />
             <span key={basket.lines.length} className="changed min-w-5 bg-lime px-1 text-center text-ink tabular">
               {basket.lines.length}
             </span>
-            {basket.lines.length > 0 && <span className="hidden tabular sm:inline">{priced ? money(basketTotal) : "not priced"}</span>}
+            {basket.lines.length > 0 && <span className="hidden tabular sm:inline">{priced ? money(basketTotal) : tx.notPriced}</span>}
           </Link>
         </div>
       </div>
-      <nav aria-label="Shop" className="on-dark bg-petrol">
+      <nav aria-label={tx.navLabel} className="on-dark bg-petrol">
         <div className="mx-auto flex max-w-[1440px] items-stretch gap-3 px-4 sm:px-6 xl:px-8">
           <ul className="flex min-w-0 flex-1 gap-1 overflow-x-auto whitespace-nowrap">
             {NAV.map((n) => {
               const href = `${base}${n.href}`;
               const active = n.href === "" ? pathname === base : pathname === href || pathname.startsWith(`${href}/`);
               return (
-                <li key={n.label}>
+                <li key={n.key}>
                   <Link
                     href={href}
                     aria-current={active ? "page" : undefined}
                     className={`relative flex min-h-12 items-center px-3 text-[1.02rem] ${active ? "font-bold text-paper" : "text-paper/80 hover:text-paper"}`}
                   >
-                    {n.label}
+                    {tx.nav[n.key]}
                     <span aria-hidden className={`absolute inset-x-3 bottom-0 h-1 ${active ? "bg-lime" : ""}`} />
                   </Link>
                 </li>
@@ -436,9 +438,9 @@ function Header() {
             <Link href={`${base}/orders?show=waiting`} className="my-1.5 flex shrink-0 items-center gap-2 bg-safety px-3 text-[0.95rem] font-semibold text-safety-ink">
               <Target size={18} tone="safety" />
               <span className="hidden sm:inline">
-                {waiting.length === 1 ? `Waiting for ${waiting[0].authorised.by === "waiting" ? waiting[0].authorised.name : "a sign-off"}` : `${waiting.length} orders waiting for sign-off`}
+                {waiting.length === 1 ? tx.waitingFor(waiting[0].authorised.by === "waiting" ? waiting[0].authorised.name : tx.aSignOff) : tx.ordersWaiting(waiting.length)}
               </span>
-              <span className="sm:hidden">{waiting.length} waiting</span>
+              <span className="sm:hidden">{tx.waitingShort(waiting.length)}</span>
             </Link>
           )}
         </div>
@@ -474,9 +476,9 @@ export function AgentIcon({ size = 20 }: { size?: number }) {
 }
 
 /** "100 L lactose-free milk for Thursday" (Tue 10.11.) or the order it stands for. */
-export function requestLabel(r: PortalRequest): string {
-  const d = day(helsinkiToday(new Date(r.at)));
+export function requestLabel(r: PortalRequest, lang: Lang = "en"): string {
+  const d = dayL(helsinkiToday(new Date(r.at)), lang);
   if (r.text) return `“${r.text.length > 70 ? `${r.text.slice(0, 67)}…` : r.text}”, ${d}`;
   const l = r.order?.lines[0];
-  return l ? `${l.quantity} × ${shortProduct(l.name)}, ${d}` : `Order of ${d}`;
+  return l ? `${l.quantity} × ${shortProduct(l.name)}, ${d}` : PORTAL_TEXT[lang].orderOf(d);
 }

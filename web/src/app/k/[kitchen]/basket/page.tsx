@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
-import { PRODUCT_NAME } from "../../../_ui/brand";
 import { BasketPage } from "../basket";
+import { requestLang } from "../../../_i18n/server";
+import { LAYOUT_TEXT } from "../layout.text";
 
-export const metadata: Metadata = { title: `${PRODUCT_NAME}: basket` };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: LAYOUT_TEXT[await requestLang()].title.basket };
+}
 
 export default function Basket() {
   return <BasketPage />;

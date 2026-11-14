@@ -3,13 +3,17 @@
 import { useState } from "react";
 import { api } from "../../_client/api";
 import { verifyChain, type ChainCheck } from "../../_client/verify-chain";
-import { actorLabel, clockSeconds, say } from "../../_ui/plain";
+import { useFormat, useText } from "../../_i18n/provider";
+import { clockSeconds, say } from "../../_ui/plain";
 import { Target } from "../../_ui/target";
+import { TIMELINE_TEXT } from "./timeline.text";
 import { Button } from "./ui";
 import type { Entry, LedgerReply } from "./types";
 
 /** "What the agent did and why": this request's ledger entries in plain words, and a chain check run in the browser. */
 export function Timeline({ entries, names, agentName, kitchen, check = true }: { entries: Entry[]; names: Record<string, string>; agentName: string; kitchen: string; check?: boolean }) {
+  const tx = useText(TIMELINE_TEXT);
+  const f = useFormat();
   return (
     <div>
       <ol className="divide-y divide-line">
@@ -18,7 +22,7 @@ export function Timeline({ entries, names, agentName, kitchen, check = true }: {
           return (
             <li key={e.seq} className="grid grid-cols-[4.6rem_1fr] gap-x-3 py-2.5 sm:grid-cols-[5.2rem_9rem_1fr]">
               <span className="pt-px text-[0.9rem] text-ink-soft tabular">{clockSeconds(e.at)}</span>
-              <span className="col-start-2 text-[0.9rem] font-semibold sm:col-start-auto sm:pt-px">{actorLabel(e.actor, { agent: agentName })}</span>
+              <span className="col-start-2 text-[0.9rem] font-semibold sm:col-start-auto sm:pt-px">{f.actor(e.actor, { agent: agentName })}</span>
               <div className="col-start-2 min-w-0 sm:col-start-auto">
                 <p className="leading-snug">{say(e.summary, names)}</p>
                 {reasons.length > 0 && (
@@ -36,7 +40,7 @@ export function Timeline({ entries, names, agentName, kitchen, check = true }: {
         })}
       </ol>
       <details className="mt-2 text-[0.92rem]">
-        <summary className="cursor-pointer py-2 font-semibold text-petrol underline decoration-2 underline-offset-4">Show the raw ledger entries</summary>
+        <summary className="cursor-pointer py-2 font-semibold text-petrol underline decoration-2 underline-offset-4">{tx.raw}</summary>
         <div className="mt-2 max-h-80 overflow-auto bg-concrete p-3">
           {entries.map((e) => (
             <div key={e.seq} className="mb-2 break-all font-mono text-[0.78rem] leading-snug">
@@ -57,6 +61,7 @@ export function Timeline({ entries, names, agentName, kitchen, check = true }: {
 type Result = { check: ChainCheck; ms: number; tampered?: number };
 
 function ChainCheckBox({ kitchen }: { kitchen: string }) {
+  const tx = useText(TIMELINE_TEXT);
   const [busy, setBusy] = useState<"verify" | "tamper" | null>(null);
   const [result, setResult] = useState<Result>();
   const [error, setError] = useState<string>();
@@ -90,19 +95,20 @@ function ChainCheckBox({ kitchen }: { kitchen: string }) {
     <div className="mt-4 border-t-[3px] border-petrol pt-3">
       <div className="flex flex-wrap gap-2">
         <Button kind="primary" busy={busy === "verify"} disabled={!!busy} onClick={() => void run(false)}>
-          Check the whole chain in this browser
+          {tx.check}
         </Button>
         <Button kind="secondary" busy={busy === "tamper"} disabled={!!busy} onClick={() => void run(true)}>
-          Edit one decision, then check
+          {tx.tamper}
         </Button>
       </div>
       <div aria-live="polite" className="min-h-[3.25rem] pt-2">
-        {error && <p className="text-ink-soft">Could not read the ledger: {error}</p>}
+        {error && <p className="text-ink-soft">{tx.readFailed(error)}</p>}
         {result?.check.ok && (
           <p className="flex items-start gap-2 leading-snug">
             <Target size={22} tone="ink" className="mt-0.5 shrink-0" />
             <span>
-              <strong>All {result.check.length} entries check out.</strong> Your browser recomputed every SHA-256 link from the first entry in {result.ms} ms; nothing was changed after it was written.
+              <strong>{tx.allOk(result.check.length)}</strong>
+              {tx.allOkDetail(result.ms)}
             </span>
           </p>
         )}
@@ -110,8 +116,8 @@ function ChainCheckBox({ kitchen }: { kitchen: string }) {
           <p className="flex items-start gap-2 leading-snug">
             <Target size={22} tone="safety" className="mt-0.5 shrink-0" />
             <span>
-              <strong>Caught.</strong> {result.check.message}
-              {result.tampered !== undefined && " The edit was made only in this browser's copy; the ledger on the server is untouched."}
+              <strong>{tx.caught}</strong> {result.check.message}
+              {result.tampered !== undefined && tx.tamperedNote}
             </span>
           </p>
         )}

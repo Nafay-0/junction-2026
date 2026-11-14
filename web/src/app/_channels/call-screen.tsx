@@ -4,7 +4,9 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { IntakeView } from "@/core/intake";
 import type { PublicOrder } from "@/core/orders";
+import { LangSwitch, useText } from "../_i18n/provider";
 import { Target } from "../_ui/target";
+import { CALL_TEXT } from "./call-screen.text";
 import { OrderCard, ReadBack, StepCards, type Act } from "./cards";
 import { useCall, type Mode } from "./use-call";
 
@@ -29,6 +31,8 @@ export type CallProps = {
   onOrder?: (order: PublicOrder) => void;
   onClose?: () => void;
   defaultMode?: Mode;
+  /** Show the language switch in the header: on the /call page, which has no store header around it. */
+  langSwitch?: boolean;
 };
 
 function mmss(s: number) {
@@ -36,15 +40,16 @@ function mmss(s: number) {
 }
 
 export function CallAgent(props: Omit<CallProps, "onClose"> & { label?: string }) {
+  const tx = useText(CALL_TEXT);
   const [open, setOpen] = useState(false);
   return (
     <>
       <button type="button" onClick={() => setOpen(true)} className="inline-flex min-h-12 items-center gap-2 bg-petrol px-5 py-2 text-[1.05rem] font-semibold text-paper hover:bg-petrol-deep">
-        <PhoneIcon /> {props.label ?? "Call your agent"}
+        <PhoneIcon /> {props.label ?? tx.callYourAgent}
       </button>
       {open &&
         createPortal(
-          <div className="fixed inset-0 z-50 overflow-y-auto bg-mist" role="dialog" aria-modal="true" aria-label="Call with your agent">
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-mist" role="dialog" aria-modal="true" aria-label={tx.dialog}>
             <CallScreen {...props} onClose={() => setOpen(false)} />
           </div>,
           document.body,
@@ -53,7 +58,8 @@ export function CallAgent(props: Omit<CallProps, "onClose"> & { label?: string }
   );
 }
 
-export function CallScreen({ kitchen, signOffHref, renderSignOff, onStep, onOrder, onClose, defaultMode = "push_to_talk" }: CallProps) {
+export function CallScreen({ kitchen, signOffHref, renderSignOff, onStep, onOrder, onClose, defaultMode = "push_to_talk", langSwitch = false }: CallProps) {
+  const tx = useText(CALL_TEXT);
   const c = useCall(kitchen, { onStep, onOrder });
   const v = c.view;
   const [mode, setMode] = useState<Mode>(defaultMode);
@@ -76,7 +82,7 @@ export function CallScreen({ kitchen, signOffHref, renderSignOff, onStep, onOrde
   const typing = v.phase === "typed";
   const act: Act = (name, args, label) => void c.tap(name, args, label);
   const signOffLink = v.order && v.order.status === "pending_approval" && v.order.approval ? signOffHref?.(v.order) : undefined;
-  const agentName = v.start?.kitchen.agentName ?? "your agent";
+  const agentName = v.start?.kitchen.agentName ?? tx.yourAgent;
 
   const cards = (
     <div className="space-y-3">
@@ -88,7 +94,7 @@ export function CallScreen({ kitchen, signOffHref, renderSignOff, onStep, onOrde
             signOffLink ? (
               <a href={signOffLink} className="flex min-h-16 items-center justify-center gap-3 bg-lime px-4 text-[1.25rem] font-bold text-ink">
                 <Target size={28} tone="safety" />
-                Sign off on this phone
+                {tx.signOffHere}
               </a>
             ) : (
               renderSignOff?.(v.order)
@@ -110,37 +116,38 @@ export function CallScreen({ kitchen, signOffHref, renderSignOff, onStep, onOrde
     <div className="mx-auto flex min-h-dvh max-w-5xl flex-col px-4 pb-6 pt-4 text-ink">
       <header className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-[0.95rem] text-ink-soft">{v.start?.kitchen.name ?? "Your kitchen"}</p>
-          <h1 className="display truncate text-[2rem] text-ink">{live || v.phase === "ringing" ? agentName : "Call your agent"}</h1>
+          <p className="truncate text-[0.95rem] text-ink-soft">{v.start?.kitchen.name ?? tx.yourKitchen}</p>
+          <h1 className="display text-[2rem] leading-[1.05] text-ink hyphens-auto [overflow-wrap:anywhere]">{live || v.phase === "ringing" ? agentName : tx.callYourAgent}</h1>
         </div>
         {live && (
           <div className="text-right tabular" aria-live="off">
             <p className="text-[1.3rem] font-bold">{mmss(elapsed)}</p>
-            <p className="text-xs text-ink-soft">{v.secondsLeft !== undefined ? `${mmss(v.secondsLeft)} left` : ""}</p>
+            <p className="text-xs text-ink-soft">{v.secondsLeft !== undefined ? tx.left(mmss(v.secondsLeft)) : ""}</p>
           </div>
         )}
+        {langSwitch && !live && <LangSwitch />}
         {onClose && (v.phase === "idle" || v.phase === "ended" || v.phase === "lost") && (
           <button type="button" onClick={onClose} className="min-h-11 border-2 border-ink px-3 font-semibold">
-            Close
+            {tx.close}
           </button>
         )}
       </header>
 
       {v.phase === "idle" && (
         <div className="mt-8 flex flex-1 flex-col items-center gap-6">
-          <p className="max-w-sm text-center text-[1.15rem]">Say what the kitchen needs. The agent reads unusual amounts back, tells you the options, and the order goes through the same checks and sign-off as typing.</p>
-          <fieldset className="flex w-full max-w-sm border-2 border-petrol bg-paper p-1" aria-label="How to talk">
+          <p className="max-w-sm text-center text-[1.15rem]">{tx.intro}</p>
+          <fieldset className="flex w-full max-w-sm border-2 border-petrol bg-paper p-1" aria-label={tx.howToTalk}>
             {(["push_to_talk", "hands_free"] as const).map((m) => (
               <label key={m} className={`flex-1 cursor-pointer px-3 py-2 text-center font-semibold ${mode === m ? "bg-petrol text-paper" : "text-petrol"}`}>
                 <input type="radio" name="mode" value={m} checked={mode === m} onChange={() => setMode(m)} className="sr-only" />
-                {m === "push_to_talk" ? "Push to talk" : "Hands-free"}
+                {m === "push_to_talk" ? tx.pushToTalk : tx.handsFree}
               </label>
             ))}
           </fieldset>
-          <p className="max-w-sm text-center text-sm text-ink-soft">{mode === "push_to_talk" ? "Hold the button while you speak, or tap once to start and once to stop. Best in a loud room." : "Just talk. The agent listens when it is not speaking. For a quiet room."}</p>
-          <button type="button" onClick={() => void c.call(mode)} className="flex h-40 w-full max-w-sm flex-col items-center justify-center gap-2 bg-lime text-ink active:translate-y-px" aria-label="Call">
+          <p className="max-w-sm text-center text-sm text-ink-soft">{mode === "push_to_talk" ? tx.pushHint : tx.freeHint}</p>
+          <button type="button" onClick={() => void c.call(mode)} className="flex h-40 w-full max-w-sm flex-col items-center justify-center gap-2 bg-lime text-ink active:translate-y-px" aria-label={tx.call}>
             <PhoneIcon size={56} />
-            <span className="display text-[2rem]">Call</span>
+            <span className="display text-[2rem]">{tx.call}</span>
           </button>
         </div>
       )}
@@ -150,7 +157,7 @@ export function CallScreen({ kitchen, signOffHref, renderSignOff, onStep, onOrde
           <div className="breathe flex h-40 w-full max-w-sm items-center justify-center bg-petrol-deep text-paper">
             <PhoneIcon size={52} />
           </div>
-          <p className="text-[1.3rem] font-semibold">Calling…</p>
+          <p className="text-[1.3rem] font-semibold">{tx.calling}</p>
           <HangUp onClick={() => c.hangUp("cancelled")} />
         </div>
       )}
@@ -158,16 +165,16 @@ export function CallScreen({ kitchen, signOffHref, renderSignOff, onStep, onOrde
       {(live || typing || v.phase === "lost" || v.phase === "ended") && (
         <div className="mt-3 grid flex-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <div className="flex min-h-0 flex-col">
-            <div ref={scroller} className="max-h-[46dvh] min-h-40 flex-1 space-y-2 overflow-y-auto bg-paper p-2.5 md:max-h-[60dvh]" aria-live="polite" aria-label="Live transcript">
-              {v.lines.length === 0 && <p className="text-[1.1rem] text-ink-soft">{live ? "Connected. The agent is saying hello…" : "Type what the kitchen needs."}</p>}
+            <div ref={scroller} className="max-h-[46dvh] min-h-40 flex-1 space-y-2 overflow-y-auto bg-paper p-2.5 md:max-h-[60dvh]" aria-live="polite" aria-label={tx.transcript}>
+              {v.lines.length === 0 && <p className="text-[1.1rem] text-ink-soft">{live ? tx.connected : tx.typeNeed}</p>}
               {v.lines.map((l) => (
                 <div key={l.id} className={`px-3 py-2 ${l.who === "you" ? "ml-6 bg-mist" : l.who === "agent" ? "mr-6 bg-lavender" : "bg-paper outline-1 outline-line"} ${l.final ? "" : "opacity-75"}`}>
-                  <p className={`text-[0.85rem] font-semibold ${l.who === "agent" ? "text-lavender-deep" : "text-ink-soft"}`}>{l.who === "you" ? "You" : l.who === "agent" ? agentName : "AimoPilot"}</p>
+                  <p className={`text-[0.85rem] font-semibold ${l.who === "agent" ? "text-lavender-deep" : "text-ink-soft"}`}>{l.who === "you" ? tx.you : l.who === "agent" ? agentName : "AimoPilot"}</p>
                   <p className={`text-[1.35rem] leading-snug ${l.who === "you" ? "font-semibold" : ""}`}>
                     {l.dropped?.length ? (
                       <>
                         <span className="line-through decoration-2">{l.text}</span>
-                        <span className="mt-1 block bg-safety px-2 py-1 text-[0.95rem] font-semibold text-safety-ink">Cut off: {l.dropped.join(", ")} did not come from AimoPilot.</span>
+                        <span className="mt-1 block bg-safety px-2 py-1 text-[0.95rem] font-semibold text-safety-ink">{tx.cutOff(l.dropped.join(", "))}</span>
                       </>
                     ) : (
                       l.text
@@ -208,12 +215,12 @@ export function CallScreen({ kitchen, signOffHref, renderSignOff, onStep, onOrde
               className={`flex h-32 min-w-0 flex-1 touch-none select-none flex-col items-center justify-center text-center font-bold [-webkit-touch-callout:none] ${v.talking ? "bg-lime text-ink outline-[4px] outline-offset-2 outline-petrol" : "bg-petrol text-paper"}`}
             >
               <MicIcon />
-              <span className="display mt-1 text-[1.6rem]">{v.talking ? (v.latched ? "Tap to stop" : "Listening") : v.agentSpeaking ? "Hold to interrupt" : "Hold to talk"}</span>
+              <span className="display mt-1 text-[1.6rem]">{v.talking ? (v.latched ? tx.tapToStop : tx.listening) : v.agentSpeaking ? tx.holdToInterrupt : tx.holdToTalk}</span>
             </button>
           ) : (
             <div className={`flex h-32 min-w-0 flex-1 flex-col items-center justify-center font-bold ${v.agentSpeaking ? "bg-lavender text-lavender-deep" : "bg-lime text-ink"}`} aria-live="polite">
               <MicIcon />
-              <span className="display mt-1 text-[1.6rem]">{v.agentSpeaking ? "Agent speaking" : v.busy ? "Checking…" : "Listening"}</span>
+              <span className="display mt-1 text-[1.6rem]">{v.agentSpeaking ? tx.agentSpeaking : v.busy ? tx.checking : tx.listening}</span>
             </div>
           )}
           <HangUp onClick={() => c.hangUp()} />
@@ -232,28 +239,31 @@ export function CallScreen({ kitchen, signOffHref, renderSignOff, onStep, onOrde
           }}
         >
           <label className="sr-only" htmlFor="call-typed">
-            What the kitchen needs
+            {tx.typedLabel}
           </label>
-          <input id="call-typed" value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="e.g. 100 litres of milk by Thursday" className="min-h-12 min-w-0 flex-1 border-2 border-ink bg-paper px-3 text-[1.1rem]" enterKeyHint="send" />
+          <input id="call-typed" value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={tx.typedPlaceholder} className="min-h-12 min-w-0 flex-1 border-2 border-ink bg-paper px-3 text-[1.1rem]" enterKeyHint="send" />
           <button type="submit" disabled={v.busy} className="min-h-12 bg-lime px-4 font-semibold text-ink disabled:opacity-50">
-            Send
+            {tx.send}
           </button>
         </form>
       )}
 
       {(v.phase === "lost" || v.phase === "ended") && (
         <div className="mt-4 space-y-3 text-center">
-          <p className="text-[1.15rem] font-semibold">{v.phase === "lost" ? "The call dropped." : "Call ended."} {v.endReason && v.endReason !== "hung up" ? v.endReason : ""}</p>
-          {v.micProblem && <p className="text-[1rem]">Microphone: {v.micProblem === "denied" ? "blocked. Allow it in the browser's site settings to call." : v.micProblem.replace("_", " ")}.</p>}
+          <p className="text-[1.15rem] font-semibold">
+            {v.phase === "lost" ? tx.dropped : tx.ended} {v.endReason && v.endReason !== "hung up" ? (tx.endReason[v.endReason] ?? v.endReason) : ""}
+          </p>
+          {v.micProblem && <p className="text-[1rem]">{tx.mic(v.micProblem === "denied" ? tx.micBlocked : (tx.micWord[v.micProblem] ?? v.micProblem.replace("_", " ")))}</p>}
           <p className="text-sm text-ink-soft tabular">
-            {v.grounding.checked > 0 ? `${v.grounding.checked} agent turn${v.grounding.checked > 1 ? "s" : ""} checked against AimoPilot, ${v.grounding.dropped} cut off. ` : ""}About ${v.costUsd.toFixed(3)} of voice.
+            {v.grounding.checked > 0 ? tx.checked(v.grounding.checked, v.grounding.dropped) : ""}
+            {tx.cost(v.costUsd.toFixed(3))}
           </p>
           <div className="flex flex-wrap justify-center gap-3">
             <button type="button" onClick={() => void c.call(mode, c.callId() ?? undefined)} className="min-h-12 bg-lime text-ink px-6 font-semibold text-paper">
-              {v.phase === "lost" ? "Call back" : "Call again"}
+              {v.phase === "lost" ? tx.callBack : tx.callAgain}
             </button>
             <button type="button" onClick={() => void c.typeInstead()} className="min-h-12 border-2 border-ink bg-paper px-6 font-semibold">
-              Type instead
+              {tx.typeInstead}
             </button>
           </div>
         </div>
@@ -263,10 +273,11 @@ export function CallScreen({ kitchen, signOffHref, renderSignOff, onStep, onOrde
 }
 
 function HangUp({ onClick }: { onClick: () => void }) {
+  const tx = useText(CALL_TEXT);
   return (
-    <button type="button" onClick={onClick} className="flex min-h-20 w-24 shrink-0 flex-col items-center justify-center gap-1 bg-ink text-paper" aria-label="Hang up">
+    <button type="button" onClick={onClick} className="flex min-h-20 w-24 shrink-0 flex-col items-center justify-center gap-1 bg-ink text-paper" aria-label={tx.hangUp}>
       <PhoneIcon size={30} className="rotate-[135deg]" />
-      <span className="text-[0.9rem] font-semibold">End call</span>
+      <span className="text-[0.9rem] font-semibold">{tx.endCall}</span>
     </button>
   );
 }

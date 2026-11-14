@@ -7,7 +7,9 @@ import type { PublicOrder } from "@/core/orders";
 import type { LineStatus, ScanLine } from "@/server/channels/scan/lines";
 import type { ScanResult } from "@/server/channels/scan/read";
 import type { StepReply } from "@/server/channels/scan/door";
+import { useFormat, useText } from "../_i18n/provider";
 import { OrderCard, StepCards, type Act } from "./cards";
+import { SCAN_TEXT } from "./scan-door.text";
 
 /**
  * The photo door: a photo of a whiteboard or a handwritten list, an image, a PDF or a pasted email becomes
@@ -26,17 +28,19 @@ export type ScanDoorProps = {
 
 type Row = ScanLine & { include: boolean; edited: boolean; original: { item: string | null; amount: number | null; unit: NeedUnit | null } };
 type QueueItem = { row: Row; state: "waiting" | "active" | "done" | "skipped" | "failed"; step?: IntakeView; order?: PublicOrder; problem?: string };
+/** A read error: the server's own message as it came, or one of ours (kept as a kind so it follows a language switch). */
+type ReadError = { message: string } | { key: "network" | "unreadable" } | { status: number };
 
-const STATUS: Record<LineStatus, { label: string; tone: "ok" | "warn" | "off" }> = {
-  ready: { label: "Read clearly", tone: "ok" },
-  check: { label: "Check this", tone: "warn" },
-  needs_amount: { label: "Amount or unit missing", tone: "warn" },
-  illegible: { label: "Could not read", tone: "warn" },
-  instruction: { label: "Not acted on", tone: "off" },
-  not_an_item: { label: "Not an item", tone: "off" },
+/** How each line status looks; its words are in scan-door.text.ts. */
+const STATUS: Record<LineStatus, { tone: "ok" | "warn" | "off" }> = {
+  ready: { tone: "ok" },
+  check: { tone: "warn" },
+  needs_amount: { tone: "warn" },
+  illegible: { tone: "warn" },
+  instruction: { tone: "off" },
+  not_an_item: { tone: "off" },
 };
 const UNITS: NeedUnit[] = ["L", "kg", "pcs", "pack"];
-const UNIT_TEXT: Record<NeedUnit, string> = { L: "litres", kg: "kilos", pcs: "pieces", pack: "packs" };
 
 /** Re-encode a photo upright (EXIF orientation applied) and at most 2000 px, so the reader and the boxes agree. */
 async function normalise(file: File): Promise<Blob> {
@@ -65,6 +69,8 @@ async function postJson<T>(path: string, body: unknown): Promise<{ ok: boolean; 
 }
 
 export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorProps) {
+  const tx = useText(SCAN_TEXT);
+  const f = useFormat();
   const base = `/ui-api/scan/${encodeURIComponent(kitchen)}`;
   const [preview, setPreview] = useState<{ url: string; kind: "image" | "pdf" } | null>(null);
   const [paste, setPaste] = useState("");
@@ -72,7 +78,7 @@ export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorPr
   const [result, setResult] = useState<(Omit<ScanResult, "lines"> & { rows: Row[] }) | null>(null);
   const [deliverBy, setDeliverBy] = useState("");
   const [focus, setFocus] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ReadError | null>(null);
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -101,10 +107,10 @@ export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorPr
     try {
       const res = await fetch(base, { method: "POST", body: form, cache: "no-store" });
       const data = await res.json();
-      if (!res.ok || data.error) setError(data.error?.message ?? `AimoPilot answered ${res.status}.`);
+      if (!res.ok || data.error) setError(data.error?.message != null ? { message: data.error.message } : { status: res.status });
       else accept(data);
     } catch {
-      setError("No connection to AimoPilot.");
+      setError({ key: "network" });
     }
     setReading(false);
   }
@@ -118,7 +124,7 @@ export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorPr
     setReading(true);
     const r = await postJson<ScanResult>(base, { text });
     if (r.ok) accept(r.data);
-    else setError(r.data.error?.message ?? "The text could not be read.");
+    else setError(r.data.error?.code === "network" ? { key: "network" } : r.data.error?.message != null ? { message: r.data.error.message } : { key: "unreadable" });
     setReading(false);
   }
 
@@ -155,11 +161,11 @@ export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorPr
         scanModel: result?.model,
       });
       setBusy(false);
-      const problem = r.data.problem?.message ?? r.data.error?.message;
+      const problem = r.data.problem?.message ?? (r.data.error?.code === "network" ? tx.network : r.data.error?.message);
       setQueue((xs) => xs.map((x, i) => (i === index ? { ...x, step: r.data.step, state: problem && !r.data.step ? "failed" : "active", problem } : x)));
       if (r.data.step) onStep?.(r.data.step);
     },
-    [base, deliverBy, onStep, result],
+    [base, deliverBy, onStep, result, tx],
   );
 
   function start() {
@@ -185,7 +191,7 @@ export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorPr
     setBusy(true);
     const r = await postJson<StepReply>(`${base}/step`, { action, requestId: active.step.requestId, ...args });
     setBusy(false);
-    const problem = r.data.problem?.message ?? r.data.error?.message;
+    const problem = r.data.problem?.message ?? (r.data.error?.code === "network" ? tx.network : r.data.error?.message);
     setQueue((xs) => xs.map((x, i) => (i === activeIndex ? { ...x, step: r.data.step ?? x.step, order: r.data.order ?? x.order, problem } : x)));
     if (r.data.step) onStep?.(r.data.step);
     if (r.data.order) onOrder?.(r.data.order);
@@ -207,6 +213,7 @@ export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorPr
   }, [waitingOrder, base, onOrder]);
 
   const focused = result?.rows.find((r) => r.id === focus);
+  const errorText = !error ? "" : "message" in error ? error.message : "status" in error ? tx.answered(error.status) : tx[error.key];
   const settled = active && (active.order || active.step?.state === "no_options" || active.step?.state === "cancelled");
 
   return (
@@ -215,10 +222,10 @@ export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorPr
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={() => cameraRef.current?.click()} className="min-h-12 bg-petrol px-4 font-semibold text-paper">
-              Take a photo
+              {tx.takePhoto}
             </button>
             <button type="button" onClick={() => fileRef.current?.click()} className="min-h-12 border-2 border-petrol bg-paper px-4 font-semibold text-petrol">
-              Choose image or PDF
+              {tx.chooseFile}
             </button>
             <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => e.target.files?.[0] && void readFile(e.target.files[0])} />
             <input ref={fileRef} type="file" accept="image/*,application/pdf" className="sr-only" onChange={(e) => e.target.files?.[0] && void readFile(e.target.files[0])} />
@@ -237,23 +244,27 @@ export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorPr
             className="rounded-xl border-2 border-dashed border-ink-soft bg-paper p-3"
           >
             <label htmlFor="scan-paste" className="text-sm font-semibold text-ink-soft">
-              Or drop a file here, or paste an email or a list
+              {tx.dropOrPaste}
             </label>
-            <textarea id="scan-paste" value={paste} onChange={(e) => setPaste(e.target.value)} rows={4} className="mt-1 w-full border-2 border-line p-2 text-[1rem]" placeholder={"Hei, torstaille 2 laatikkoa maitoa ja 15 kg rahkaa…"} />
+            <textarea id="scan-paste" value={paste} onChange={(e) => setPaste(e.target.value)} rows={4} className="mt-1 w-full border-2 border-line p-2 text-[1rem]" placeholder={tx.pastePlaceholder} />
             <button type="button" disabled={!paste.trim()} onClick={() => void readText()} className="mt-2 min-h-11 bg-petrol px-4 font-semibold text-paper disabled:opacity-40">
-              Read the text
+              {tx.readText}
             </button>
           </div>
-          <p className="text-sm text-ink-soft">Photos up to 8 MB, PDFs up to 10 MB and 5 pages. Read in memory and not kept.</p>
+          <p className="text-sm text-ink-soft">{tx.limits}</p>
         </div>
       )}
 
-      {reading && <p className="text-[1.1rem]" role="status">Reading the list…</p>}
+      {reading && (
+        <p className="text-[1.1rem]" role="status">
+          {tx.reading}
+        </p>
+      )}
       {error && (
         <p role="alert" className="rounded-lg bg-paper p-3 shadow-[inset_0_3px_0_var(--color-petrol)]">
-          {error}{" "}
+          {errorText}{" "}
           <button type="button" className="underline" onClick={() => setError(null)}>
-            OK
+            {tx.ok}
           </button>
         </p>
       )}
@@ -263,13 +274,13 @@ export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorPr
           {preview?.kind === "image" ? (
             <div className="relative self-start overflow-hidden border-2 border-line bg-paper">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={preview.url} alt="The list as photographed" className="block w-full" />
+              <img src={preview.url} alt={tx.photoAlt} className="block w-full" />
               {result.rows.map((r) =>
                 r.box ? (
                   <button
                     key={r.id}
                     type="button"
-                    aria-label={`Line: ${r.read}`}
+                    aria-label={tx.lineLabel(r.read)}
                     onClick={() => setFocus(r.id)}
                     className={`absolute border-2 ${focus === r.id ? "border-petrol bg-petrol/20" : r.status === "ready" ? "border-petrol/50" : "border-dashed border-lavender-deep bg-lavender/30"}`}
                     style={{ left: `${r.box.x * 100}%`, top: `${r.box.y * 100}%`, width: `${r.box.w * 100}%`, height: `${r.box.h * 100}%` }}
@@ -278,16 +289,17 @@ export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorPr
               )}
             </div>
           ) : (
-            <div className="self-start bg-paper p-3 shadow-[inset_0_3px_0_var(--color-petrol)] text-sm text-ink-soft">{result.kind === "pdf" ? "PDF read; positions are not shown for PDFs." : "Pasted text."}</div>
+            <div className="self-start bg-paper p-3 shadow-[inset_0_3px_0_var(--color-petrol)] text-sm text-ink-soft">{result.kind === "pdf" ? tx.pdfRead : tx.pasted}</div>
           )}
 
           <div className="space-y-3">
             <p className="text-sm text-ink-soft">
-              {result.rows.length} line{result.rows.length === 1 ? "" : "s"} read by {result.model} in {(result.ms / 1000).toFixed(1)} s{result.costUsd !== null ? `, $${result.costUsd.toFixed(4)}` : ""}. {result.isOrderList ? "" : "This does not look like an order list."}
+              {tx.summary(result.rows.length, result.model, (result.ms / 1000).toFixed(1), result.costUsd !== null ? `, $${result.costUsd.toFixed(4)}` : "")}
+              {result.isOrderList ? "" : tx.notAList}
             </p>
             <label className="block text-sm font-semibold">
-              Delivery, as written
-              <input value={deliverBy} onChange={(e) => setDeliverBy(e.target.value)} placeholder="none written" className="mt-1 block min-h-11 w-full border-2 border-line bg-paper px-2 text-[1rem]" />
+              {tx.deliveryAsWritten}
+              <input value={deliverBy} onChange={(e) => setDeliverBy(e.target.value)} placeholder={tx.noneWritten} className="mt-1 block min-h-11 w-full border-2 border-line bg-paper px-2 text-[1rem]" />
             </label>
             <ul className="space-y-2">
               {result.rows.map((r) => {
@@ -297,10 +309,10 @@ export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorPr
                   <li key={r.id} onFocus={() => setFocus(r.id)} onMouseEnter={() => setFocus(r.id)} className={`rounded-lg border-2 bg-paper p-3 ${focus === r.id ? "border-petrol" : "border-line"} ${off ? "opacity-70" : ""}`}>
                     <div className="flex items-start justify-between gap-2">
                       <p className={`text-[1.05rem] ${r.status === "instruction" ? "line-through" : ""}`}>
-                        <span className="text-xs font-bold text-ink-soft">Read: </span>“{r.read}”
+                        <span className="text-xs font-bold text-ink-soft">{tx.read}</span>“{r.read}”
                       </p>
                       <span className={`shrink-0 px-2 py-0.5 text-xs font-bold ${s.tone === "warn" ? "bg-lavender text-lavender-deep" : s.tone === "ok" ? "bg-petrol text-paper" : "bg-concrete-deep"}`}>
-                        {s.label} · {r.confidence}
+                        {tx.status[r.status] ?? r.status} · {r.confidence}
                       </span>
                     </div>
                     {r.notes.map((n) => (
@@ -311,27 +323,27 @@ export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorPr
                     {!off && (
                       <div className="mt-2 flex flex-wrap items-end gap-2">
                         <label className="flex min-w-0 flex-[2_1_10rem] flex-col text-xs font-semibold">
-                          Item
+                          {tx.item}
                           <input value={r.item ?? ""} onChange={(e) => edit(r.id, { item: e.target.value || null })} className="min-h-11 border-2 border-petrol px-2 text-[1rem] font-normal" />
                         </label>
                         <label className="flex w-24 flex-col text-xs font-semibold">
-                          Amount
+                          {tx.amount}
                           <input type="number" inputMode="decimal" min={0} value={r.amount ?? ""} onChange={(e) => edit(r.id, { amount: e.target.value ? Number(e.target.value) : null })} className="min-h-11 border-2 border-petrol px-2 text-[1rem] font-normal tabular" />
                         </label>
                         <label className="flex w-28 flex-col text-xs font-semibold">
-                          Unit
+                          {tx.unitLabel}
                           <select value={r.unit ?? ""} onChange={(e) => edit(r.id, { unit: (e.target.value || null) as NeedUnit | null })} className="min-h-11 border-2 border-petrol px-1 text-[1rem] font-normal">
-                            <option value="">choose</option>
+                            <option value="">{tx.choose}</option>
                             {UNITS.map((u) => (
                               <option key={u} value={u}>
-                                {UNIT_TEXT[u]}
+                                {tx.unit[u]}
                               </option>
                             ))}
                           </select>
                         </label>
                         <label className="flex min-h-11 items-center gap-2 text-sm font-semibold">
                           <input type="checkbox" checked={r.include} disabled={!r.item || !r.amount || !r.unit} onChange={(e) => edit(r.id, { include: e.target.checked })} className="size-5" />
-                          Order
+                          {tx.order}
                         </label>
                       </div>
                     )}
@@ -342,7 +354,7 @@ export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorPr
             {queue.length === 0 && (
               <div className="flex flex-wrap gap-2">
                 <button type="button" disabled={!sendable.length} onClick={start} className="min-h-12 bg-petrol px-4 font-semibold text-paper disabled:opacity-40">
-                  Send {sendable.length} line{sendable.length === 1 ? "" : "s"} to the agent
+                  {tx.send(sendable.length)}
                 </button>
                 <button
                   type="button"
@@ -352,21 +364,25 @@ export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorPr
                   }}
                   className="min-h-12 border-2 border-petrol px-4 font-semibold text-petrol"
                 >
-                  Start over
+                  {tx.startOver}
                 </button>
               </div>
             )}
-            {focused?.box && <p className="sr-only">Highlighted on the image: {focused.read}</p>}
+            {focused?.box && <p className="sr-only">{tx.highlighted(focused.read)}</p>}
           </div>
         </div>
       )}
 
       {queue.length > 0 && (
-        <section className="space-y-3" aria-label="Lines going through the agent">
+        <section className="space-y-3" aria-label={tx.queueLabel}>
           <ol className="flex flex-wrap gap-2 text-sm">
             {queue.map((x, i) => (
               <li key={x.row.id} className={`rounded-full border-2 px-3 py-1 ${x.state === "active" ? "border-petrol bg-petrol text-paper" : "border-line bg-paper"}`}>
-                {i + 1}. {x.row.amount} {x.row.unit} {x.row.item} · {x.state === "done" ? (x.order ? (x.order.status === "pending_approval" ? "waiting for sign-off" : x.order.status) : "done") : x.state}
+                {i + 1}. {f.lang !== "en" && x.row.amount != null && x.row.unit ? f.measure(x.row.amount, x.row.unit) : (
+                  <>
+                    {x.row.amount} {x.row.unit}
+                  </>
+                )} {x.row.item} · {x.state === "done" ? (x.order ? (tx.orderState[x.order.status] ?? x.order.status) : tx.state.done) : (tx.state[x.state] ?? x.state)}
               </li>
             ))}
           </ol>
@@ -381,13 +397,13 @@ export function ScanDoor({ kitchen, onStep, onOrder, renderSignOff }: ScanDoorPr
               <div className="flex flex-wrap gap-2">
                 {queue.some((x) => x.state === "waiting") && (
                   <button type="button" onClick={() => next(settled ? "done" : "skipped")} className="min-h-11 border-2 border-petrol px-4 font-semibold text-petrol">
-                    {settled ? "Next line" : "Skip this line"}
+                    {settled ? tx.nextLine : tx.skipLine}
                   </button>
                 )}
               </div>
             </div>
           )}
-          {!active && queue.every((x) => x.state !== "waiting") && <p className="text-[1.05rem]">All lines handled.</p>}
+          {!active && queue.every((x) => x.state !== "waiting") && <p className="text-[1.05rem]">{tx.allHandled}</p>}
         </section>
       )}
     </div>

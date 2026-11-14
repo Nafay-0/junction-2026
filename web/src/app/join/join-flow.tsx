@@ -4,9 +4,12 @@ import { browserSupportsWebAuthn, startRegistration, type PublicKeyCredentialCre
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, passkeyProblem } from "../_client/api";
+import { api } from "../_client/api";
+import { useLang } from "../_i18n/provider";
+import { passkeyProblemL } from "../_ui/passkey.text";
 import { fiMoney } from "../_ui/plain";
 import { PhoneNotice, PhoneProblem, bigButton } from "../_ui/phone";
+import { JOIN_TEXT } from "./join-flow.text";
 
 type Identity = { kitchenName: string; city: string; approverName: string; agentName: string };
 type Start = {
@@ -18,15 +21,20 @@ type Start = {
   demoTapEnabled: boolean;
 };
 
+/** Kept as a kind, not as words, so the page follows a language switch. */
+type Problem = { key: "full" | "offline" | "failed"; body: string } | { key: "passkey"; err: unknown };
+
 type Phase = "loading" | "ready" | "prompt" | "saving" | "failed" | "full" | "offline";
 
 const REFRESH_MS = 4 * 60_000; // prompts expire after 5 minutes on the server
 
 export function JoinFlow() {
   const router = useRouter();
+  const { lang } = useLang();
+  const tx = JOIN_TEXT[lang];
   const [start, setStart] = useState<Start | null>(null);
   const [phase, setPhase] = useState<Phase>("loading");
-  const [problem, setProblem] = useState<{ title: string; body: string } | null>(null);
+  const [problem, setProblem] = useState<Problem | null>(null);
   const [supported, setSupported] = useState(true);
   const [skipCurrent, setSkipCurrent] = useState(false);
   const fetchedAt = useRef(0);
@@ -39,7 +47,7 @@ export function JoinFlow() {
       setPhase((p) => (p === "loading" || p === "offline" ? "ready" : p));
       return;
     }
-    setProblem({ title: r.status === 503 ? "The demo is full" : "Can't reach AimoPilot", body: r.error.message });
+    setProblem({ key: r.status === 503 ? "full" : "offline", body: r.error.message });
     setPhase(r.status === 503 ? "full" : "offline");
   }, []);
 
@@ -62,7 +70,7 @@ export function JoinFlow() {
       router.replace(r.data.next);
       return;
     }
-    setProblem({ title: "That didn't work", body: r.error.message });
+    setProblem({ key: "failed", body: r.error.message });
     setPhase("failed");
     void load(); // the prompt was used up; prepare a fresh one
   }
@@ -75,7 +83,7 @@ export function JoinFlow() {
     try {
       response = await startRegistration({ optionsJSON: start.options });
     } catch (err) {
-      setProblem(passkeyProblem(err));
+      setProblem({ key: "passkey", err });
       setPhase("failed");
       if (Date.now() - fetchedAt.current > REFRESH_MS) void load();
       return;
@@ -83,12 +91,14 @@ export function JoinFlow() {
     await finish({ response });
   }
 
-  if (phase === "loading") return <p className="mt-20 text-center text-ink-soft">Setting up your kitchen…</p>;
+  const shown = !problem ? null : problem.key === "passkey" ? passkeyProblemL(problem.err, lang) : { title: tx[problem.key], body: problem.body };
+
+  if (phase === "loading") return <p className="mt-20 text-center text-ink-soft">{tx.loading}</p>;
   if (phase === "full" || phase === "offline")
     return (
-      <PhoneNotice title={problem?.title ?? "Can't reach AimoPilot"} body={problem?.body ?? ""}>
+      <PhoneNotice title={shown?.title ?? tx.offline} body={shown?.body ?? ""}>
         <button className={`mt-6 ${bigButton("dark")}`} onClick={() => void load()}>
-          Try again
+          {tx.tryAgain}
         </button>
       </PhoneNotice>
     );
@@ -96,12 +106,12 @@ export function JoinFlow() {
 
   if (start.current && !skipCurrent)
     return (
-      <PhoneNotice title={`You are already ${start.current.approverName}`} body={`Purchasing manager at ${start.current.kitchenName}.`}>
+      <PhoneNotice title={tx.already(start.current.approverName)} body={tx.alreadyBody(start.current.kitchenName)}>
         <Link href="/approver" className={`mt-6 ${bigButton("go")}`}>
-          Go to my screen
+          {tx.goToMine}
         </Link>
         <button className={`mt-3 ${bigButton("secondary")} min-h-14 text-[1.05rem]`} onClick={() => setSkipCurrent(true)}>
-          Start over with a new kitchen
+          {tx.startOver}
         </button>
       </PhoneNotice>
     );
@@ -111,35 +121,31 @@ export function JoinFlow() {
   const canPasskey = supported && start.secureOrigin;
   return (
     <div className="flex flex-1 flex-col">
-      <p className="text-[1rem] font-semibold text-petrol">A demo kitchen, yours for 90 minutes</p>
-      <h1 className="display mt-2 text-[2.6rem] leading-[0.98] text-ink">
-        Become the purchasing manager of {id.kitchenName}, {id.city}
-      </h1>
+      <p className="text-[1rem] font-semibold text-petrol">{tx.eyebrow}</p>
+      <h1 className="display mt-2 text-[2.6rem] leading-[0.98] text-ink hyphens-auto [overflow-wrap:anywhere]">{tx.title(id.kitchenName, id.city)}</h1>
       <div className="mt-5 bg-paper p-4">
-        <p className="leading-snug">
-          You will be <strong>{id.approverName}</strong>. The kitchen&apos;s AI buyer may spend up to <strong className="tabular">{fiMoney(start.perOrderLimit)}</strong> per order on its own. Anything bigger, or any swap to a different product, stops at the gate and comes to this phone for your OK.
-        </p>
+        <p className="leading-snug">{tx.intro(<strong>{id.approverName}</strong>, <strong className="tabular">{fiMoney(start.perOrderLimit)}</strong>)}</p>
       </div>
       <ol className="mt-5 space-y-3">
-        {["Create a passkey: one tap, Face ID or fingerprint.", "Keep this screen open.", "When the agent goes beyond its limit, the request opens here. You approve or decline."].map((t, i) => (
+        {tx.steps.map((t, i) => (
           <li key={t} className="grid grid-cols-[2rem_1fr] items-baseline gap-2 leading-snug">
             <span className="display flex size-7 items-center justify-center border-2 border-petrol text-[1rem] text-petrol">{i + 1}</span>
             {t}
           </li>
         ))}
       </ol>
-      <p className="mt-5 text-[0.95rem] leading-snug text-ink-soft">No name, no email, no password. The passkey is deleted from AimoPilot when the demo kitchen closes.</p>
+      <p className="mt-5 text-[0.95rem] leading-snug text-ink-soft">{tx.privacy}</p>
 
-      {problem && phase === "failed" && <PhoneProblem title={problem.title} body={problem.body} />}
-      {!canPasskey && <PhoneProblem quiet title="Passkeys are not available here" body={start.secureOrigin ? "This browser can't create passkeys. Try Safari on iPhone or Chrome on Android." : "Passkeys only work over https. Open the https address of this demo."} />}
+      {shown && phase === "failed" && <PhoneProblem title={shown.title} body={shown.body} />}
+      {!canPasskey && <PhoneProblem quiet title={tx.noPasskeyTitle} body={start.secureOrigin ? tx.noPasskeyBrowser : tx.noPasskeyHttps} />}
 
       <div className="mt-auto pt-8">
         <button className={bigButton("go")} onClick={() => void createPasskey()} disabled={busy || !canPasskey}>
-          {phase === "prompt" ? "Waiting for Face ID or fingerprint…" : phase === "saving" ? "Setting up…" : "Create my passkey and start"}
+          {phase === "prompt" ? tx.waitingBio : phase === "saving" ? tx.settingUp : tx.create}
         </button>
         {start.demoTapEnabled && (phase === "failed" || !canPasskey) && (
           <button className={`mt-3 ${bigButton("demo")} min-h-14 text-[1rem]`} disabled={busy} onClick={() => void finish({ fallback: true })}>
-            Demo only: continue without a passkey (your approvals will be marked unverified)
+            {tx.demoTap}
           </button>
         )}
       </div>

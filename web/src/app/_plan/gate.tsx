@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import type { PlanWire } from "@/server/agent/menu/wire";
 import { api } from "../_client/api";
-import { clock, day, money, roleLabel, ruleTitle, say } from "../_ui/plain";
+import { clock, money, say } from "../_ui/plain";
 import { Target } from "../_ui/target";
+import { useFormat, useText } from "../_i18n/provider";
+import { GATE_TEXT } from "./gate.text";
 import { cutoff } from "./sheet";
 import { Btn, Field, Sheet } from "./ui";
 
@@ -13,30 +15,32 @@ type ApprovalQr = { mode: "demo_link" | "view_only"; approver: { name: string; r
 /** The bottom of the sheet: total, delivery, what needs a person, and the one button that asks for a fixed price. */
 export function Totals({ plan, onQuote, busy }: { plan: PlanWire; onQuote: () => void; busy: boolean }) {
   const t = plan.totals;
+  const tx = useText(GATE_TEXT);
+  const f = useFormat();
   return (
     <Sheet safety={t.signOff.needed || t.openDoubts > 0}>
       <div className="p-4 sm:p-5">
         <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
-          <Field label="Total, before VAT">
+          <Field label={tx.total}>
             <span className="display text-[2rem] tabular">{money(t.totalCents)}</span>
           </Field>
-          <Field label="Lines">
-            {t.lines} line{t.lines === 1 ? "" : "s"}, {t.products} product{t.products === 1 ? "" : "s"}
-            {t.struck ? <span className="block text-[0.9rem] font-medium text-ink-soft">{t.struck} not ordered</span> : null}
+          <Field label={tx.lines}>
+            {tx.linesCount(t.lines, t.products)}
+            {t.struck ? <span className="block text-[0.9rem] font-medium text-ink-soft">{tx.notOrdered(t.struck)}</span> : null}
           </Field>
-          <Field label="Delivery">
-            {t.deliveryDate ? day(t.deliveryDate) : "-"}
-            {t.orderBy ? <span className="block text-[0.9rem] font-medium text-ink-soft">order by {cutoff(t.orderBy)}</span> : null}
+          <Field label={tx.delivery}>
+            {t.deliveryDate ? f.day(t.deliveryDate) : "-"}
+            {t.orderBy ? <span className="block text-[0.9rem] font-medium text-ink-soft">{tx.orderBy(cutoff(t.orderBy, f.lang))}</span> : null}
           </Field>
-          <Field label="Who decides">
-            {t.signOff.needed ? (t.signOff.approver ? `${t.signOff.approver.name}, ${roleLabel(t.signOff.approver.role)}` : "no one may sign it") : "the agent, within its mandate"}
+          <Field label={tx.whoDecides}>
+            {t.signOff.needed ? (t.signOff.approver ? `${t.signOff.approver.name}, ${f.role(t.signOff.approver.role)}` : tx.noOne) : tx.agentAlone}
             {t.signOff.reasons[0] ? <span className="block text-[0.9rem] font-medium text-ink-soft">{t.signOff.reasons[0]}</span> : null}
           </Field>
         </dl>
         {plan.state === "planned" && (
           <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-line pt-3">
             <Btn kind="primary" busy={busy} disabled={!t.canQuote} onClick={onQuote} className="min-h-12 px-5 text-[1.1rem]">
-              Get a fixed price
+              {tx.getPrice}
             </Btn>
             {t.blockers.length > 0 ? (
               <ul className="text-[0.95rem] leading-snug">
@@ -45,13 +49,14 @@ export function Totals({ plan, onQuote, busy }: { plan: PlanWire; onQuote: () =>
                 ))}
               </ul>
             ) : (
-              <p className="text-[0.95rem] text-ink-soft">One quote for the whole plan, then the gate checks it against the mandate once.</p>
+              <p className="text-[0.95rem] text-ink-soft">{tx.oneQuote}</p>
             )}
           </div>
         )}
         <p className="mt-3 text-[0.85rem] text-ink-soft">
-          Live price and availability: {plan.live.calls} batched call{plan.live.calls === 1 ? "" : "s"}, {plan.live.products} products ({plan.live.allowance.newProductsLeft} more allowed this hour).
-          {plan.live.refused ? ` ${plan.live.refused}` : ""} Model: {plan.model.calls.length} calls, {(plan.model.ms / 1000).toFixed(1)} s{plan.model.costUsd !== null ? `, $${plan.model.costUsd.toFixed(3)}` : ""}.
+          {tx.live(plan.live.calls, plan.live.products, plan.live.allowance.newProductsLeft)}
+          {plan.live.refused ? ` ${plan.live.refused}` : ""}
+          {tx.model(plan.model.calls.length, plan.model.ms, plan.model.costUsd)}
         </p>
       </div>
     </Sheet>
@@ -62,6 +67,8 @@ export function Totals({ plan, onQuote, busy }: { plan: PlanWire; onQuote: () =>
 export function GateStage({ plan, kitchen, onOrder, onRefresh, busy, base }: { plan: PlanWire; kitchen: string; onOrder: () => void; onRefresh: () => void; busy: boolean; base: string }) {
   const q = plan.quote;
   const o = plan.order;
+  const tx = useText(GATE_TEXT);
+  const f = useFormat();
   useEffect(() => {
     if (o?.status !== "pending_approval") return;
     const t = setInterval(onRefresh, 2000);
@@ -73,28 +80,25 @@ export function GateStage({ plan, kitchen, onOrder, onRefresh, busy, base }: { p
       <div className="p-4 sm:p-5">
         {plan.error && (
           <div role="alert" className="mb-3 border-l-[6px] border-safety-ink bg-safety/30 px-3 py-2">
-            <p className="font-semibold">The gate said no: {ruleTitle(plan.error.rule) || plan.error.code}</p>
+            <p className="font-semibold">{tx.gateSaidNo(f.ruleTitle(plan.error.rule) || plan.error.code)}</p>
             <p>{plan.error.message}</p>
           </div>
         )}
         {q && (
           <>
-            <h2 className="display text-[1.6rem]">Fixed price {money(q.totalCents)}</h2>
-            <p className="text-[0.95rem] text-ink-soft">
-              Signed by the wholesaler, holds until {clock(q.expiresAt)}
-              {q.expiresBecause === "order_cutoff" ? " (the order cut-off)" : q.expiresBecause === "price_validity" ? " (when the price stops being valid)" : ""}; it rests on {q.evidence} signed claims. {q.lines.length} lines.
-            </p>
+            <h2 className="display text-[1.6rem]">{tx.fixedPrice(money(q.totalCents))}</h2>
+            <p className="text-[0.95rem] text-ink-soft">{tx.holds(clock(q.expiresAt), q.expiresBecause, q.evidence, q.lines.length)}</p>
             {!o && (
               <>
                 <p className="mt-2">
                   {q.policyPreview.outcome === "auto_approve"
-                    ? "The gate will let the agent place this alone: it is within the mandate."
+                    ? tx.previewAuto
                     : q.policyPreview.outcome === "needs_human_approval"
-                      ? `The gate will ask ${q.policyPreview.approver?.name} (${roleLabel(q.policyPreview.approver?.role ?? "")}) to sign off: ${q.policyPreview.reasons[0]}`
-                      : `The gate would refuse it: ${q.policyPreview.reasons[0]}`}
+                      ? tx.previewAsk(q.policyPreview.approver?.name, f.role(q.policyPreview.approver?.role ?? ""), q.policyPreview.reasons[0])
+                      : tx.previewRefuse(q.policyPreview.reasons[0])}
                 </p>
                 <Btn kind="go" busy={busy} onClick={onOrder} className="mt-3 min-h-12 px-5 text-[1.1rem]">
-                  Place the order
+                  {tx.place}
                 </Btn>
               </>
             )}
@@ -110,16 +114,18 @@ function Decision({ order, kitchen, base }: { order: NonNullable<PlanWire["order
   const a = order.approval;
   const escalated = order.decision.rules.filter((r) => r.outcome === "escalate");
   const failed = order.decision.rules.filter((r) => r.outcome === "fail");
+  const tx = useText(GATE_TEXT);
+  const f = useFormat();
   const title =
     order.status === "committed"
       ? a
-        ? `Signed off by ${a.approver.name}: ordered`
-        : "Ordered on the agent's own authority"
+        ? tx.signedOff(a.approver.name)
+        : tx.ownAuthority
       : order.status === "pending_approval"
-        ? `Waiting for ${a?.approver.name ?? "a person"}`
+        ? tx.waitingFor(a?.approver.name)
         : order.status === "declined"
-          ? `Declined by ${a?.approver.name}`
-          : "Refused by the gate";
+          ? tx.declinedBy(a?.approver.name)
+          : tx.refused;
   return (
     <div className="mt-4 grid gap-5 border-t border-line pt-4 md:grid-cols-[1fr_auto]">
       <div className="min-w-0">
@@ -135,7 +141,7 @@ function Decision({ order, kitchen, base }: { order: NonNullable<PlanWire["order
             <p className="display text-[1.9rem]">{title}</p>
             <p className="text-ink-soft">
               {money(order.totalCents)}
-              {order.confirmed ? ", confirmation signed by the wholesaler" : ""}.
+              {order.confirmed ? tx.confirmed : ""}.
             </p>
           </div>
         </div>
@@ -143,18 +149,18 @@ function Decision({ order, kitchen, base }: { order: NonNullable<PlanWire["order
           <ul className="mt-3 space-y-1 leading-snug">
             {[...failed, ...escalated].map((r) => (
               <li key={r.rule}>
-                <strong>{ruleTitle(r.rule)}.</strong> {say(r.reason)}
+                <strong>{f.ruleTitle(r.rule)}.</strong> {say(r.reason)}
               </li>
             ))}
           </ul>
         )}
         <details className="mt-3 text-[0.92rem]">
-          <summary className="min-h-10 cursor-pointer py-2 font-semibold text-petrol underline decoration-2 underline-offset-4">All {order.decision.rules.length} checks</summary>
+          <summary className="min-h-10 cursor-pointer py-2 font-semibold text-petrol underline decoration-2 underline-offset-4">{tx.allChecks(order.decision.rules.length)}</summary>
           <ul className="mt-1 divide-y divide-line">
             {order.decision.rules.map((r) => (
               <li key={r.rule} className="grid gap-x-3 py-1 sm:grid-cols-[13rem_5rem_1fr]">
-                <span className="font-semibold">{ruleTitle(r.rule)}</span>
-                <span>{r.outcome === "pass" ? "Passed" : r.outcome === "escalate" ? "Needs a person" : "Failed"}</span>
+                <span className="font-semibold">{f.ruleTitle(r.rule)}</span>
+                <span>{tx.outcome[r.outcome === "pass" || r.outcome === "escalate" ? r.outcome : "fail"]}</span>
                 <span className="text-ink-soft">{say(r.reason)}</span>
               </li>
             ))}
@@ -169,6 +175,7 @@ function Decision({ order, kitchen, base }: { order: NonNullable<PlanWire["order
 function ApprovalQrPanel({ kitchen, approvalId, base }: { kitchen: string; approvalId: string; base: string }) {
   const [qr, setQr] = useState<ApprovalQr>();
   const [error, setError] = useState<string>();
+  const tx = useText(GATE_TEXT);
   useEffect(() => {
     let live = true;
     void api<ApprovalQr>("GET", `${base}/${encodeURIComponent(kitchen)}/approval/${encodeURIComponent(approvalId)}`).then((r) => {
@@ -192,10 +199,10 @@ function ApprovalQrPanel({ kitchen, approvalId, base }: { kitchen: string; appro
         </div>
       </div>
       <p className="mt-1 leading-snug">
-        {qr.mode === "demo_link" ? `Scan to sign off as ${qr.approver.name}: the one-time link AimoPilot sent to their phone (demo kitchen).` : `${qr.approver.name} signs off on their phone.`}
+        {qr.mode === "demo_link" ? tx.scanAs(qr.approver.name) : tx.signsOnPhone(qr.approver.name)}
       </p>
       <a href={qr.url} target="_blank" rel="noreferrer" className="font-semibold text-petrol underline decoration-2 underline-offset-4">
-        Open the sign-off page
+        {tx.openSignOff}
       </a>
     </div>
   );

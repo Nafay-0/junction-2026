@@ -1,16 +1,20 @@
 import type { Metadata } from "next";
-import { Wordmark } from "../../_ui/wordmark";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { MENU_KITCHENS } from "@/server/agent/menu/kitchens";
 import { MenuPlanner } from "../../_plan/menu-planner";
+import { StandaloneHeader, StandaloneNote } from "../../_plan/pages";
+import { PLAN_PAGES_TEXT } from "../../_plan/pages.text";
+import { LangProvider } from "../../_i18n/provider";
+import { chosenLang, requestLang } from "../../_i18n/server";
 
-export const metadata: Metadata = { title: "AimoPilot: menu to order" };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: PLAN_PAGES_TEXT[await requestLang()].standaloneTitle };
+}
 
-const NAMES: Record<string, { name: string; kind: string }> = {
-  kaari: { name: "Ravintola Kaari", kind: "Lunch restaurant" },
-  laakso: { name: "Laakso Catering", kind: "School and daycare kitchen, no nuts" },
+const NAMES: Record<string, string> = {
+  kaari: "Ravintola Kaari",
+  laakso: "Laakso Catering",
 };
 
 /**
@@ -33,29 +37,14 @@ async function Loaded({ params }: PageProps<"/plan/[kitchen]">) {
   const { kitchen } = await params;
   if (!(MENU_KITCHENS as string[]).includes(kitchen)) notFound();
   return (
-    <main className="min-h-dvh bg-mist text-ink">
-      <header className="border-b-4 border-petrol bg-paper">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-3">
-            <Link href={`/k/${kitchen}/menu`} className="flex items-center">
-              <Wordmark size={32} />
-            </Link>
-            <span className="display text-[1.5rem]">Menu planner</span>
-          </div>
-          <nav className="flex flex-wrap gap-2" aria-label="Kitchens">
-            {MENU_KITCHENS.map((k) => (
-              <Link key={k} href={`/plan/${k}`} aria-current={k === kitchen ? "page" : undefined} className={`border-2 px-3 py-1.5 text-[0.95rem] font-semibold ${k === kitchen ? "border-petrol bg-petrol text-paper" : "border-line hover:border-petrol"}`}>
-                {NAMES[k].name}
-                <span className={`block text-[0.75rem] font-medium ${k === kitchen ? "text-paper/80" : "text-ink-soft"}`}>{NAMES[k].kind}</span>
-              </Link>
-            ))}
-          </nav>
+    <LangProvider initial={await chosenLang()}>
+      <main className="min-h-dvh bg-mist text-ink">
+        <StandaloneHeader kitchen={kitchen} kitchens={MENU_KITCHENS} names={NAMES} />
+        <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6">
+          <StandaloneNote />
+          <MenuPlanner key={kitchen} kitchen={kitchen} />
         </div>
-      </header>
-      <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6">
-        <p className="mb-4 text-[0.85rem] text-ink-soft">Also inside each kitchen&apos;s shop, under Menu planner. Demo on synthetic kitchens and the partner&apos;s test catalogue. The model drafts dishes and amounts; plain code checks every line, the price and the mandate.</p>
-        <MenuPlanner key={kitchen} kitchen={kitchen} />
-      </div>
-    </main>
+      </main>
+    </LangProvider>
   );
 }

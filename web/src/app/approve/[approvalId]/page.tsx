@@ -1,9 +1,18 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { PhoneShell } from "../../_ui/phone";
+import { pick } from "../../_i18n/lang";
+import { requestLang } from "../../_i18n/server";
+import { LangText } from "../../_ui/phone";
+import { PhonePage } from "../../_ui/phone-page";
 import { ApprovalScreen } from "./approval-screen";
+import { APPROVAL_TEXT } from "./approval-screen.text";
 
-export const metadata: Metadata = { title: "AimoPilot: sign-off" };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: pick(await requestLang(), { en: "AimoPilot: sign-off", fi: "AimoPilot: hyväksyntä", sv: "AimoPilot: godkännande" }) };
+}
+
+const context = { en: APPROVAL_TEXT.en.context, fi: APPROVAL_TEXT.fi.context, sv: APPROVAL_TEXT.sv.context };
+const opening = { en: APPROVAL_TEXT.en.opening, fi: APPROVAL_TEXT.fi.opening, sv: APPROVAL_TEXT.sv.opening };
 
 /**
  * The sign-off screen behind an approval link or QR code. Approvers with a passkey approve with it (the challenge
@@ -11,11 +20,17 @@ export const metadata: Metadata = { title: "AimoPilot: sign-off" };
  */
 export default function ApprovePage(props: PageProps<"/approve/[approvalId]">) {
   return (
-    <PhoneShell tone="gate" context="Sign-off">
-      <Suspense fallback={<p className="mt-20 text-center text-ink-soft">Opening the request…</p>}>
+    <PhonePage tone="gate" context={context}>
+      <Suspense
+        fallback={
+          <p className="mt-20 text-center text-ink-soft">
+            <LangText t={opening} />
+          </p>
+        }
+      >
         <Approval {...props} />
       </Suspense>
-    </PhoneShell>
+    </PhonePage>
   );
 }
 

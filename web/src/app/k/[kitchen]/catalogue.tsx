@@ -2,9 +2,12 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { attr, num } from "../../_ui/plain";
-import { usePortal, type Lang } from "./portal";
-import { CLAIM_LABEL, TEMP, Tile } from "./shop";
+import { num } from "../../_ui/plain";
+import { useFormat, useText } from "../../_i18n/provider";
+import { usePortal } from "./portal";
+import { CATALOGUE_TEXT, departmentName } from "./catalogue.text";
+import { SHOP_TEXT } from "./shop.text";
+import { TEMP, Tile, allergenText } from "./shop";
 import { Button, ErrorPlate } from "./ui";
 import { Empty, Skeleton } from "../../_ui/kit";
 import { DEPARTMENT_GLYPH, Glyph, TempGlyph } from "../../_ui/glyphs";
@@ -18,14 +21,12 @@ import type { CatalogReply, ShopDepartment } from "./types";
 
 const CLAIMS = ["lactose_free", "low_lactose", "gluten_free", "vegan", "vegetarian", "organic"] as const;
 const ALLERGENS = ["milk", "gluten", "eggs", "nuts", "peanuts", "soy", "fish", "sesame", "celery", "mustard"] as const;
-const LANGS: { id: Lang; label: string }[] = [
-  { id: "en", label: "English" },
-  { id: "fi", label: "Suomi" },
-  { id: "sv", label: "Svenska" },
-];
 
 export function Catalogue() {
-  const { kitchen, ui, lang, setLang, live } = usePortal();
+  const { kitchen, ui, lang, live } = usePortal();
+  const tx = useText(CATALOGUE_TEXT);
+  const sx = useText(SHOP_TEXT);
+  const f = useFormat();
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -92,15 +93,15 @@ export function Catalogue() {
   const pageCalls = live.calls - startCalls;
   const pageProducts = live.products - startProducts;
   const total = data?.source.products;
-  const title = applied ? `“${applied}”` : current ? current.cat.label : category ? attr(category) : "All products";
+  const title = applied ? tx.quoted(applied) : current ? current.cat.label : category ? f.attr(category) : tx.allProducts;
 
   const glyph = current ? DEPARTMENT_GLYPH[current.dept.id] : undefined;
   const filtered = applied || category !== (defaultCat ?? "") || claims.length > 0 || free.length > 0;
 
   return (
     <div className="mt-5 grid gap-6 lg:grid-cols-[16rem_minmax(0,1fr)]">
-      <nav aria-label="Departments" className="lg:sticky lg:top-3 lg:max-h-[calc(100dvh-1.5rem)] lg:overflow-y-auto">
-        <h2 className="display text-[1.5rem] text-ink">Departments</h2>
+      <nav aria-label={tx.departments} className="lg:sticky lg:top-3 lg:max-h-[calc(100dvh-1.5rem)] lg:overflow-y-auto">
+        <h2 className="display text-[1.5rem] text-ink">{tx.departments}</h2>
         {!depts && <Skeleton className="mt-2 h-64" />}
         <ul className="mt-2 bg-paper">
           {depts?.map((d) => {
@@ -110,7 +111,7 @@ export function Catalogue() {
               <li key={d.id} className="border-b border-line last:border-b-0">
                 <button type="button" aria-expanded={open} onClick={() => setOpenDept(open ? "" : d.id)} className={`flex min-h-11 w-full items-center gap-2.5 px-3 py-1.5 text-left ${open ? "bg-petrol-deep font-semibold text-paper" : "hover:bg-mist"}`}>
                   {g ? <Glyph kind={g} size={22} className={`shrink-0 ${open ? "text-lime" : "text-petrol"}`} strokeWidth={3} /> : <span className="w-[22px]" />}
-                  <span className="min-w-0 flex-1 leading-tight">{d.name}</span>
+                  <span className="min-w-0 flex-1 leading-tight hyphens-auto">{departmentName(d, lang)}</span>
                   <span className={`text-[0.8rem] font-normal tabular ${open ? "text-paper/70" : "text-ink-soft"}`}>{num(d.count, 0)}</span>
                 </button>
                 {open && (
@@ -125,7 +126,7 @@ export function Catalogue() {
                         >
                           <span className="flex items-center gap-1.5">
                             {c.temperature && TEMP[c.temperature] && (
-                              <span style={{ color: TEMP[c.temperature].color }} title={TEMP[c.temperature].label}>
+                              <span style={{ color: TEMP[c.temperature].color }} title={sx.temp[c.temperature]}>
                                 <TempGlyph t={c.temperature} size={11} />
                               </span>
                             )}
@@ -141,53 +142,42 @@ export function Catalogue() {
             );
           })}
         </ul>
-        {depts && depts.length > 1 && <p className="mt-2 text-[0.8rem] leading-snug text-ink-soft">The wholesaler publishes category numbers only; these names are derived from the products in each.</p>}
+        {depts && depts.length > 1 && <p className="mt-2 text-[0.8rem] leading-snug text-ink-soft">{tx.categoryNote}</p>}
       </nav>
 
       <section aria-labelledby="shop-title" className="min-w-0">
         <header className="on-dark relative overflow-hidden bg-petrol-deep px-5 py-6 text-paper sm:px-7 sm:py-8">
           {glyph && !applied && <Glyph kind={glyph} size={220} strokeWidth={1.2} className="pointer-events-none absolute -right-6 -top-6 text-paper/10 sm:right-6" />}
-          <p className="relative text-[0.95rem] text-paper/75">{applied ? "Search" : current ? current.dept.name : "Catalogue"}</p>
-          <h1 id="shop-title" className="display relative mt-1 text-[2.6rem] text-paper sm:text-[3.4rem]">
+          <p className="relative text-[0.95rem] text-paper/75">{applied ? tx.search : current ? departmentName(current.dept, lang) : tx.catalogue}</p>
+          <h1 id="shop-title" className="display relative mt-1 break-words text-[2.6rem] text-paper sm:text-[3.4rem]">
             {title}
           </h1>
           <p className="relative mt-2 text-[0.95rem] text-paper/80" aria-live="polite">
-            {loading ? "Searching…" : data ? `${data.products.length}${data.products.length === limit ? "+" : ""} products from the product files in ${data.ms} ms. No live call for the list.` : ""}
+            {loading ? tx.searching : data ? tx.found(data.products.length, data.products.length === limit, data.ms) : ""}
           </p>
-          <div className="relative mt-4 flex flex-wrap items-end justify-between gap-4">
-            <p className="flex items-center gap-2" aria-live="polite">
-              <span className="display text-[2.4rem] text-lime tabular">{pageCalls}</span>
-              <span className="text-[0.9rem] leading-tight text-paper/85">
-                live price check{pageCalls === 1 ? "" : "s"} on this page
-                <span className="block text-paper/65">
-                  for {pageProducts} product{pageProducts === 1 ? "" : "s"} you opened or added, of {total ? num(total, 0) : "all"}
-                </span>
-              </span>
-            </p>
-            <div role="group" aria-label="Product names in" className="flex">
-              {LANGS.map((l) => (
-                <button key={l.id} type="button" aria-pressed={lang === l.id} onClick={() => setLang(l.id)} className={`-ml-[2px] min-h-10 border-2 border-paper/60 px-3 text-[0.92rem] first:ml-0 ${lang === l.id ? "bg-paper font-semibold text-petrol-deep" : "text-paper hover:bg-paper/10"}`}>
-                  {l.label}
-                </button>
-              ))}
-            </div>
-          </div>
+          <p className="relative mt-4 flex items-center gap-2" aria-live="polite">
+            <span className="display text-[2.4rem] text-lime tabular">{pageCalls}</span>
+            <span className="min-w-0 text-[0.9rem] leading-tight text-paper/85">
+              {tx.pageChecks(pageCalls)}
+              <span className="block text-paper/65">{tx.pageProducts(pageProducts, total ? num(total, 0) : undefined)}</span>
+            </span>
+          </p>
         </header>
 
         <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 bg-paper px-4 py-3">
-          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Must be">
-            <span className="mr-1 text-[0.9rem] font-semibold">Must be</span>
+          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={tx.mustBe}>
+            <span className="mr-1 text-[0.9rem] font-semibold">{tx.mustBe}</span>
             {CLAIMS.map((c) => (
               <Chip key={c} on={claims.includes(c)} onClick={() => set({ claim: toggle(claims, c) })}>
-                {CLAIM_LABEL[c]}
+                {sx.claim[c]}
               </Chip>
             ))}
           </div>
-          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Leave out allergens">
-            <span className="mr-1 text-[0.9rem] font-semibold">Without</span>
+          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={tx.leaveOut}>
+            <span className="mr-1 text-[0.9rem] font-semibold">{tx.without}</span>
             {ALLERGENS.map((a) => (
               <Chip key={a} on={free.includes(a)} onClick={() => set({ free: toggle(free, a) })}>
-                {attr(a)}
+                {allergenText(a, lang)}
               </Chip>
             ))}
           </div>
@@ -200,17 +190,17 @@ export function Catalogue() {
                 router.replace(pathname, { scroll: false });
               }}
             >
-              Clear
+              {tx.clear}
             </button>
           )}
         </div>
-        {free.length > 0 && <p className="mt-1 text-[0.85rem] text-ink-soft">Products with no allergen data are left out too: unknown is not safe.</p>}
+        {free.length > 0 && <p className="mt-1 text-[0.85rem] text-ink-soft">{tx.allergenNote}</p>}
 
-        {error && <ErrorPlate title="The catalogue did not load" message={`${error} Try again, or search for the product by name.`} />}
+        {error && <ErrorPlate title={tx.loadFailed} message={tx.loadFailedMessage(error)} />}
         {!loading && data?.products.length === 0 && (
           <div className="mt-3">
-            <Empty title="Nothing matches" action={filtered ? <Button kind="secondary" onClick={() => router.replace(pathname, { scroll: false })}>Clear the filters</Button> : undefined}>
-              Remove a filter, or search in another language: “maito”, “mjölk”. Or ask the agent: it finds products by what they are for.
+            <Empty title={tx.nothing} action={filtered ? <Button kind="secondary" onClick={() => router.replace(pathname, { scroll: false })}>{tx.clearFilters}</Button> : undefined}>
+              {tx.nothingHelp}
             </Empty>
           </div>
         )}
@@ -220,10 +210,10 @@ export function Catalogue() {
         </ul>
         {data && data.products.length === limit && limit < 100 && (
           <Button kind="secondary" className="mt-4" onClick={() => setLimit(100)}>
-            Show more
+            {tx.showMore}
           </Button>
         )}
-        {live.error && <ErrorPlate title="The live check failed" message={live.error} />}
+        {live.error && <ErrorPlate title={tx.liveFailed} message={live.error} />}
       </section>
     </div>
   );
