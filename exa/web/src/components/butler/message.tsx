@@ -188,8 +188,11 @@ export function AssistantMessage({
   handlers,
   onRetry,
   busy,
+  spoken,
 }: {
   message: ButlerMessage;
+  /** In a live call's own view: the words were spoken aloud, so only what was put on screen is shown. */
+  spoken?: boolean;
   /** True while this message is still being generated. */
   active: boolean;
   handlers: WidgetHandlers;
@@ -265,6 +268,7 @@ export function AssistantMessage({
       {blocks.map((block) => {
         switch (block.kind) {
           case "text":
+            if (spoken) return null;
             return (
               <div key={block.key} className="animate-fade">
                 <Markdown streaming={active && block.streaming}>{block.text}</Markdown>
@@ -280,8 +284,8 @@ export function AssistantMessage({
             return <ToolWidget key={block.key} part={block.part} handlers={handlers} />;
         }
       })}
-      {active && nothingYet ? <WorkingLine /> : null}
-      {!active && !nothingYet ? <RunFooter stats={finished ? stats : undefined} sources={sources} copy={copy} onRetry={onRetry} busy={busy} /> : null}
+      {active && nothingYet && !spoken ? <WorkingLine /> : null}
+      {!active && !nothingYet && !spoken ? <RunFooter stats={finished ? stats : undefined} sources={sources} copy={copy} onRetry={onRetry} busy={busy} /> : null}
     </div>
   );
 }

@@ -2,10 +2,11 @@
 
 import * as React from "react";
 import { motion } from "motion/react";
-import { ArrowUpRight, ChartCandlestick, Images, Microscope, MousePointerClick, Plane, ShoppingBag, UtensilsCrossed } from "lucide-react";
+import { ArrowUpRight, AudioLines, ChartCandlestick, Images, Microscope, MousePointerClick, Plane, ShoppingBag, UtensilsCrossed } from "lucide-react";
 import { APP_NAME } from "@/lib/brand";
 import { useDesktopApp } from "@/lib/browser/desktop";
 import { useClientValue } from "@/lib/use-client";
+import { voiceSupported } from "@/lib/voice/audio";
 
 type Preset = { icon: React.ReactNode; title: string; hint: string; prompt: (place: string) => string };
 
@@ -66,7 +67,8 @@ function greeting(hour: number): string {
   return "Good evening";
 }
 
-export function Welcome({ place, onPick }: { place: string; onPick: (prompt: string) => void }) {
+export function Welcome({ place, onPick, onTalk }: { place: string; onPick: (prompt: string) => void; /** Start a live call. */ onTalk?: () => void }) {
+  const canTalk = useClientValue(voiceSupported, false) && Boolean(onTalk);
   // The hour is only known in the browser, so the greeting appears after hydration.
   const hour = useClientValue(() => new Date().getHours(), -1);
   const hello = hour >= 0 ? greeting(hour) : null;
@@ -89,6 +91,16 @@ export function Welcome({ place, onPick }: { place: string; onPick: (prompt: str
             ? "Pass me a task. I search the live web with Exa, show what I find as maps, charts and cards you can use, and do the work in a live browser you can watch. The last step comes back to you."
             : `Pass me a task. I search the live web with Exa and show what I find as maps, charts and cards you can use. To have it done for you on a site, in a live browser you can watch, open the ${APP_NAME} desktop app.`}
         </p>
+        {canTalk ? (
+          <button
+            type="button"
+            onClick={onTalk}
+            className="mt-5 flex h-11 items-center gap-2.5 rounded-full bg-primary pr-5 pl-4 text-[0.92rem] font-medium text-primary-foreground shadow-card transition-[transform,opacity] hover:opacity-90 active:scale-[0.98]"
+          >
+            <AudioLines className="size-[1.15rem]" />
+            Talk to {APP_NAME}
+          </button>
+        ) : null}
       </motion.div>
 
       {/* Narrow column: two columns of small chips, name only. Wider: tiles with a line of explanation, two then three across. */}

@@ -329,3 +329,45 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ───────── Voice: the call's stone ───────── */
+.orb { --orb-ink: var(--primary-foreground); --orb-tile: var(--primary); }
+.orb-tile { fill: var(--orb-tile); transition: fill 0.4s ease; }
+.orb-facet, .orb-table { fill: var(--orb-ink); transform-origin: 16px 16px; transition: opacity 0.4s ease; }
+.orb-stone {
+  transform: scale(calc(1 + var(--voice) * 0.14));
+  filter: drop-shadow(0 10px 28px color-mix(in oklch, var(--brand) 28%, transparent));
+  will-change: transform;
+}
+.orb-ring {
+  border: 1.5px solid color-mix(in oklch, var(--brand) 55%, transparent);
+  opacity: calc(0.12 + var(--mic) * 0.7);
+  transform: scale(calc(1.06 + var(--mic) * 0.3));
+  will-change: transform, opacity;
+}
+.orb-glow {
+  background: radial-gradient(closest-side, color-mix(in oklch, var(--brand) 45%, transparent), transparent 72%);
+  opacity: calc(0.18 + var(--voice) * 0.75);
+  transform: scale(calc(1.2 + var(--voice) * 0.5));
+  will-change: transform, opacity;
+}
+/* Listening: it breathes. */
+.orb[data-status="listening"] .orb-stone { animation: orb-breathe 4.2s ease-in-out infinite; }
+/* Connecting and reconnecting: it waits, dimmed. */
+.orb[data-status="connecting"] .orb-stone, .orb[data-status="reconnecting"] .orb-stone { animation: orb-wait 1.6s ease-in-out infinite; }
+/* Working: the facets catch the light one after another. */
+.orb[data-status="thinking"] .orb-facet { animation: orb-facet 1.5s ease-in-out infinite; animation-delay: calc(var(--i) * 0.25s); }
+.orb[data-status="thinking"] .orb-ring { animation: orb-turn 2.4s linear infinite; border-style: dashed; opacity: 0.5; }
+/* Muted: the colour drains. */
+.orb[data-status="muted"] { --orb-tile: var(--muted); --orb-ink: var(--muted-foreground); }
+.orb[data-status="muted"] .orb-stone { filter: none; }
+.orb[data-status="muted"] .orb-ring, .orb[data-status="muted"] .orb-glow { opacity: 0; }
+@keyframes orb-breathe { 0%, 100% { scale: 1; } 50% { scale: 1.035; } }
+@keyframes orb-wait { 0%, 100% { opacity: 0.45; } 50% { opacity: 0.85; } }
+@keyframes orb-facet { 0%, 100% { opacity: 0.35; } 40% { opacity: 1; } }
+@keyframes orb-turn { to { rotate: 360deg; } }
+/* The little meter in the message box while it listens. */
+@keyframes voice-bar { 0%, 100% { transform: scaleY(0.35); } 50% { transform: scaleY(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .orb-stone, .orb-facet, .orb-ring { animation: none !important; }
+}

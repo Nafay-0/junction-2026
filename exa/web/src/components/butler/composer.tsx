@@ -2,8 +2,12 @@
 
 import * as React from "react";
 import type { FileUIPart } from "ai";
-import { ArrowUp, Check, ChevronDown, ImagePlus, LoaderCircle, LocateFixed, MapPin, Square, X } from "lucide-react";
+import { ArrowUp, AudioLines, Check, ChevronDown, ImagePlus, LoaderCircle, LocateFixed, MapPin, Mic, Square, X } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useClientValue } from "@/lib/use-client";
+import { voiceSupported } from "@/lib/voice/audio";
+import { startDictation, type Dictation } from "@/lib/voice/dictation";
 import { MODELS, getModel, type ModelInfo } from "@/lib/agent/models";
 import { formatAccuracy, type LocateResult } from "@/lib/location";
 import type { ExactLocation } from "@/lib/widgets/types";
@@ -12,6 +16,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 
 const MAX_IMAGES = 3;
 const MAX_EDGE = 1568;
+
+/** Put what was just heard after what is already in the box. */
+const join = (text: string, heard: string) => (!heard ? text : !text ? heard : /\s$/.test(text) ? text + heard : `${text} ${heard}`);
 
 /** Shrink an image in the browser so a phone photo does not become a 10 MB request. */
 async function toImagePart(file: File): Promise<FileUIPart> {
@@ -33,8 +40,14 @@ export function Composer({
   onModelChange,
   where,
   autoFocus,
+  onTalk,
+  inCall,
 }: {
   onSend: (text: string, files: FileUIPart[]) => void;
+  /** Start a live call: talk with the agent instead of typing. Left out where there is no call to start. */
+  onTalk?: () => void;
+  /** A live call is on: what is typed here is said in the call, and the microphone is the call's. */
+  inCall?: boolean;
   onStop: () => void;
   /** True while the agent is working. */
   busy: boolean;
@@ -50,13 +63,60 @@ export function Composer({
   const textarea = React.useRef<HTMLTextAreaElement>(null);
   const fileInput = React.useRef<HTMLInputElement>(null);
 
+  /* Voice input. Speak, and the words appear here as they are spoken; nothing is sent until the
+     user presses Send. `interim` is what is being said right now: it changes until the speaker
+     pauses, then joins the text. */
+  const canVoice = useClientValue(voiceSupported, false) && !inCall;
+  const [listening, setListening] = React.useState<"off" | "starting" | "on">("off");
+  const [interim, setInterim] = React.useState("");
+  const dictation = React.useRef<Dictation | null>(null);
+  const shown = join(text, interim);
+
+  const stopListening = React.useCallback(() => {
+    dictation.current?.stop();
+  }, []);
+  const startListening = React.useCallback(() => {
+    if (dictation.current || listening !== "off") return;
+    setListening("starting");
+    void startDictation({
+      onInterim: setInterim,
+      onFinal: (heard) => {
+        setInterim("");
+        setText((prev) => join(prev, heard.trim()));
+      },
+      onEnd: (problem) => {
+        dictation.current = null;
+        // Whatever was still being said when it stopped is kept.
+        setInterim((last) => {
+          if (last.trim()) setText((prev) => join(prev, last.trim()));
+          return "";
+        });
+        setListening("off");
+        if (problem) toast.error(problem);
+      },
+    }).then(
+      (session) => {
+        dictation.current = session;
+        setListening("on");
+      },
+      (err: unknown) => {
+        setListening("off");
+        toast.error(err instanceof Error ? err.message : "Voice input could not start.");
+      },
+    );
+  }, [listening]);
+  // Leaving the conversation ends it.
+  React.useEffect(() => () => dictation.current?.stop(), []);
+
   const resize = React.useCallback(() => {
     const el = textarea.current;
     if (!el) return;
     el.style.height = "0px";
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+    // While words are arriving, keep the newest ones in view.
+    if (dictation.current) el.scrollTop = el.scrollHeight;
   }, []);
-  React.useEffect(resize, [text, resize]);
+  React.useEffect(resize, [shown, resize]);
 
   // The box can change width without the text changing (a hidden tab becoming visible, rotation,
   // a split view), which changes how the text wraps: measure again when that happens.
@@ -86,11 +146,13 @@ export function Composer({
     setImages((prev) => [...prev, ...parts].slice(0, MAX_IMAGES));
   };
 
-  const canSend = !busy && (text.trim().length > 0 || images.length > 0);
+  const canSend = !busy && (shown.trim().length > 0 || images.length > 0);
   const submit = () => {
     if (!canSend) return;
-    onSend(text.trim(), images);
+    stopListening();
+    onSend(shown.trim(), images);
     setText("");
+    setInterim("");
     setImages([]);
   };
 
@@ -139,13 +201,18 @@ export function Composer({
 
       <textarea
         ref={textarea}
-        value={text}
+        value={shown}
         rows={1}
+        // While a sentence is still being heard it is not the user's to edit: it would change under their hands.
+        readOnly={interim.length > 0}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
             e.preventDefault();
             submit();
+          } else if (e.key === "Escape" && listening !== "off") {
+            e.preventDefault();
+            stopListening();
           }
         }}
         onPaste={(e) => {
@@ -155,7 +222,7 @@ export function Composer({
             void addFiles(files);
           }
         }}
-        placeholder="Hand me a task: plan it, find it, compare it, book it"
+        placeholder={inCall ? "Type something to say in the call" : listening === "off" ? "Hand me a task: plan it, find it, compare it, book it" : "Listening. Speak in any language"}
         aria-label="Message"
         className="block max-h-[200px] w-full resize-none bg-transparent px-4 pt-3.5 pb-1 text-base leading-relaxed outline-none placeholder:text-subtle sm:text-[0.95rem]"
       />
@@ -177,6 +244,45 @@ export function Composer({
         <PlaceChip {...where} />
 
         <div className="flex-1" />
+
+        {canVoice ? (
+          <button
+            type="button"
+            onClick={listening === "off" ? startListening : stopListening}
+            disabled={listening === "starting"}
+            aria-pressed={listening !== "off"}
+            aria-label={listening === "off" ? "Speak instead of typing" : "Stop listening"}
+            title={listening === "off" ? "Speak instead of typing: your words appear here" : "Stop listening"}
+            className={cn(
+              "flex size-9 shrink-0 items-center justify-center rounded-full transition-colors",
+              listening === "off" ? "text-muted-foreground hover:bg-muted hover:text-foreground" : "bg-brand-soft text-brand",
+            )}
+          >
+            {listening === "starting" ? (
+              <LoaderCircle className="size-[1.05rem] animate-spin" />
+            ) : listening === "on" ? (
+              <span className="flex h-4 items-center gap-[3px]" aria-hidden>
+                {[0, 1, 2, 3].map((i) => (
+                  <span key={i} className="h-full w-[3px] origin-center rounded-full bg-current" style={{ animation: "voice-bar 0.9s ease-in-out infinite", animationDelay: `${i * 0.14}s` }} />
+                ))}
+              </span>
+            ) : (
+              <Mic className="size-[1.1rem]" />
+            )}
+          </button>
+        ) : null}
+        {canVoice && onTalk && !busy && listening === "off" ? (
+          <button
+            type="button"
+            onClick={onTalk}
+            aria-label="Talk: start a live call"
+            title="Talk with it instead of typing"
+            className="flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-border bg-card px-2.5 text-[0.82rem] font-medium transition-colors hover:border-ring/50 hover:bg-muted @min-[440px]/chat:px-3"
+          >
+            <AudioLines className="size-[1.05rem] text-brand" />
+            <span className="hidden @min-[440px]/chat:inline">Talk</span>
+          </button>
+        ) : null}
 
         {busy ? (
           <button

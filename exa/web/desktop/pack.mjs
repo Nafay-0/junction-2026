@@ -62,6 +62,8 @@ const [out] = await packager({
   icon,
   appBundleId: "app.beryl.desktop",
   appCategoryType: "public.app-category.productivity",
+  // macOS asks the user before an app may listen: this is what the question says.
+  extendInfo: { NSMicrophoneUsageDescription: "Beryl listens when you use voice input or start a live call, so you can talk to it instead of typing." },
   electronVersion: JSON.parse(readFileSync(require.resolve("electron/package.json"), "utf8")).version,
   asar: false,
   prune: false,

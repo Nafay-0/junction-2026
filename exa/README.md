@@ -1,6 +1,6 @@
 # Beryl: the Exa "Internet Butler" project
 
-**Owner:** Asadullah (`Asadullah378`). **Status (Sat 14 Nov, 10:58):** one platform in two forms, both running locally. The **web app** (also installable on a phone) signs people in, searches and reads the live web with Exa and answers with live widgets. The **desktop app** is the same interface in a window of its own with a real browser inside it, where the agent also acts on websites. Accounts, conversations and usage are in Postgres; one admin account creates the others. The desktop app passes its end-to-end test and real agent tasks, and is packaged as `Beryl.app`. Not deployed yet, and nobody has signed in to Google inside the desktop app yet.
+**Owner:** Asadullah (`Asadullah378`). **Status (Sat 14 Nov, 12:16):** one platform in two forms, both running locally. The **web app** (also installable on a phone) signs people in, searches and reads the live web with Exa and answers with live widgets. The **desktop app** is the same interface in a window of its own with a real browser inside it, where the agent also acts on websites. Both now have **voice**: speak instead of typing (your words appear in the message box as you say them), or start a **live call** and talk with the agent while its tools run in the background. Accounts, conversations and usage are in Postgres; one admin account creates the others. Everything passes its end-to-end tests and real agent tasks, and the desktop app is packaged as `Beryl.app`. Not deployed yet; voice has been tested in the desktop app with a recorded question, not yet with a person at a real microphone or on a phone.
 
 Beryl is a general web agent for Exa's challenge "The Internet Butler". You hand it a task; it searches the live web with Exa, answers with live widgets instead of plain text (a map, fare cards, price charts, a gallery, a research report), and takes the task as far as it can go. Beryl is a gemstone (emerald and aquamarine are beryl) whose crystals are six-sided, which is the logo. The name and the logo's shapes are set in `web/src/lib/brand.ts`. It was called Hovi, then Baton, until 14 Nov; the browser's storage keys keep the `hovi.` prefix so nothing saved is lost.
 
@@ -10,7 +10,7 @@ Dock, the Valio Aimo project, is a separate project in this repo, owned by Nafay
 
 1. **Agent with live widgets (built).** Exa is read-only: search, read, structured data. Widgets, sub-agents, parallel tools, a visible plan, clarifying questions, model switching, usage and cost tracking.
 2. **Live web actions (built, in the desktop app).** The agent acts in a real browser inside the app that the user watches, hands the page over for sign-ins and human checks, asks for approval before anything that commits the user, and never pays.
-3. **Phone and voice (started).** The web version can be installed on a phone (it has a web app manifest and icons). Voice input and more autonomy (Exa Monitors that keep watching) are still to do.
+3. **Phone and voice (built).** The web version can be installed on a phone (it has a web app manifest and icons). Voice input and live calls work on both web and desktop. More autonomy (Exa Monitors that keep watching) is still to do.
 
 ## Web and desktop: who does what
 
@@ -18,6 +18,7 @@ Dock, the Valio Aimo project, is a separate project in this repo, owned by Nafay
 |---|---|---|
 | Sign in | Email and password | The same account, the same screen |
 | Search, read, widgets, research | Yes | Yes |
+| Voice input and live calls | Yes | Yes, and in a call the agent can also work in the live browser |
 | Act on websites in a live browser | No. The agent has no browser tools here and says that doing it needs the desktop app | Yes |
 | Conversations | Saved to the account | Saved to the account |
 | A conversation started in the other one | Read-only | Read-only |
@@ -49,6 +50,7 @@ Sign in with `ADMIN_EMAIL` and `ADMIN_PASSWORD` from `exa/.env.local`. The admin
 - `pnpm test:guard` checks the live browser's safety rules as a table (no browser needed).
 - `pnpm test:auth 3000` checks accounts over HTTP with the server running: sign-in, the admin's powers, each account seeing only its own conversations, the read-only rule, blocking and deleting.
 - `pnpm test:desktop 3000` starts the real desktop app in a throwaway profile, signs in, and checks from inside it: the browser view, the agent's clicks, keys and scrolling, the safety rules, approvals, the user's own typing, hiding and closing. `BERYL_TEST_CHAT="<request>"` then types a real request into the app; `BERYL_TEST_SHOTS=<folder>` saves pictures of the window.
+- `pnpm test:voice 3000` checks voice in the real desktop app without anyone speaking: the app's microphone is fed a recording (`scripts/fixtures/weather-question.wav`) and its speaker is muted. It checks that the words appear in the message box as they are heard, and that a live call hears the question, runs the weather tool, shows its card, answers aloud and is written into the conversation. `BERYL_TEST_PHONE=1` runs it at a phone's width.
 - `pnpm icons` redraws the desktop and installed-app icons from the logo.
 - `/dev/widgets` shows every widget with sample data. `/dev/sandbox.html` is a pretend cafe and shop for testing the browser without touching a real site.
 - `pnpm typecheck`, `pnpm lint` and `pnpm build` all pass.
@@ -73,6 +75,22 @@ The model can also show a comparison table, key facts, a plan, clarifying questi
 **Custom widget.** When none of the fixed widgets fits, the agent composes its own with the `showWidget` tool, block by block: charts (pie, donut, bar, stacked bar, horizontal bar, line, area, scatter, radar), stat tiles, tables, lists and timelines, progress bars, images, callouts and buttons. A button can open a link, copy text, or send a follow-up to the agent, so the widget can continue the task. For something no block can express (a calculator, a custom diagram) there is an `html` block: a self-contained fragment that runs in a sandboxed frame with no network access and the app's colours passed in. Blocks appear as the model writes them. The block shapes are in `web/src/lib/widgets/types.ts` ("Custom widget"), the tool in `web/src/lib/agent/tools/compose.ts`.
 
 Every widget shows its sources. Every answer shows the model, the time, the number of Exa calls and the cost; the top bar adds them up for the conversation.
+
+## Voice
+
+Voice runs on Gemini's Live API, whatever model is picked for typed conversations. It works on the web, on a phone and in the desktop app, in any language, and it is built so that most tasks can be done by talking.
+
+**Voice input.** A microphone button in the message box. Tap it and speak: the words appear in the box as they are spoken (the first ones in about a second and a half), and nothing is sent until the user presses Send, so they can read and correct what was heard. It uses `gemini-3.5-transcribe-live`, which sends its best guess while the user is still speaking and the finished sentence when they pause. Escape or a second tap stops it.
+
+**Live call.** "Talk" in the message box, or "Talk to Beryl" on the first screen, starts a call: the call's own view takes the place of the conversation and the message box. The user talks, the agent talks back (`gemini-3.8-live`, speech in and speech out), and it calls the same tools as in a typed conversation while they talk. In testing the agent starts to answer about a second after the user stops speaking.
+- **The view.** The Beryl stone shows who has the floor: it breathes while it listens, a ring widens with the user's voice, its facets light in turn while it works, and it swells with its own voice. Under it are the user's words and the agent's, which appear word by word as they are heard, not before. Whatever the tools find is laid out below as it arrives (the same cards, maps and charts as in a conversation), and the stone moves up out of the way. Mute, End and Type (to say something by keyboard) are large buttons at the bottom, where a thumb is.
+- **The same conversation.** A call is another way of holding the conversation, not a separate thing. What the user said, what the agent said and every tool call with its result are written into the conversation's messages as they happen. The "Conversation" tab shows the call as a normal conversation while it is still going, with a bar to mute, end or go back; afterwards the conversation can be continued by typing, and a call started in an existing conversation carries on from what was said before.
+- **Interrupting.** Speaking over the agent stops its voice at once (so does a tap on the stone), and the conversation keeps only the words it had actually said. A tool that is running keeps running unless the agent's model cancels it.
+- **Tools in a call.** The agent's "let me check" is spoken while the tool starts. Tools that search and read run on this app's server (`/api/voice/tool`), the user's location is read by their browser, and in the desktop app the live browser's steps run in the app under the same rules as ever: payment and passwords are refused, a sign-in is handed over and comes back when the user presses Done, and a step that commits the user waits for them to press Approve on screen. Saying yes aloud is not enough.
+- **How it connects.** Sound goes straight between the browser and Gemini, not through this server. The server makes a short-lived token for each session (`/api/voice/token`) that is locked to the model, to what the agent is told and to the tools it may call, so the API key never reaches the browser and the interface cannot change the agent. A dropped connection picks the same session up again; Gemini ends a connection after about ten minutes and the call carries on over a new one.
+- **Limits.** Voice needs `GOOGLE_API_KEY`, a microphone and a secure page (HTTPS, or localhost). On loudspeakers it relies on the browser's echo cancellation so the agent does not hear itself. In a call the agent does not ask its tap-to-answer questions or draw a plan card: it asks aloud. Usage is counted from what the browser reports when a session ends.
+
+Code: `web/src/lib/voice/` (`audio.ts` the microphone and speaker, `live-socket.ts` the line to the Live API, `dictation.ts` voice input, `live-call.ts` the call, `server.ts` what the agent is told and which tools it gets, `models.ts` models and prices), `web/src/components/voice/` (the call's view and the stone), `web/src/app/api/voice/` (token, tool, usage).
 
 ## The live browser (step 2, desktop app only)
 
@@ -117,6 +135,7 @@ Reading, navigating, searching, filling in a form, adding to a basket and refusi
 ## How it is built
 
 - **Stack:** Next.js 16, React 19, Tailwind 4, shadcn/ui, Vercel AI SDK 7, Postgres through Drizzle. One server for web and desktop; the desktop shell is Electron.
+- **Voice:** Gemini's Live API straight from the browser, with short-lived tokens from the server (`@google/genai` on the server only). `gemini-3.8-live` for calls, `gemini-3.5-transcribe-live` for voice input.
 - **Models:** Claude (Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable 5.2) through Claude Platform on AWS (`@ai-sdk/anthropic-aws`) and Gemini (4 Carbon, 4 Hydrogen) through Google AI Studio, switchable per message. Sub-agents and extraction run on the fast model of the same family (Haiku 5.5 or Gemini 4 Hydrogen). The thinking settings differ by family and by model (Gemini 4 rejects the "minimal" level; only Haiku lets Claude's thinking be switched off), so they are decided per model and job in one file, `web/src/lib/agent/options.ts`. Prices are in `web/src/lib/agent/models.ts`; Gemini 4 Carbon's list price doubles on 1 Dec 2026.
 - **Why the AI SDK and not Pydantic AI or a hand-written loop:** see `research_notes/Agent runtime choice/`. Short version: one codebase, and each tool's output type is the widget's input type.
 - **Code map** (all under `web/src`):
@@ -142,6 +161,7 @@ Reading, navigating, searching, filling in a form, adding to a basket and refusi
 - **Two projects, one team of two.** Can one team submit two projects (Dock and this), and is each eligible for the main prize? Someone has to be at each table during peer review. Ask the organisers.
 - **Deployment.** Not done. The server no longer runs a browser, so it can go on any host that runs Next.js, with a hosted Postgres; set `DATABASE_URL`, the admin's two variables and the model keys there, then package the desktop app with `BERYL_SERVER_URL` pointing at it. On a serverless host run `pnpm db:migrate` at deploy. The sign-in limiter is in memory, per server instance.
 - **Google sign-in inside the desktop app.** Built so that it should work (an ordinary embedded browser, not an automation one), but only a person signing in can show that Google accepts it. If Google objects to the engine being connected while the user types, the next step is to disconnect the bridge for as long as the user is in control.
+- **Voice with a real person.** Tested end to end with a recording fed to the microphone. Not yet tried with a person talking over loudspeakers (echo), on a phone, or in a browser tab other than the desktop app's.
 - **The packaged app is not signed or notarised**, and has only been built for this Mac.
 - **Accounts.** A user cannot change their own password and there is no "forgot password": the admin sets a new one.
 - **Hotels are slow** (up to a minute through Jinko). A faster source would improve the trip demo.

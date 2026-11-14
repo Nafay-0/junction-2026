@@ -3,7 +3,8 @@
 import * as React from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type FileUIPart } from "ai";
-import { ArrowDown, Eye, Plus, RotateCw } from "lucide-react";
+import { ArrowDown, AudioLines, Eye, MessagesSquare, Plus, RotateCw } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { DEFAULT_MODEL_ID, getModel } from "@/lib/agent/models";
 import type { ButlerMessage } from "@/lib/agent/tools";
@@ -26,7 +27,9 @@ import {
 import { describe, locate, useExactLocation, type LocateResult } from "@/lib/location";
 import { useClientValue, useMediaQuery, useStored } from "@/lib/use-client";
 import type { ClarifyAnswer, ExactLocation, LocationAnswer } from "@/lib/widgets/types";
+import { liveCall, useCall } from "@/lib/voice/use-call";
 import { BrowserWorkspace, useBrowserLayout } from "@/components/browser/workspace";
+import { CallBar, CallView } from "@/components/voice/call-view";
 import { Composer } from "./composer";
 import { AssistantMessage, UserMessage, WorkingLine } from "./message";
 import { Sidebar } from "./sidebar";
@@ -318,7 +321,7 @@ function ChatView({
   /** The user pressed Stop (or left): what arrives after that is kept, but does not start the agent again. */
   const halted = React.useRef(false);
   const takeStep = React.useRef<((call: { toolName: string; toolCallId: string; input: unknown }) => void) | null>(null);
-  const { messages, sendMessage, status, stop, error, regenerate, addToolOutput, clearError } = useChat<ButlerMessage>({
+  const { messages, setMessages, sendMessage, status, stop, error, regenerate, addToolOutput, clearError } = useChat<ButlerMessage>({
     id: conversationId,
     messages: seed,
     transport,
@@ -363,6 +366,14 @@ function ChatView({
   const busy = status === "submitted" || status === "streaming";
   const empty = messages.length === 0;
 
+  /* A live call. It is another way of holding this same conversation: what is said and done in
+     it is written into these messages as it happens, so the conversation view shows the call
+     too, and it is saved like anything else. While it is on, the call's own view takes the place
+     of the conversation and the message box; "Chat" switches back to read along. */
+  const call = useCall();
+  const calling = call.active && liveCall.conversationId === conversationId;
+  const [callView, setCallView] = React.useState<"live" | "chat">("live");
+
   /* Saving. Every change is written to this browser's storage: at once when the agent finishes,
      and every few seconds while it is still working, so a refresh mid-answer keeps what there was. */
   const baseline = React.useRef<ButlerMessage[] | null>(null);
@@ -384,15 +395,17 @@ function ChatView({
     }
     if (messages === baseline.current || messages.length === 0) return;
     dirty.current = true;
-    const settled = status === "ready" || status === "error";
+    // In a call the messages change with every few words: save every few seconds, and once when it ends.
+    const settled = (status === "ready" || status === "error") && !calling;
     if (!settled && Date.now() - lastSaved.current < 3000) return;
     lastSaved.current = Date.now();
     void persistConversation(conversationId, withoutPictures(messages), labelRef.current);
-  }, [messages, status, conversationId]);
-  // Leaving the conversation: stop any answer in progress, and any step in the browser, and save what there is.
+  }, [messages, status, conversationId, calling]);
+  // Leaving the conversation: stop any answer in progress, any call and any step in the browser, and save what there is.
   React.useEffect(
     () => () => {
       halted.current = true;
+      if (liveCall.conversationId === conversationId) liveCall.end();
       stopBrowserTools();
       void stopRef.current();
       if (dirty.current && latest.current.length > 0) void persistConversation(conversationId, withoutPictures(latest.current), labelRef.current);
@@ -429,6 +442,12 @@ function ChatView({
   const send = React.useCallback(
     (text: string, files: FileUIPart[] = []) => {
       if (!text && files.length === 0) return;
+      // During a call, what is typed is said to the agent in the call, and answered aloud.
+      if (liveCall.conversationId === conversationId && files.length === 0) {
+        followLatest();
+        liveCall.sendText(text);
+        return;
+      }
       halted.current = false;
       clearError();
       remember(conversationId);
@@ -502,10 +521,37 @@ function ChatView({
     return result;
   }, [applyLocation]);
 
+  const startCall = React.useCallback(() => {
+    if (liveCall.conversationId) return;
+    // One voice at a time: an answer that is still being written stops here.
+    halted.current = true;
+    stopBrowserTools();
+    void stop();
+    clearError();
+    remember(conversationId);
+    setCallView("live");
+    void liveCall.start({
+      conversationId,
+      context: () => ({ modelId: live.modelId, place: live.place, timeZone: live.timeZone, country: ZONES[live.timeZone]?.[1], coords: live.coords, locationDeclined: live.locationDeclined, browser: browserNote() }),
+      getMessages: () => latest.current,
+      setMessages: (update) => setMessages(update),
+      locate: locateNow,
+    });
+  }, [conversationId, stop, clearError, setMessages, locateNow]);
+  // A call that could not start, or ended by itself, says why.
+  React.useEffect(() => {
+    if (call.problem) toast.error(call.problem);
+  }, [call.problem]);
+
   /* The live browser. The pane's own buttons and the cards in the chat end up in the same place. */
   const openBrowser = React.useRef<(() => void) | null>(null);
   const answerHandover = React.useCallback(
     (answer: HandoverAnswer, toolCallId?: string) => {
+      // Asked for during a call: the call tells the agent, aloud.
+      if (toolCallId && liveCall.ownsHandover(toolCallId)) {
+        liveCall.handoverDone(answer, toolCallId);
+        return;
+      }
       // The browser belongs to the visitor, not to one conversation: only answer a request that is in this one.
       const pending = latest.current.some((m) => m.role === "assistant" && m.parts.some((p) => p.type === "tool-requestUserAction" && p.toolCallId === toolCallId && p.state === "input-available"));
       if (!toolCallId || !pending) return;
@@ -576,9 +622,38 @@ function ChatView({
       <LayoutBridge target={openBrowser} onBeside={onBrowserBeside} onGone={onBrowserGone} />
       <TopBar stats={stats} onNewChat={onNewTask} showNew={!empty} sidebarOpen={sidebarOpen} onToggleSidebar={onToggleSidebar} />
 
+      {calling ? (
+        <div className="flex shrink-0 justify-center px-3 pb-1">
+          <div role="tablist" aria-label="Call or conversation" className="flex items-center gap-0.5 rounded-full border border-border bg-card p-0.5 shadow-card">
+            {(
+              [
+                ["live", "Live", <AudioLines key="i" className="size-3.5" />],
+                ["chat", "Conversation", <MessagesSquare key="i" className="size-3.5" />],
+              ] as const
+            ).map(([id, label, icon]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={callView === id}
+                onClick={() => setCallView(id)}
+                className={cn("flex h-8 items-center gap-1.5 rounded-full px-3.5 text-[0.8rem] font-medium transition-colors", callView === id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}
+              >
+                {icon}
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {calling && callView === "live" ? (
+        <CallView call={call} messages={messages} handlers={shown} onShowConversation={() => setCallView("chat")} />
+      ) : (
+      <>
       <div ref={scroller} onScroll={onScroll} className={cn("relative flex-1 overflow-y-auto overscroll-contain", empty && "backdrop-room")}>
         {empty ? (
-          <Welcome place={location?.label ?? approximatePlace} onPick={(prompt) => send(prompt)} />
+          <Welcome place={location?.label ?? approximatePlace} onPick={(prompt) => send(prompt)} onTalk={readOnly ? undefined : startCall} />
         ) : (
           <div className="mx-auto flex w-full max-w-[760px] flex-col gap-7 px-4 pt-4 pb-10">
             {messages.map((message, i) =>
@@ -632,11 +707,14 @@ function ChatView({
         ) : null}
         <div className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-t from-background to-transparent" />
         <div className="safe-bottom mx-auto w-full max-w-[760px] px-3 sm:px-4">
+          {calling ? <CallBar call={call} onShowCall={() => setCallView("live")} /> : null}
           {readOnly ? (
             <ReadOnlyNote startedIn={startedIn ?? "web"} onNewTask={onNewTask} />
           ) : (
           <Composer
             onSend={send}
+            onTalk={calling ? undefined : startCall}
+            inCall={calling}
             onStop={() => {
               // Stopping also ends a step in the live browser; a step waiting for approval counts as declined.
               halted.current = true;
@@ -662,6 +740,8 @@ function ChatView({
           <p className="mt-2 hidden text-center text-[0.7rem] text-subtle @min-[520px]/chat:block">Searches the live web with Exa. Check important details at the source before you act.</p>
         </div>
       </div>
+      </>
+      )}
     </>
   );
 }
