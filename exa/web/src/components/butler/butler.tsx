@@ -2,14 +2,16 @@
 
 import * as React from "react";
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport, lastAssistantMessageIsCompleteWithApprovalResponses, type FileUIPart } from "ai";
-import { ArrowDown, RotateCw } from "lucide-react";
+import { DefaultChatTransport, type FileUIPart } from "ai";
+import { ArrowDown, Eye, Plus, RotateCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DEFAULT_MODEL_ID, getModel } from "@/lib/agent/models";
 import type { ButlerMessage } from "@/lib/agent/tools";
-import { control as browserControl, useBrowserId } from "@/lib/browser/client";
+import { APP_NAME } from "@/lib/brand";
+import { browserState, control as browserControl, requestHandover, runBrowserTool, stopBrowserTools } from "@/lib/browser/client";
 import { useDesktopApp } from "@/lib/browser/desktop";
-import type { HandoverAnswer } from "@/lib/browser/protocol";
+import { BROWSER_TOOL_NAMES, type BrowserToolName, type HandoverAnswer } from "@/lib/browser/protocol";
+import { CLIENT_HEADER, clientKind, type ClientKind } from "@/lib/client-kind";
 import {
   deleteAllConversations,
   deleteConversation,
@@ -65,17 +67,24 @@ type Coords = Pick<ExactLocation, "lat" | "lng" | "accuracyM" | "label" | "count
  * created once, always reads the latest choice: switching model mid-conversation just works,
  * including when the chat resumes on its own after the user answers a question or shares a location.
  */
-const live: { modelId: string; place: string; timeZone: string; coords?: Coords; locationDeclined: boolean; browserId: string; browserKind: string } = {
+const live: { modelId: string; place: string; timeZone: string; coords?: Coords; locationDeclined: boolean } = {
   modelId: DEFAULT_MODEL_ID,
   place: "",
   timeZone: "Europe/Helsinki",
   locationDeclined: false,
-  browserId: "",
-  browserKind: "assisted",
 };
+
+/** Desktop app: where its live browser stands, so the agent knows what is open before it acts. */
+function browserNote() {
+  if (clientKind() !== "desktop") return undefined;
+  const { status, url, title, control } = browserState();
+  return { status, url, title, control };
+}
 
 const transport = new DefaultChatTransport<ButlerMessage>({
   api: "/api/chat",
+  // Which kind of client is asking decides what the agent can do: only the desktop app has a live browser.
+  headers: () => ({ [CLIENT_HEADER]: clientKind() }),
   body: () => ({
     modelId: live.modelId,
     place: live.place,
@@ -83,10 +92,36 @@ const transport = new DefaultChatTransport<ButlerMessage>({
     country: ZONES[live.timeZone]?.[1],
     coords: live.coords,
     locationDeclined: live.locationDeclined,
-    browserId: live.browserId || undefined,
-    browserKind: live.browserKind,
+    browser: browserNote(),
   }),
 });
+
+/** The tools the interface answers itself: questions to the user, and (in the desktop app) the steps in the live browser. */
+const BROWSER_PARTS = new Set<string>(BROWSER_TOOL_NAMES.map((name) => `tool-${name}`));
+const ANSWERED_HERE = new Set<string>(["tool-askUser", "tool-requestLocation", "tool-requestUserAction", ...BROWSER_PARTS]);
+const isBrowserTool = (name: string): name is BrowserToolName => (BROWSER_TOOL_NAMES as readonly string[]).includes(name);
+
+/**
+ * True when the agent's last step asked the interface for something and has now been given all of
+ * it: the answer to a question, the user's location, a hand-over, the result of a browser step.
+ * That is the moment to carry on by itself.
+ */
+function answeredHere(messages: ButlerMessage[]): boolean {
+  const last = messages.at(-1);
+  if (last?.role !== "assistant") return false;
+  const step = last.parts.slice(last.parts.findLastIndex((p) => p.type === "step-start") + 1);
+  const tools = step.filter((p) => p.type.startsWith("tool-")) as Array<{ type: string; state: string }>;
+  return tools.some((p) => ANSWERED_HERE.has(p.type)) && tools.every((p) => p.state === "output-available");
+}
+
+/** A picture the agent took of a page is for the answer being written. It is not kept in the saved conversation. */
+function withoutPictures(messages: ButlerMessage[]): ButlerMessage[] {
+  const has = (p: ButlerMessage["parts"][number]) => p.type === "tool-browserLook" && p.state === "output-available" && Boolean(p.output?.picture);
+  if (!messages.some((m) => m.role === "assistant" && m.parts.some(has))) return messages;
+  return messages.map((m) =>
+    m.role === "assistant" && m.parts.some(has) ? { ...m, parts: m.parts.map((p) => (p.type === "tool-browserLook" && p.state === "output-available" && p.output?.picture ? { ...p, output: { ...p.output, picture: undefined } } : p)) } : m,
+  );
+}
 
 /**
  * The open conversation as it stands right now. The chat view can be mounted afresh while a
@@ -118,9 +153,9 @@ export function Butler() {
 
   const [active, setActive] = React.useState<Active | null>(null);
 
-  // The live browser belongs to the visitor, not to one conversation: it sits above the
+  // The live browser belongs to the account, not to one conversation: it sits above the
   // conversation, so opening another one does not disturb a browser that is running.
-  const browserId = useBrowserId();
+  const accountId = "local";
   const handover = React.useRef<((answer: HandoverAnswer, toolCallId?: string) => void) | null>(null);
   const onHandoverDone = React.useCallback((answer: HandoverAnswer, toolCallId?: string) => handover.current?.(answer, toolCallId), []);
 
@@ -192,6 +227,10 @@ export function Butler() {
     [active?.id, newTask],
   );
 
+  // A conversation belongs to the kind of client it was started in. Opened from the other kind
+  // it can be read, not continued: the desktop app's conversations use a browser the web lacks.
+  const startedIn: ClientKind | undefined = undefined;
+
   return (
     <div className="flex h-dvh bg-background">
       <Sidebar
@@ -209,7 +248,7 @@ export function Butler() {
         }}
       />
       <div className="flex min-w-0 flex-1 flex-col">
-        <BrowserWorkspace browserId={browserId} onHandoverDone={onHandoverDone}>
+        <BrowserWorkspace accountId={accountId} onHandoverDone={onHandoverDone}>
         {active ? (
           // Keyed by conversation: opening another one starts a fresh chat state with its own messages.
           <ChatView
@@ -221,8 +260,8 @@ export function Butler() {
             onNewTask={newTask}
             onBrowserBeside={makeRoom}
             onBrowserGone={giveRoomBack}
-            browserId={browserId}
             handoverRef={handover}
+            startedIn={startedIn}
           />
         ) : null}
         </BrowserWorkspace>
@@ -239,8 +278,8 @@ function ChatView({
   onNewTask,
   onBrowserBeside,
   onBrowserGone,
-  browserId,
   handoverRef,
+  startedIn,
 }: {
   conversationId: string;
   initialMessages: ButlerMessage[];
@@ -251,8 +290,8 @@ function ChatView({
   onBrowserBeside: () => void;
   /** The live browser is no longer shown. */
   onBrowserGone: () => void;
-  /** This visitor's live browser. */
-  browserId: string;
+  /** Where the conversation was started, when it is a saved one. Elsewhere it is read-only. */
+  startedIn?: ClientKind;
   /** Where the browser pane finds this conversation's way of answering a hand-over. */
   handoverRef: React.RefObject<((answer: HandoverAnswer, toolCallId?: string) => void) | null>;
 }) {
@@ -262,9 +301,9 @@ function ChatView({
   const { location, declined, save: saveLocation, setDeclined } = useExactLocation();
   const approximatePlace = place || defaultPlace(timeZone);
   const modelLabel = getModel(modelId).label;
-  const [storedKind] = useStored("hovi.browser.kind", "assisted");
-  // In the desktop app the browser is always the one inside the app.
-  const browserKind = useDesktopApp() ? "desktop" : storedKind;
+  const desktop = useDesktopApp();
+  const here: ClientKind = desktop ? "desktop" : "web";
+  const readOnly = startedIn !== undefined && startedIn !== here;
 
   React.useEffect(() => {
     live.modelId = getModel(modelId).id;
@@ -272,24 +311,53 @@ function ChatView({
     live.timeZone = timeZone;
     live.coords = location ? { lat: location.lat, lng: location.lng, accuracyM: location.accuracyM, label: location.label, country: location.country } : undefined;
     live.locationDeclined = declined;
-    live.browserId = browserId;
-    live.browserKind = browserKind;
-  }, [modelId, approximatePlace, timeZone, location, declined, browserId, browserKind]);
+  }, [modelId, approximatePlace, timeZone, location, declined]);
 
   const [seed] = React.useState(() => liveMessages.get(conversationId) ?? initialMessages);
-  const { messages, sendMessage, status, stop, error, regenerate, addToolOutput, addToolApprovalResponse, clearError } = useChat<ButlerMessage>({
+  /** The user pressed Stop (or left): what arrives after that is kept, but does not start the agent again. */
+  const halted = React.useRef(false);
+  const takeStep = React.useRef<((call: { toolName: string; toolCallId: string; input: unknown }) => void) | null>(null);
+  const { messages, sendMessage, status, stop, error, regenerate, addToolOutput, clearError } = useChat<ButlerMessage>({
     id: conversationId,
     messages: seed,
     transport,
-    // Resume on its own only after the user has answered something the agent asked: a question,
-    // their location, a hand-over in the live browser, or an approval.
-    sendAutomaticallyWhen: ({ messages: all }) => {
-      const last = all.at(-1);
-      const tail = last?.role === "assistant" ? last.parts.at(-1) : undefined;
-      const answered = (tail?.type === "tool-askUser" || tail?.type === "tool-requestLocation" || tail?.type === "tool-requestUserAction") && tail.state === "output-available";
-      return answered || lastAssistantMessageIsCompleteWithApprovalResponses({ messages: all });
-    },
+    // Carry on by itself only after the interface has given the agent what it asked for: an answer
+    // to a question, the user's location, a hand-over, or the result of a step in the live browser.
+    sendAutomaticallyWhen: ({ messages: all }) => !halted.current && answeredHere(all),
+    // The agent's browser steps are not taken on the server: the desktop app takes them.
+    onToolCall: ({ toolCall }) => takeStep.current?.(toolCall),
   });
+
+  /* The live browser's steps. The agent asks, the app (on this computer) takes the step under its
+     safety rules, and the page as it then stands goes back to the agent. Each step is taken once. */
+  const taken = React.useRef(new Set<string>());
+  React.useEffect(() => {
+    takeStep.current = (call) => {
+      if (taken.current.has(call.toolCallId)) return;
+      if (call.toolName === "requestUserAction") {
+        taken.current.add(call.toolCallId);
+        requestHandover(call.input, call.toolCallId);
+        return;
+      }
+      if (!isBrowserTool(call.toolName)) return;
+      taken.current.add(call.toolCallId);
+      const tool = call.toolName;
+      // Not awaited here: the answer is written into the conversation when the step is done.
+      void runBrowserTool({ tool, toolCallId: call.toolCallId, input: call.input }).then((output) => void addToolOutput({ tool, toolCallId: call.toolCallId, output }));
+    };
+    return () => {
+      takeStep.current = null;
+    };
+  }, [addToolOutput]);
+  // The view was mounted afresh while a step was on its way (a code reload, a layout change): ask
+  // for it again. The app answers a step it has already taken with the same result.
+  React.useEffect(() => {
+    const last = seed.at(-1);
+    if (last?.role !== "assistant") return;
+    for (const part of last.parts) {
+      if (BROWSER_PARTS.has(part.type) && "state" in part && part.state === "input-available") takeStep.current?.({ toolName: part.type.slice(5), toolCallId: part.toolCallId, input: part.input });
+    }
+  }, [seed]);
 
   const busy = status === "submitted" || status === "streaming";
   const empty = messages.length === 0;
@@ -318,13 +386,15 @@ function ChatView({
     const settled = status === "ready" || status === "error";
     if (!settled && Date.now() - lastSaved.current < 3000) return;
     lastSaved.current = Date.now();
-    void persistConversation(conversationId, messages, labelRef.current);
+    void persistConversation(conversationId, withoutPictures(messages), labelRef.current);
   }, [messages, status, conversationId]);
-  // Leaving the conversation: stop any answer in progress and save what there is.
+  // Leaving the conversation: stop any answer in progress, and any step in the browser, and save what there is.
   React.useEffect(
     () => () => {
+      halted.current = true;
+      stopBrowserTools();
       void stopRef.current();
-      if (dirty.current && latest.current.length > 0) void persistConversation(conversationId, latest.current, labelRef.current);
+      if (dirty.current && latest.current.length > 0) void persistConversation(conversationId, withoutPictures(latest.current), labelRef.current);
     },
     [conversationId],
   );
@@ -358,6 +428,7 @@ function ChatView({
   const send = React.useCallback(
     (text: string, files: FileUIPart[] = []) => {
       if (!text && files.length === 0) return;
+      halted.current = false;
       clearError();
       remember(conversationId);
       followLatest();
@@ -373,6 +444,7 @@ function ChatView({
       if (!text && files.length === 0) return;
       const before = latest.current;
       if (before.find((m) => m.role === "user")?.id === message.id) retitleAfterEdit(conversationId, before, text);
+      halted.current = false;
       clearError();
       remember(conversationId);
       followLatest();
@@ -384,6 +456,7 @@ function ChatView({
   // Answer again from the same request: this answer and everything after it goes.
   const retry = React.useCallback(
     (messageId: string) => {
+      halted.current = false;
       clearError();
       remember(conversationId);
       followLatest();
@@ -452,16 +525,17 @@ function ChatView({
     () => ({
       approximatePlace,
       savedLocation: location,
-      onOpenBrowser: () => openBrowser.current?.(),
-      onApproval: (approvalId: string, approved: boolean) => {
+      // The live browser is part of the desktop app: on the web its steps are history to read.
+      onOpenBrowser: desktop ? () => openBrowser.current?.() : undefined,
+      // The user's yes or no to a step that commits them. The app is what waits for it.
+      onApproval: (toolCallId: string, approved: boolean) => {
         followLatest();
-        void addToolApprovalResponse({ id: approvalId, approved });
+        void browserControl({ action: "approval", toolCallId, approved }).catch(() => {});
       },
       // "Done" in a chat card: hand the page back to the agent, then tell it.
       onHandover: (toolCallId: string, answer: HandoverAnswer) => {
         const finish = () => answerHandover(answer, toolCallId);
-        if (live.browserId) void browserControl(live.browserId, { action: "release" }).then(finish, finish);
-        else finish();
+        void browserControl({ action: "release" }).then(finish, finish);
       },
       // A button inside a custom widget that continues the conversation.
       onAsk: (prompt: string) => send(prompt),
@@ -487,8 +561,10 @@ function ChatView({
         void addToolOutput({ tool: "requestLocation", toolCallId, output });
       },
     }),
-    [approximatePlace, location, addToolOutput, addToolApprovalResponse, answerHandover, applyLocation, setDeclined, setPlace, send, followLatest],
+    [approximatePlace, location, desktop, addToolOutput, answerHandover, applyLocation, setDeclined, setPlace, send, followLatest],
   );
+  // Read-only: the cards show what was asked and answered, and none of them talks back.
+  const shown = React.useMemo<WidgetHandlers>(() => (readOnly ? { approximatePlace, savedLocation: location } : handlers), [readOnly, handlers, approximatePlace, location]);
 
   const stats = React.useMemo(() => sumStats(messages.filter((m) => m.role === "assistant").map((m) => m.metadata)), [messages]);
   const last = messages.at(-1);
@@ -506,20 +582,20 @@ function ChatView({
           <div className="mx-auto flex w-full max-w-[760px] flex-col gap-7 px-4 pt-4 pb-10">
             {messages.map((message, i) =>
               message.role === "user" ? (
-                <UserMessage key={message.id} message={message} busy={busy} hasLater={i < messages.length - 1} onEdit={(text) => editAndResend(message, text)} />
+                <UserMessage key={message.id} message={message} busy={busy} hasLater={i < messages.length - 1} onEdit={readOnly ? undefined : (text) => editAndResend(message, text)} />
               ) : (
                 <AssistantMessage
                   key={message.id}
                   message={message}
                   active={busy && i === messages.length - 1}
-                  handlers={handlers}
+                  handlers={shown}
                   busy={busy}
-                  onRetry={() => retry(message.id)}
+                  onRetry={readOnly ? undefined : () => retry(message.id)}
                 />
               ),
             )}
             {waitingForFirstToken ? <WorkingLine /> : null}
-            {error ? (
+            {error && !readOnly ? (
               <div className="flex animate-rise items-center justify-between gap-3 rounded-xl border border-destructive/25 bg-destructive/5 px-4 py-3 text-[0.85rem]">
                 <span className="text-destructive">{readable(error)}</span>
                 <button
@@ -555,9 +631,17 @@ function ChatView({
         ) : null}
         <div className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-t from-background to-transparent" />
         <div className="safe-bottom mx-auto w-full max-w-[760px] px-3 sm:px-4">
+          {readOnly ? (
+            <ReadOnlyNote startedIn={startedIn ?? "web"} onNewTask={onNewTask} />
+          ) : (
           <Composer
             onSend={send}
-            onStop={() => void stop()}
+            onStop={() => {
+              // Stopping also ends a step in the live browser; a step waiting for approval counts as declined.
+              halted.current = true;
+              stopBrowserTools();
+              void stop();
+            }}
             busy={busy}
             modelId={modelId}
             onModelChange={setModelId}
@@ -573,10 +657,38 @@ function ChatView({
             }}
             autoFocus
           />
+          )}
           <p className="mt-2 hidden text-center text-[0.7rem] text-subtle @min-[520px]/chat:block">Searches the live web with Exa. Check important details at the source before you act.</p>
         </div>
       </div>
     </>
+  );
+}
+
+/** In place of the message box, when a conversation is open in the kind of client it was not started in. */
+function ReadOnlyNote({ startedIn, onNewTask }: { startedIn: ClientKind; onNewTask: () => void }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5 rounded-3xl border border-border bg-card px-4 py-3.5 shadow-card sm:px-5">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand">
+        <Eye className="size-[1.05rem]" />
+      </span>
+      <div className="min-w-[13rem] flex-1">
+        <p className="text-[0.9rem] leading-5 font-medium">Read-only here</p>
+        <p className="mt-0.5 text-[0.8rem] leading-snug text-muted-foreground">
+          {startedIn === "desktop"
+            ? `This conversation was started in the ${APP_NAME} desktop app, where the agent works in a live browser. Open it there to carry on.`
+            : `This conversation was started in ${APP_NAME} on the web. Open it there to carry on, or start a new task here.`}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onNewTask}
+        className="flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-primary px-4 text-[0.85rem] font-medium text-primary-foreground transition-[transform,opacity] hover:opacity-90 active:scale-[0.98]"
+      >
+        <Plus className="size-4" />
+        New task
+      </button>
+    </div>
   );
 }
 

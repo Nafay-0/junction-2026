@@ -6,7 +6,7 @@ import { Columns2, MessageSquare, PanelRightClose } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { control, useBrowser, watchBrowser } from "@/lib/browser/client";
-import { useDesktopApp } from "@/lib/browser/desktop";
+import { browserPartition, useDesktopApp } from "@/lib/browser/desktop";
 import { IDLE_STATE, type BrowserState, type HandoverAnswer } from "@/lib/browser/protocol";
 import { useMediaQuery, useStored } from "@/lib/use-client";
 import { BrowserPane } from "./browser-pane";
@@ -81,17 +81,18 @@ function subscribeMode(onChange: () => void) {
  * hands the page to the user; after that, closing it is the user's choice and stays.
  */
 export function BrowserWorkspace({
-  browserId,
+  accountId,
   onHandoverDone,
   children,
 }: {
-  browserId: string;
+  /** Whose sign-ins the browser uses: each account has its own store on this computer. */
+  accountId: string;
   /** The user finished or skipped what the agent asked for. `toolCallId` names the agent's waiting request. */
   onHandoverDone: (answer: HandoverAnswer, toolCallId?: string) => void;
   /** The chat. */
   children: React.ReactNode;
 }) {
-  const { state, connected } = useBrowser(browserId);
+  const { state } = useBrowser();
   const desktop = useDesktopApp() !== null;
   const wide = useMediaQuery("(min-width: 768px)");
   const storedMode = React.useSyncExternalStore(subscribeMode, readMode, () => "closed");
@@ -105,7 +106,9 @@ export function BrowserWorkspace({
 
   const stored = asMode(storedMode);
   // With no browser running there is nothing to show unless the user asked for the pane.
-  const mode: BrowserLayoutMode = stored !== "closed" && state.status === "idle" && !asked ? "closed" : stored;
+  // There is a live browser only in the desktop app; and with none running there is nothing to
+  // show unless the user asked for the pane.
+  const mode: BrowserLayoutMode = !desktop || (stored !== "closed" && state.status === "idle" && !asked) ? "closed" : stored;
   const split = clampSplit(dragging ?? (Number(storedSplit) || DEFAULT_SPLIT));
 
   const modeRef = React.useRef(stored);
@@ -115,7 +118,7 @@ export function BrowserWorkspace({
 
   /* Open by itself when a browser starts, and whenever the agent hands the page over. */
   React.useEffect(() => {
-    return watchBrowser(browserId, (next: BrowserState, previous: BrowserState) => {
+    return watchBrowser((next: BrowserState, previous: BrowserState) => {
       // The first message after connecting describes what already was: not news.
       if (previous === IDLE_STATE) return;
       const started = (previous.status === "idle" || previous.status === "closed") && (next.status === "starting" || next.status === "ready");
@@ -131,12 +134,7 @@ export function BrowserWorkspace({
       // An approval is answered in the chat: bring the chat in when the page covers it.
       if (next.approval && !previous.approval && modeRef.current === "full") setPeek(true);
     });
-  }, [browserId]);
-
-  /* The desktop app has one browser, its own: say so before anything asks for a browser. */
-  React.useEffect(() => {
-    if (desktop && connected && state.kind !== "desktop") void control(browserId, { action: "kind", kind: "desktop" }).catch(() => {});
-  }, [desktop, connected, state.kind, browserId]);
+  }, []);
 
   const open = React.useCallback(
     (next: "split" | "full" = "split") => {
@@ -155,11 +153,11 @@ export function BrowserWorkspace({
   const answerHandover = React.useCallback(
     (answer: HandoverAnswer) => {
       const toolCallId = state.handover?.toolCallId;
-      void control(browserId, { action: "release" })
+      void control({ action: "release" })
         .catch((err: unknown) => void toast.error(err instanceof Error ? err.message : "The browser did not respond."))
         .then(() => onHandoverDone(answer, toolCallId));
     },
-    [browserId, state.handover?.toolCallId, onHandoverDone],
+    [state.handover?.toolCallId, onHandoverDone],
   );
 
   /* Full screen: Escape steps back to the split view (unless the page itself has the keyboard). */
@@ -234,7 +232,7 @@ export function BrowserWorkspace({
               )}
             >
               <BrowserPane
-                browserId={browserId}
+                partition={browserPartition(accountId)}
                 parked={parked}
                 mode={paneMode}
                 phone={!wide}

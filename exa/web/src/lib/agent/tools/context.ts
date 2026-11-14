@@ -3,6 +3,7 @@ import "server-only";
 import type { LanguageModel } from "ai";
 import type { RunMeter } from "../meter";
 import type { ModelInfo } from "../models";
+import type { ClientKind } from "@/lib/client-kind";
 import type { Source } from "@/lib/widgets/types";
 
 /** What every tool needs from the request it runs in. */
@@ -18,8 +19,8 @@ export type ToolContext = {
   coords?: { lat: number; lng: number; label?: string };
   /** "Friday 14 November 2026" style, so tools and sub-agents know the date. */
   today: string;
-  /** This visitor's live browser, when the interface has one. */
-  browserId?: string;
+  /** Where the request comes from: the desktop app (which has a live browser) or the web. */
+  client: ClientKind;
 };
 
 /** Turn a thrown value into a short message a widget can show. */

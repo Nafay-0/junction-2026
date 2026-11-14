@@ -55,8 +55,6 @@ export type Verdict =
 const IDENTITY_HOSTS =
   /(^|\.)(accounts\.google\.com|accounts\.youtube\.com|login\.microsoftonline\.com|login\.live\.com|login\.microsoft\.com|appleid\.apple\.com|idmsa\.apple\.com|login\.yahoo\.com|id\.atlassian\.com|signin\.aws\.amazon\.com|[a-z0-9-]+\.auth0\.com|[a-z0-9-]+\.okta\.com|[a-z0-9-]+\.onelogin\.com|tunnistautuminen\.suomi\.fi|tunnistus\.suomi\.fi|bankid\.com)$/i;
 
-/** Sites that refuse a sign-in typed into an assisted browser. The user signs in to these in an ordinary Chrome window. */
-const REFUSES_ASSISTED_SIGN_IN = /(^|\.)(accounts\.google\.com|accounts\.youtube\.com)$/i;
 
 /** Hosts whose whole page is a payment or bank step. The agent does nothing there. */
 const PAYMENT_HOSTS =
@@ -107,10 +105,6 @@ export function isIdentityHost(url: string): boolean {
 }
 
 /** The site only accepts sign-ins from an ordinary browser. */
-export function refusesAssistedSignIn(url: string): boolean {
-  return REFUSES_ASSISTED_SIGN_IN.test(host(url));
-}
-
 /** The whole page is a payment or bank step. */
 export function isPaymentHost(url: string): boolean {
   return PAYMENT_HOSTS.test(host(url));

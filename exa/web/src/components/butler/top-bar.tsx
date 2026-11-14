@@ -6,7 +6,7 @@ import { Globe, Moon, PanelLeft, Plus, Sun } from "lucide-react";
 import { APP_NAME } from "@/lib/brand";
 import { Logo } from "@/components/brand/logo";
 import { useHydrated } from "@/lib/use-client";
-import { useBrowser, useBrowserId } from "@/lib/browser/client";
+import { useBrowser } from "@/lib/browser/client";
 import { useBrowserLayout } from "@/components/browser/workspace";
 import type { RunStats } from "@/lib/agent/models";
 import { EMPTY_USAGE } from "@/lib/agent/models";
@@ -113,7 +113,7 @@ export function TopBar({
 
 /** A browser is running but its pane is put away: one press brings it back. */
 function BrowserButton() {
-  const { state } = useBrowser(useBrowserId());
+  const { state } = useBrowser();
   const layout = useBrowserLayout();
   const running = state.status === "starting" || state.status === "ready";
   if (!running || layout.mode !== "closed") return null;

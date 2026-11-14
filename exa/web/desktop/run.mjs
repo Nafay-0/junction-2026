@@ -1,37 +1,38 @@
-// Start Baton as a desktop app: pnpm desktop
+// Start Beryl as a desktop app: pnpm desktop
 //
-// Makes sure the interface's server is running (starting it if it is not), then opens the app
-// window on it. BATON_PORT picks the port (default 3000); BATON_URL points at a server that is
-// already running somewhere on this computer.
+// Builds the app's browser engine, makes sure a server is running, then opens the app window on
+// it. With nothing set, that is a server on this computer (started here if it is not up yet,
+// BERYL_PORT picks the port, default 3000). BERYL_URL points the app at a server that is already
+// running anywhere: `BERYL_URL=https://beryl.example.com pnpm desktop`.
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildEngine } from "./build.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const web = path.join(here, "..");
-const port = process.env.BATON_PORT || "3000";
-const url = process.env.BATON_URL || `http://localhost:${port}`;
+const port = process.env.BERYL_PORT || "3000";
+const url = process.env.BERYL_URL || `http://localhost:${port}`;
 const up = async () => {
   try {
-    return (await fetch(url, { signal: AbortSignal.timeout(1500) })).ok;
+    // Signed out, the server answers with the sign-in page: any answer means it is up.
+    return (await fetch(url, { signal: AbortSignal.timeout(2500), redirect: "manual" })).status < 500;
   } catch {
     return false;
   }
 };
 
+await buildEngine();
+
 let server;
-if (!(await up())) {
-  if (process.env.BATON_URL) {
-    console.error(`Nothing answers at ${url}. Start the app's server first, or leave BATON_URL unset to have it started for you.`);
-    process.exit(1);
-  }
-  console.log(`Starting the interface on ${url} ...`);
+if (!process.env.BERYL_URL && !(await up())) {
+  console.log(`Starting Beryl's server on ${url} ...`);
   server = spawn("pnpm", ["exec", "next", "dev", "--port", port], { cwd: web, stdio: "inherit" });
   const deadline = Date.now() + 90_000;
   while (!(await up())) {
     if (Date.now() > deadline || server.exitCode !== null) {
-      console.error("The interface did not start.");
+      console.error("The server did not start.");
       server.kill();
       process.exit(1);
     }
@@ -40,7 +41,7 @@ if (!(await up())) {
 }
 
 const electron = createRequire(import.meta.url)("electron");
-const app = spawn(electron, [path.join(here, "main.cjs")], { stdio: "inherit", env: { ...process.env, BATON_URL: url } });
+const app = spawn(electron, [path.join(here, "main.cjs")], { stdio: "inherit", env: { ...process.env, BERYL_URL: url } });
 const stop = () => {
   app.kill();
   server?.kill();

@@ -111,7 +111,7 @@ export type WidgetHandlers = {
   /** The exact location saved in this browser, if any. */
   savedLocation?: ExactLocation | null;
   /** The user's yes or no to a step in the live browser that acts on their behalf. */
-  onApproval?: (approvalId: string, approved: boolean) => void;
+  onApproval?: (toolCallId: string, approved: boolean) => void;
   /** The user has finished (or skipped) something the agent handed to them in the live browser. */
   onHandover?: (toolCallId: string, answer: HandoverAnswer) => void;
   /** Bring the live browser into view. */

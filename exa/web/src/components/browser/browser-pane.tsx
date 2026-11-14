@@ -3,9 +3,6 @@
 import * as React from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
-  AppWindow,
-  Copy,
-  Compass,
   ArrowLeft,
   ArrowRight,
   Check,
@@ -33,13 +30,12 @@ import { APP_NAME } from "@/lib/brand";
 import { control, useBrowser } from "@/lib/browser/client";
 import { useDesktopApp } from "@/lib/browser/desktop";
 import type { BrowserState, ControlRequest, HandoverAnswer, HandoverKind } from "@/lib/browser/protocol";
-import { useStored } from "@/lib/use-client";
 import { domainOf, faviconOf } from "@/lib/widgets/types";
 import { IconAction } from "@/components/butler/icon-action";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { BrowserView } from "./browser-view";
+import { BrowserView } from "./desktop-view";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -48,7 +44,7 @@ const EASE = [0.22, 1, 0.36, 1] as const;
  * and the moments that need the user (signing in, a check, payment, an approval).
  */
 export function BrowserPane({
-  browserId,
+  partition,
   mode,
   phone,
   onMode,
@@ -57,10 +53,11 @@ export function BrowserPane({
   onShowChat,
   parked = false,
 }: {
-  browserId: string;
-  /** How the pane is laid out right now. */
-  /** Desktop app: the pane is out of sight while its browser keeps running. Its controls are switched off. */
+  /** The store this account's sign-ins are kept in. */
+  partition: string;
+  /** The pane is out of sight while its browser keeps running. Its controls are switched off. */
   parked?: boolean;
+  /** How the pane is laid out right now. */
   mode: "split" | "full";
   /** On a phone the pane is a full-screen sheet: no layout buttons, a way back to the chat instead. */
   phone?: boolean;
@@ -71,11 +68,9 @@ export function BrowserPane({
   /** Bring the chat into view, when the pane covers it. */
   onShowChat?: () => void;
 }) {
-  const { state, connected } = useBrowser(browserId);
+  const { state } = useBrowser();
+  const desktop = useDesktopApp();
   const [confirmForget, setConfirmForget] = React.useState(false);
-  /** The steps for letting the app work in the user's own Chrome. `reopen` carries the open page over. */
-  const [setup, setSetup] = React.useState<{ reopen: boolean } | null>(null);
-  const [storedKind, setStoredKind] = useStored("hovi.browser.kind", "assisted");
   const [draft, setDraft] = React.useState<string | null>(null);
 
   // A narrow pane has no room for back, forward and reload in the toolbar: they move into the menu.
@@ -91,34 +86,9 @@ export function BrowserPane({
   }, []);
 
   const run = React.useCallback(
-    (request: ControlRequest) => control(browserId, request).catch((err: unknown) => void toast.error(err instanceof Error ? err.message : "The browser did not respond.")),
-    [browserId],
+    (request: ControlRequest) => control(request).catch((err: unknown) => void toast.error(err instanceof Error ? err.message : "The browser did not respond.")),
+    [],
   );
-
-  /* Which browser: the user's own Chrome, or the app's hidden one. In the desktop app there is only its own. */
-  const desktop = useDesktopApp();
-  const ownAvailable = state.own !== "unavailable" && !desktop;
-  const switchToOwnChrome = (reopen: boolean) => {
-    if (state.own !== "ready") {
-      setSetup({ reopen });
-      return;
-    }
-    setStoredKind("own");
-    void run({ action: "kind", kind: "own", reopen });
-  };
-  const switchToBuiltIn = () => {
-    setStoredKind("assisted");
-    void run({ action: "kind", kind: "assisted" });
-  };
-  // The choice is remembered in this browser. After the server restarts it has forgotten: remind it, once.
-  const reminded = React.useRef(false);
-  React.useEffect(() => {
-    if (reminded.current || !connected || desktop) return;
-    reminded.current = true;
-    if (storedKind === "own" && state.kind === "assisted" && state.own === "ready" && state.status !== "ready" && state.status !== "starting") {
-      void run({ action: "kind", kind: "own" });
-    }
-  }, [connected, desktop, storedKind, state.kind, state.own, state.status, run]);
 
   const live = state.status === "ready";
   const userControl = state.control === "user";
@@ -158,12 +128,6 @@ export function BrowserPane({
           }}
         />
 
-        {state.kind === "own" ? (
-          <span className="hidden h-7 shrink-0 items-center gap-1 rounded-full bg-brand-soft px-2 text-[0.7rem] font-medium text-brand @[34rem]:flex" title="The agent is working in a window of your own Chrome">
-            <AppWindow className="size-3" />
-            Your Chrome
-          </span>
-        ) : null}
         <StatusChip state={state} />
 
         {userControl && !state.handover ? (
@@ -210,34 +174,16 @@ export function BrowserPane({
                   <MenuNav label="Reload" disabled={!canDrive} onClick={() => void run({ action: "reload" })} icon={<RotateCw />} />
                 </div>
               ) : null}
-              {ownAvailable ? (
-                state.kind === "own" ? (
-                  <DropdownMenuItem onSelect={switchToBuiltIn} className="gap-2.5 px-2 py-1.5">
-                    <Compass className="text-muted-foreground" />
-                    <span className="flex-1">Use the built-in browser</span>
-                  </DropdownMenuItem>
-                ) : (
-                  <DropdownMenuItem onSelect={() => switchToOwnChrome(live)} className="gap-2.5 px-2 py-1.5">
-                    <AppWindow className="text-muted-foreground" />
-                    <span className="flex-1">Use my own Chrome</span>
-                    <span className="text-[0.7rem] text-subtle">signed in</span>
-                  </DropdownMenuItem>
-                )
-              ) : null}
               <DropdownMenuItem disabled={noBrowser} onSelect={() => void run({ action: "close" })} className="gap-2.5 px-2 py-1.5">
                 <Power className="text-muted-foreground" />
-                <span className="flex-1">{state.kind === "own" ? "Close this window" : "Close browser"}</span>
-                {state.kind === "own" ? null : <span className="text-[0.7rem] text-subtle">keeps sign-ins</span>}
+                <span className="flex-1">Close browser</span>
+                <span className="text-[0.7rem] text-subtle">keeps sign-ins</span>
               </DropdownMenuItem>
-              {state.kind === "own" ? null : (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem variant="destructive" onSelect={() => setConfirmForget(true)} className="gap-2.5 px-2 py-1.5">
-                    <Trash2 />
-                    Forget sign-ins
-                  </DropdownMenuItem>
-                </>
-              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" onSelect={() => setConfirmForget(true)} className="gap-2.5 px-2 py-1.5">
+                <Trash2 />
+                Forget sign-ins
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           {phone ? null : (
@@ -257,9 +203,6 @@ export function BrowserPane({
               reason={state.handover.reason}
               site={state.handover.site}
               onAnswer={onHandover}
-              // Google refuses a sign-in typed into the app's browser. In the user's own Chrome they are already signed in.
-              own={state.kind === "assisted" && ownAvailable && state.handover.kind !== "payment" ? (NOT_TYPED_HERE.test(domainOf(state.url)) ? "first" : "offer") : undefined}
-              onOwn={() => switchToOwnChrome(true)}
             />
           </Banner>
         ) : state.paymentPage ? (
@@ -301,7 +244,7 @@ export function BrowserPane({
       {/* The page */}
       <div className="relative flex min-h-0 flex-1 p-2 @[26rem]:p-3">
         <BrowserView
-          browserId={browserId}
+          partition={partition}
           empty={
             noBrowser ? (
               <button
@@ -329,18 +272,6 @@ export function BrowserPane({
         {state.tabs.length > 1 ? <Tabs state={state} onPick={(tabId) => void run({ action: "tab", tabId })} /> : null}
       </div>
 
-      <OwnChromeSetup
-        open={setup !== null}
-        onClose={() => setSetup(null)}
-        check={async () => (await control(browserId, { action: "kind", kind: state.kind })).own}
-        onReady={() => {
-          const reopen = setup?.reopen ?? false;
-          setSetup(null);
-          setStoredKind("own");
-          void run({ action: "kind", kind: "own", reopen });
-        }}
-      />
-
       <Dialog open={confirmForget} onOpenChange={setConfirmForget}>
         <DialogContent>
           <DialogHeader>
@@ -357,10 +288,11 @@ export function BrowserPane({
               type="button"
               onClick={() => {
                 setConfirmForget(false);
-                // In the desktop app the sign-ins live in the app, so the app wipes them.
-                void (desktop ? run({ action: "close" }).then((next) => desktop.forget().then(() => next)) : run({ action: "forget" })).then((next) => {
-                  if (next) toast.success("Sign-ins forgotten", { description: "The browser starts clean next time." });
-                });
+                // The sign-ins live in the app on this computer, so the app wipes them.
+                void desktop?.browser.forget(partition).then(
+                  () => void toast.success("Sign-ins forgotten", { description: "The browser starts clean next time." }),
+                  () => void toast.error("The sign-ins could not be wiped."),
+                );
               }}
               className="h-9 rounded-full bg-destructive px-4 text-[0.85rem] font-medium text-white transition-opacity hover:opacity-90"
             >
@@ -642,27 +574,19 @@ const HANDOVER: Record<HandoverKind, { icon: React.ReactNode; title: string; hel
   },
 };
 
-/** Sites that do not accept a sign-in typed into the app's browser. */
-const NOT_TYPED_HERE = /(^|\.)accounts\.(google|youtube)\.com$/i;
-
 function HandoverBanner({
   kind,
   reason,
   site,
   onAnswer,
-  own,
-  onOwn,
 }: {
   kind: HandoverKind;
   reason: string;
   site?: string;
   onAnswer: (answer: HandoverAnswer) => void;
-  /** Whether to offer the user's own Chrome for this step: "first" when signing in here will not work. */
-  own?: "offer" | "first";
-  onOwn: () => void;
 }) {
   const copy = HANDOVER[kind] ?? HANDOVER.other;
-  const help = own === "first" ? "This site does not accept sign-ins typed here. Carry on in your own Chrome instead, where you are already signed in: the page moves there." : copy.help;
+  const help = copy.help;
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5">
       <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-card text-brass hairline [&_svg]:size-[1.1rem]">{copy.icon}</span>
@@ -676,116 +600,11 @@ function HandoverBanner({
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-1.5">
         <BannerButton onClick={() => onAnswer({ status: "skipped" })}>Skip</BannerButton>
-        {own ? (
-          <BannerButton primary={own === "first"} onClick={onOwn}>
-            <AppWindow className="size-3.5" />
-            Use my own Chrome
-          </BannerButton>
-        ) : null}
-        <BannerButton primary={own !== "first"} onClick={() => onAnswer({ status: "done" })}>
+        <BannerButton primary onClick={() => onAnswer({ status: "done" })}>
           <Check className="size-3.5" strokeWidth={2.5} />
           {copy.done}
         </BannerButton>
       </div>
     </div>
   );
-}
-
-/* ───────────────────────── Working in the user's own Chrome ───────────────────────── */
-
-const INSPECT_ADDRESS = "chrome://inspect/#remote-debugging";
-
-/**
- * The one-time step for working in the user's own Chrome. Only the user can take it: Chrome's
- * settings are theirs, and a web page may not open a chrome:// address, so the address is copied.
- */
-function OwnChromeSetup({ open, onClose, check, onReady }: { open: boolean; onClose: () => void; check: () => Promise<BrowserState["own"]>; onReady: () => void }) {
-  const [copied, setCopied] = React.useState(false);
-  const [problem, setProblem] = React.useState("");
-  const [checking, setChecking] = React.useState(false);
-  const connect = async () => {
-    setChecking(true);
-    setProblem("");
-    try {
-      const own = await check();
-      if (own === "ready") onReady();
-      else setProblem(own === "setup" ? "Chrome has not turned it on yet. Tick the box in Chrome, then press Connect again." : "Your Chrome is not on the computer that runs this app, so it cannot be used here.");
-    } catch {
-      setProblem("The app did not answer. Try again in a moment.");
-    } finally {
-      setChecking(false);
-    }
-  };
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) onClose();
-      }}
-    >
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Use your own Chrome</DialogTitle>
-          <DialogDescription>
-            {APP_NAME} can work in a window of the Chrome you already use, where you are signed in to your accounts. There is then nothing to sign in to. It takes one setting in Chrome, once.
-          </DialogDescription>
-        </DialogHeader>
-        <ol className="space-y-3 text-[0.88rem] leading-relaxed">
-          <li className="flex gap-3">
-            <StepNumber n={1} />
-            <div className="min-w-0 flex-1">
-              In Chrome, open this address:
-              <div className="mt-1.5 flex items-center gap-1.5">
-                <code className="min-w-0 flex-1 truncate rounded-lg border border-border bg-surface px-2.5 py-1.5 text-[0.8rem]">{INSPECT_ADDRESS}</code>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void navigator.clipboard.writeText(INSPECT_ADDRESS).then(() => {
-                      setCopied(true);
-                      setTimeout(() => setCopied(false), 1600);
-                    });
-                  }}
-                  className="flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border bg-card px-3 text-[0.78rem] font-medium transition-colors hover:bg-muted"
-                >
-                  {copied ? <Check className="size-3.5 text-brand" /> : <Copy className="size-3.5 text-muted-foreground" />}
-                  {copied ? "Copied" : "Copy"}
-                </button>
-              </div>
-            </div>
-          </li>
-          <li className="flex gap-3">
-            <StepNumber n={2} />
-            <span>Turn on &ldquo;Allow remote debugging for this browser instance&rdquo;.</span>
-          </li>
-          <li className="flex gap-3">
-            <StepNumber n={3} />
-            <span>Come back and press Connect. Chrome asks whether to allow it: press Allow.</span>
-          </li>
-        </ol>
-        <p className="rounded-xl border border-border bg-surface/70 px-3 py-2.5 text-[0.78rem] leading-relaxed text-muted-foreground">
-          {APP_NAME} opens a window of its own in your Chrome and works only there; your other tabs are left alone. Chrome shows that it is being controlled. The same rules hold as before: it never pays, never types passwords, and asks before
-          anything that commits you. Turn the setting off in the same place whenever you like.
-        </p>
-        {problem ? <p className="text-[0.82rem] text-destructive">{problem}</p> : null}
-        <DialogFooter>
-          <button type="button" onClick={onClose} className="h-9 rounded-full border border-border bg-card px-4 text-[0.85rem] font-medium transition-colors hover:bg-muted">
-            Not now
-          </button>
-          <button
-            type="button"
-            onClick={() => void connect()}
-            disabled={checking}
-            className="flex h-9 items-center gap-2 rounded-full bg-primary px-4 text-[0.85rem] font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
-          >
-            <AppWindow className="size-4" />
-            {checking ? "Checking" : "Connect"}
-          </button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function StepNumber({ n }: { n: number }) {
-  return <span className="nums mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-brand-soft text-[0.72rem] font-semibold text-brand">{n}</span>;
 }

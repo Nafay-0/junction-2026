@@ -5,23 +5,19 @@ import { costOf, getModel, type RunStats } from "@/lib/agent/models";
 import { agentProviderOptions, languageModel, workerModelFor } from "@/lib/agent/providers";
 import { createTools, type ButlerMessage } from "@/lib/agent/tools";
 import type { ToolContext } from "@/lib/agent/tools/context";
-import { browserFor, validBrowserId, type ActInput } from "@/lib/browser/session";
+import { clientKindOf } from "@/lib/client-kind";
 
 /** Agent runs with sub-agents and live inventory lookups can take a minute or more. */
 export const maxDuration = 300;
 
 /** Rough size, in tokens, at which older tool results are dropped from what the model re-reads. */
 const TRIM_ABOVE_TOKENS = 120_000;
-/** A task in the live browser takes one model step per click, so the limit has to leave room for a whole booking form. */
-const MAX_STEPS = 45;
-
 /**
- * Signs the approval requests this server issues, so an approval cannot be forged by editing the
- * conversation the browser sends back. Set HOVI_APPROVAL_SECRET to keep approvals valid across
- * restarts and across several server instances; without it a random one lasts as long as the process.
+ * Steps the model may take in one request. In the desktop app each step in the live browser is a
+ * request of its own (the app takes the step and sends the result back), so this bounds the work
+ * between two of them.
  */
-const secrets = globalThis as unknown as { __hoviApprovalSecret?: string };
-const approvalSecret = process.env.HOVI_APPROVAL_SECRET || (secrets.__hoviApprovalSecret ??= crypto.randomUUID() + crypto.randomUUID());
+const MAX_STEPS = 45;
 
 type ChatRequest = {
   messages: ButlerMessage[];
@@ -35,10 +31,10 @@ type ChatRequest = {
   coords?: { lat: number; lng: number; accuracyM?: number; label?: string; country?: string };
   /** True when the user has said no to sharing their exact location. */
   locationDeclined?: boolean;
-  /** This visitor's live browser. */
-  browserId?: string;
-  /** Which browser they chose: the app's own, or a window of their own Chrome. */
-  browserKind?: string;
+  /** The conversation this belongs to, as the interface names it. */
+  conversationId?: string;
+  /** Desktop app: where its live browser stands right now. */
+  browser?: { status?: string; url?: string; title?: string; control?: string };
 };
 
 const estimateTokens = (messages: ModelMessage[]) => Math.ceil(JSON.stringify(messages).length / 4);
@@ -73,13 +69,12 @@ export async function POST(req: Request) {
   const countryCode = coords?.country ?? body.country ?? "";
   const country = /^[A-Za-z]{2}$/.test(countryCode) ? countryCode.toUpperCase() : undefined;
 
-  const browserId = validBrowserId(body.browserId) ? body.browserId : undefined;
-  const browser = browserId ? browserFor(browserId) : undefined;
-  browser?.setTimeZone(timeZone);
-  browser?.preferKind(body.browserKind === "own" ? "own" : body.browserKind === "desktop" ? "desktop" : "assisted");
-  browser?.beginTurn();
+  // The desktop app has a live browser and the web does not: that decides which tools the agent
+  // gets and what it is told it can do.
+  const client = clientKindOf(req);
+  const browser = client === "desktop" ? browserNote(body.browser) : undefined;
 
-  const ctx: ToolContext = { meter, model: info, worker, country, today, coords: coords ? { lat: coords.lat, lng: coords.lng, label: coords.label } : undefined, browserId };
+  const ctx: ToolContext = { meter, model: info, worker, country, today, coords: coords ? { lat: coords.lat, lng: coords.lng, label: coords.label } : undefined, client };
   const tools = createTools(ctx, model);
 
   // Reasoning from earlier turns is never replayed. Claude's thinking blocks are bound to the exact
@@ -94,10 +89,10 @@ export async function POST(req: Request) {
   // The fixed instructions come first and carry a cache marker, so Claude re-reads them (and the
   // tool definitions before them) at a tenth of the price on every later step and request.
   const instructions: SystemModelMessage[] = [
-    { role: "system", content: buildInstructions(), providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } } },
+    { role: "system", content: buildInstructions(client), providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } } },
     {
       role: "system",
-      content: buildContext({ today, time, place: body.place?.slice(0, 80), coords, locationDeclined: body.locationDeclined === true, browser: browser?.snapshotState() }),
+      content: buildContext({ today, time, place: body.place?.slice(0, 80), coords, locationDeclined: body.locationDeclined === true, client, browser }),
     },
   ];
 
@@ -115,16 +110,6 @@ export async function POST(req: Request) {
     stopWhen: isStepCount(MAX_STEPS),
     providerOptions: agentProviderOptions(info),
     abortSignal: req.signal,
-    // Steps in the live browser that act on the user's behalf wait for the user's yes. The decision
-    // is made in code from what the element is (lib/browser/guard.ts), not left to the model.
-    toolApproval: {
-      browserAct: async (input, { toolCallId }) => {
-        if (!browser) return undefined;
-        const verdict = await browser.review(toolCallId, input as ActInput);
-        return verdict.decision === "approve" ? { type: "user-approval", reason: input.summary?.trim() || verdict.reason } : undefined;
-      },
-    },
-    experimental_toolApprovalSecret: approvalSecret,
     // Context overflow guard: once the conversation is large, the model stops re-reading old tool
     // results (the user still sees every widget). Reasoning goes with them, see above.
     prepareStep: ({ messages }) => {
@@ -216,6 +201,13 @@ function withCacheMark(messages: ModelMessage[], provider: string): ModelMessage
   const last = messages[messages.length - 1];
   const marked = { ...last, providerOptions: { ...last.providerOptions, anthropic: { ...last.providerOptions?.anthropic, cacheControl: { type: "ephemeral" } } } } as ModelMessage;
   return [...messages.slice(0, -1), marked];
+}
+
+/** What the desktop app says about its browser, cut down to what the model is told. */
+function browserNote(input: ChatRequest["browser"]): { status: string; url: string; title: string; control: string } | undefined {
+  if (!input || typeof input.status !== "string") return undefined;
+  const text = (value: unknown, max: number) => (typeof value === "string" ? value.slice(0, max) : "");
+  return { status: text(input.status, 20), url: text(input.url, 300), title: text(input.title, 120), control: text(input.control, 10) };
 }
 
 function validCoords(input: ChatRequest["coords"]): ChatRequest["coords"] | undefined {

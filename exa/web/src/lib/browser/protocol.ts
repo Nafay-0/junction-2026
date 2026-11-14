@@ -1,24 +1,19 @@
 /**
- * The live browser: what the server and the interface say to each other.
+ * The live browser: what the desktop app and its interface say to each other.
  *
- * The agent drives a real Chrome on the server. The interface shows it live, animates what the
- * agent does, and lets the user take over (to sign in, solve a check, or pay themselves).
- * Shared by the server and the browser: types and constants only, no imports.
+ * The live browser exists only in the desktop app: it is a real browser view inside the app's
+ * window, on the user's computer. The agent itself runs on the server; when it wants a step taken
+ * in the browser, the interface passes the step to the app, the app takes it (after the safety
+ * rules in guard.ts have had their say) and the result goes back to the agent.
  *
- * Endpoints (all take the browser's id as `?id=`; the id is a random value kept in this browser's
- * storage, one live browser per visitor):
- *
- *   GET  /api/browser/stream   Server-sent events. Each message is one `BrowserEvent` as JSON.
- *                              The current state (and the latest frame, if any) arrive at once.
- *                              Stays open while there is no browser yet: events start when one opens.
- *   POST /api/browser/input    `{ events: UserInput[] }`. Honoured only while the user is in control.
- *   POST /api/browser/control  `ControlRequest`. Answers with the new `BrowserState`.
+ * Shared by the app and the interface: types and constants only, no imports. The bridge between
+ * the two is described in lib/browser/desktop.ts.
  *
  * Coordinates everywhere are CSS pixels inside the page's viewport (`state.viewport`), with the
- * origin at the top left. Frames are JPEG images of exactly that viewport.
+ * origin at the top left.
  */
 
-/** The size the page is rendered at. The interface scales the picture to fit. */
+/** The width a page is laid out at when the view is narrower than this, so sites keep their desktop layout. */
 export const VIEWPORT = { width: 1280, height: 800 } as const;
 
 /** Why the agent has stopped and handed the page to the user. */
@@ -38,16 +33,16 @@ export type BrowserTab = { id: string; title: string; url: string; active: boole
 
 export type BrowserState = {
   /**
-   * "idle": no browser has been opened yet. "starting": Chrome is launching.
-   * "ready": there is a page to show. "closed": the browser was closed. "error": it could not start.
+   * "idle": no browser has been opened yet. "starting": a browser was asked for and its view is
+   * being put on screen. "ready": there is a page. "closed": it was closed. "error": it could not start.
    */
   status: "idle" | "starting" | "ready" | "closed" | "error";
-  /** Who is driving. While "user", the agent does nothing and the user's input reaches the page. */
+  /** Who is driving. While "user", the agent does nothing and the user's clicks and keys reach the page. */
   control: "agent" | "user";
   /** Set when the agent asked the user to step in. Absent when the user took over on their own. */
   handover?: Handover;
-  /** Set while a step is waiting for the user's approval in the chat. */
-  approval?: { label: string };
+  /** Set while a step is waiting for the user's yes or no: which step, and what it will do. */
+  approval?: { label: string; toolCallId: string; summary: string };
   url: string;
   title: string;
   loading: boolean;
@@ -61,20 +56,6 @@ export type BrowserState = {
   activity: string;
   /** The page takes payment. The agent never acts here; the user may pay themselves. */
   paymentPage: boolean;
-  /**
-   * Which browser the agent works in. "assisted": a Chrome of its own on the computer running the
-   * app, hidden, with sign-ins of its own. "own": a window of the Chrome the user already uses,
-   * signed in to their accounts, so there is nothing to sign in to. "desktop": the browser view
-   * inside the desktop app's own window; the user types straight into it, and the interface shows
-   * the real page instead of pictures of it.
-   */
-  kind: "assisted" | "own" | "desktop";
-  /**
-   * Whether the user's own Chrome can be used. "ready": Chrome allows an app to attach.
-   * "setup": the user has to turn that on in Chrome first (chrome://inspect/#remote-debugging).
-   * "unavailable": the app is not running on a computer with the user's Chrome.
-   */
-  own: "ready" | "setup" | "unavailable";
   /** Set with status "error". */
   error?: string;
 };
@@ -92,8 +73,6 @@ export const IDLE_STATE: BrowserState = {
   busy: false,
   activity: "",
   paymentPage: false,
-  kind: "assisted",
-  own: "unavailable",
 };
 
 export type Box = { x: number; y: number; width: number; height: number };
@@ -127,25 +106,13 @@ export type AgentAction = {
   text?: string;
   /** "scroll": which way. */
   direction?: "up" | "down";
-  /** How long the server waits before doing it, in milliseconds: the time the pointer has to arrive. */
+  /** How long the app waits before doing it, in milliseconds: the time the pointer has to arrive. */
   leadMs: number;
 };
 
-export type BrowserEvent =
-  | { type: "state"; state: BrowserState }
-  /** One picture of the page. `data` is a base64 JPEG of the whole viewport. */
-  | { type: "frame"; data: string; width: number; height: number }
-  | { type: "action"; action: AgentAction };
+export type BrowserEvent = { type: "state"; state: BrowserState } | { type: "action"; action: AgentAction };
 
-/** What the user does in the live view while they are in control. */
-export type UserInput =
-  | { type: "mouse"; action: "move" | "down" | "up"; x: number; y: number; button?: "left" | "middle" | "right"; clickCount?: number }
-  | { type: "wheel"; x: number; y: number; deltaX: number; deltaY: number }
-  /** `key` is `KeyboardEvent.key`: "a", "A", "Enter", "Backspace", "ArrowLeft", "Shift", "Meta". */
-  | { type: "key"; action: "down" | "up"; key: string }
-  /** Pasted or composed text, inserted at the caret. */
-  | { type: "text"; text: string };
-
+/** What the user asks of the browser from the interface. */
 export type ControlRequest =
   /** The user takes over. The agent pauses until "release". */
   | { action: "take" }
@@ -156,25 +123,27 @@ export type ControlRequest =
   | { action: "reload" }
   /** Go to an address the user typed. Opens the browser if there is none. Only while the user is in control. */
   | { action: "navigate"; url: string }
+  /** Open a link the user pressed in the chat. The user takes over, and the browser opens if there is none. */
+  | { action: "visit"; url: string }
   | { action: "tab"; tabId: string }
-  /**
-   * Work in the user's own Chrome, or go back to the assisted browser. `reopen` carries the page
-   * that is open over to the other browser (used when a sign-in is why the user is switching).
-   */
-  | { action: "kind"; kind: "assisted" | "own"; reopen?: boolean }
-  /** The desktop app: its browser view exists, and this is where the agent can reach it. */
-  | { action: "kind"; kind: "desktop"; endpoint?: string }
-  /** The desktop app: the size the browser view is drawn at, so the page is laid out to fit it. */
+  /** The size the browser view is drawn at, so the page is laid out to fit it. */
   | { action: "fit"; width: number; height: number }
+  /** The user's yes or no to the step that is waiting for it. */
+  | { action: "approval"; toolCallId: string; approved: boolean }
   /** Close the browser. Sign-ins are kept. */
-  | { action: "close" }
-  /** Close the browser and wipe every sign-in, cookie and saved form entry. */
-  | { action: "forget" };
+  | { action: "close" };
 
 /** What the agent's "it is your turn" request resolves to. */
 export type HandoverAnswer = { status: "done" | "skipped"; note?: string };
 
-/** One browser step as the conversation shows it. Returned by the agent's browser tools. */
+/** The agent's browser tools. They are carried out in the desktop app, not on the server. */
+export const BROWSER_TOOL_NAMES = ["browserOpen", "browserAct", "browserRead", "browserLook", "browserClose"] as const;
+export type BrowserToolName = (typeof BROWSER_TOOL_NAMES)[number];
+
+/** One step the agent asked for, as the interface passes it to the app. */
+export type BrowserCall = { tool: BrowserToolName; toolCallId: string; input: unknown };
+
+/** One browser step as the conversation shows it. What the agent's browser tools return. */
 export type BrowserStepData = {
   kind: "browser";
   /** What was done, in plain words: "Opened tableonline.fi", "Clicked 'Reserve'". */
@@ -188,7 +157,11 @@ export type BrowserStepData = {
   problem?: string;
   /** True when a safety rule refused the step (payment, password), as opposed to an ordinary failure. */
   blocked?: boolean;
+  /** True when the user said no to the step. */
+  denied?: boolean;
   /** What the model reads back: the page as it now stands. Not shown to the user. */
   page: string;
+  /** browserLook: a picture of the page (base64 JPEG) for the model. Not kept when the conversation is saved. */
+  picture?: string;
   sources: [];
 };

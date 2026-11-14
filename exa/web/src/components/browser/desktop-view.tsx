@@ -6,7 +6,7 @@ import { LoaderCircle, WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { APP_NAME } from "@/lib/brand";
 import { control, useBrowser } from "@/lib/browser/client";
-import type { BatonDesktop } from "@/lib/browser/desktop";
+import { useDesktopApp } from "@/lib/browser/desktop";
 import { ActionLayer, AgentPointer, Placeholder } from "./browser-view";
 
 type Size = { width: number; height: number };
@@ -17,13 +17,24 @@ type ViewElement = HTMLElement & { getWebContentsId(): number };
 const EASE = [0.22, 1, 0.36, 1] as const;
 
 /**
- * The live browser inside the desktop app: not pictures of a page but the page itself, in a
- * browser view that belongs to the app's window. While the user is in control they click and
- * type straight into it, exactly as in any browser. While the agent is driving, what it does is
- * drawn on top, as in the web version.
+ * The live browser: the page itself, in a browser view that belongs to the desktop app's window.
+ * While the user is in control they click and type straight into it, exactly as in any browser.
+ * While the agent is driving, what it does is drawn on top: its pointer, a ring round what it is
+ * about to press, the text it types.
  */
-export function DesktopBrowserView({ browserId, desktop, className, empty }: { browserId: string; desktop: BatonDesktop; className?: string; empty?: React.ReactNode }) {
-  const { state, action: latest, fresh, connected } = useBrowser(browserId);
+export function BrowserView({
+  partition,
+  className,
+  empty,
+}: {
+  /** The store this account's sign-ins are kept in (see browserPartition). */
+  partition: string;
+  className?: string;
+  /** Extra content under the "no browser yet" message, for example a button. */
+  empty?: React.ReactNode;
+}) {
+  const desktop = useDesktopApp();
+  const { state, action: latest, fresh, connected } = useBrowser();
   const action = latest && (fresh || (latest.kind === "approval" && Boolean(state.approval))) ? latest : null;
 
   const room = React.useRef<HTMLDivElement>(null);
@@ -42,22 +53,19 @@ export function DesktopBrowserView({ browserId, desktop, className, empty }: { b
 
   // The view exists while the server wants a browser: it appears when a task (or the user) opens
   // one and goes when the browser is closed. Putting it on screen is what starts the bridge.
-  const wanted = state.kind === "desktop" && (state.status === "starting" || state.status === "ready");
+  const wanted = state.status === "starting" || state.status === "ready";
   React.useEffect(() => {
     const parent = host.current;
-    if (!wanted || !parent) return;
+    if (!wanted || !parent || !desktop) return;
     const view = document.createElement("webview") as ViewElement;
     view.setAttribute("src", "about:blank");
-    view.setAttribute("partition", "persist:baton");
+    view.setAttribute("partition", partition);
     view.setAttribute("allowpopups", "true");
     view.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:inline-flex;background:#fff";
     let gone = false;
     const onReady = () => {
       view.removeEventListener("dom-ready", onReady);
-      void desktop
-        .attach(view.getWebContentsId())
-        .then((endpoint) => (gone ? undefined : control(browserId, { action: "kind", kind: "desktop", endpoint })))
-        .catch(() => {});
+      if (!gone) void desktop.browser.attach(view.getWebContentsId()).catch(() => {});
     };
     view.addEventListener("dom-ready", onReady);
     parent.appendChild(view);
@@ -66,17 +74,17 @@ export function DesktopBrowserView({ browserId, desktop, className, empty }: { b
       view.removeEventListener("dom-ready", onReady);
       view.remove();
     };
-  }, [wanted, browserId, desktop]);
+  }, [wanted, desktop, partition]);
 
   // Tell the server how much room the view has, so the page is laid out to fit it.
-  const ready = state.status === "ready" && state.kind === "desktop";
+  const ready = state.status === "ready";
   const width = space?.width ?? 0;
   const height = space?.height ?? 0;
   React.useEffect(() => {
     if (!ready || width < 100 || height < 100) return;
-    const timer = setTimeout(() => void control(browserId, { action: "fit", width, height }).catch(() => {}), 160);
+    const timer = setTimeout(() => void control({ action: "fit", width, height }).catch(() => {}), 160);
     return () => clearTimeout(timer);
-  }, [ready, width, height, browserId]);
+  }, [ready, width, height]);
 
   const userControl = ready && state.control === "user";
   const scale = ready && state.viewport.width > 0 && width > 0 ? width / state.viewport.width : 0;

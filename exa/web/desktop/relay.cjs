@@ -35,13 +35,13 @@ const BUTTONS = [
  * @returns {Promise<{ endpoint: string, close: () => void }>}
  */
 function startRelay(guest, options = {}) {
-  const verbose = process.env.BATON_RELAY_LOG === "2";
-  const log = options.log ?? (process.env.BATON_RELAY_LOG ? (...args) => console.error("[relay]", ...args) : () => {});
+  const verbose = process.env.BERYL_RELAY_LOG === "2";
+  const log = options.log ?? (process.env.BERYL_RELAY_LOG ? (...args) => console.error("[relay]", ...args) : () => {});
   const token = crypto.randomBytes(18).toString("hex");
   const server = new WebSocketServer({ host: "127.0.0.1", port: 0, path: `/${token}` });
-  const PAGE = "baton-page";
+  const PAGE = "beryl-page";
   /** A second channel to "the browser" itself, which the agent opens to ask for more page sessions. */
-  const BROWSER = "baton-browser";
+  const BROWSER = "beryl-browser";
   /** Extra sessions the agent opens on the same page: they all talk to the one view. */
   const aliases = new Set([PAGE]);
   let aliasCount = 0;
@@ -82,7 +82,7 @@ function startRelay(guest, options = {}) {
     inInterface(`(() => {
       const view = document.querySelector("webview");
       if (!view || document.activeElement === view) return;
-      window.__batonKeyboardWas = document.activeElement;
+      window.__berylKeyboardWas = document.activeElement;
       view.focus();
     })()`);
   /** The agent has stopped typing: whoever had the keyboard gets it back (unless the user has taken the page over). */
@@ -92,8 +92,8 @@ function startRelay(guest, options = {}) {
       if (control !== "agent" || agentKeys > 0) return;
       void inInterface(`(() => {
         const view = document.querySelector("webview");
-        const was = window.__batonKeyboardWas;
-        window.__batonKeyboardWas = null;
+        const was = window.__berylKeyboardWas;
+        window.__berylKeyboardWas = null;
         if (!view || document.activeElement !== view) return;
         if (was && was !== document.body && was.isConnected) was.focus();
         else view.blur();
@@ -142,11 +142,11 @@ function startRelay(guest, options = {}) {
         return {};
       }
       case "Target.getTargetInfo":
-        return { targetInfo: targetInfo ?? { targetId: "baton-browser", type: "browser", title: "", url: "", attached: true, canAccessOpener: false } };
+        return { targetInfo: targetInfo ?? { targetId: "beryl-browser", type: "browser", title: "", url: "", attached: true, canAccessOpener: false } };
       case "Target.attachToBrowserTarget":
         return { sessionId: BROWSER };
       case "Target.attachToTarget": {
-        const sessionId = `baton-alias-${++aliasCount}`;
+        const sessionId = `beryl-alias-${++aliasCount}`;
         aliases.add(sessionId);
         return { sessionId };
       }
@@ -161,8 +161,8 @@ function startRelay(guest, options = {}) {
 
   async function handle(method, params, sessionId) {
     // Notes from the app's server to this bridge, not for the page.
-    if (method.startsWith("Baton.")) {
-      if (method === "Baton.setControl") control = params?.control === "user" ? "user" : "agent";
+    if (method.startsWith("Beryl.")) {
+      if (method === "Beryl.setControl") control = params?.control === "user" ? "user" : "agent";
       return {};
     }
     if (!sessionId || sessionId === BROWSER) return browserLevel(method, params);
@@ -196,7 +196,7 @@ function startRelay(guest, options = {}) {
         return;
       }
       const { id, method, params, sessionId } = message;
-      if (verbose && /^(Input|Emulation|Baton)\./.test(method)) log(method, JSON.stringify(params ?? {}).slice(0, 160));
+      if (verbose && /^(Input|Emulation|Beryl)\./.test(method)) log(method, JSON.stringify(params ?? {}).slice(0, 160));
       try {
         const result = await handle(method, params, sessionId);
         send({ id, sessionId, result: result ?? {} });

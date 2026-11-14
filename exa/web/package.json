@@ -17,10 +17,9 @@
     "test:auth": "node scripts/auth-test.mjs",
     "smoke": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/smoke.mjs",
     "test:guard": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/guard-test.mjs",
-    "test:browser": "node scripts/browser-test.mjs",
-    "test:own": "node scripts/own-chrome-test.mjs",
-    "test:desktop": "electron scripts/desktop-test.cjs",
-    "desktop": "node desktop/run.mjs"
+    "test:desktop": "node desktop/build.mjs && electron scripts/desktop-test.cjs",
+    "desktop": "node desktop/run.mjs",
+    "desktop:build": "node desktop/build.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.103",

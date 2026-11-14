@@ -22,7 +22,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { APP_NAME } from "@/lib/brand";
-import type { BrowserStepData } from "@/lib/browser/protocol";
+import { useBrowser } from "@/lib/browser/client";
+import type { BrowserState, BrowserStepData } from "@/lib/browser/protocol";
 import { faviconOf } from "@/lib/widgets/types";
 import type { ToolPart, WidgetHandlers } from "./tool-part";
 
@@ -83,12 +84,13 @@ function intent(part: ToolPart): { label: string; action: string } {
   }
 }
 
-function toRow(part: ToolPart): Row {
+function toRow(part: ToolPart, pending: BrowserState["approval"]): Row {
   const planned = intent(part);
   const base = { id: part.toolCallId, action: planned.action };
   switch (part.state) {
     case "output-available": {
       const output = part.output as BrowserStepData;
+      if (output.denied) return { ...base, action: output.action, label: "You declined this step", state: "declined", url: output.url };
       const state: RowState = output.ok ? "done" : output.blocked ? "blocked" : "failed";
       return { ...base, action: output.action, label: output.label, state, problem: output.ok ? undefined : firstSentence(output.problem), url: output.url };
     }
@@ -103,6 +105,8 @@ function toRow(part: ToolPart): Row {
     case "approval-responded":
       return part.approval.approved ? { ...base, label: "Approved", state: "approved" } : { ...base, label: "You declined this step", state: "declined" };
     default:
+      // The app is holding this step until the user says yes or no.
+      if (pending && pending.toolCallId === part.toolCallId) return { ...base, label: "Waiting for your approval", state: "waiting", approval: { id: part.toolCallId, reason: pending.summary } };
       return { ...base, label: planned.label, state: "running" };
   }
 }
@@ -140,7 +144,8 @@ export function BrowserSteps({
   active: boolean;
   handlers: WidgetHandlers;
 }) {
-  const rows = React.useMemo(() => parts.map(toRow), [parts]);
+  const { approval } = useBrowser().state;
+  const rows = React.useMemo(() => parts.map((part) => toRow(part, approval)), [parts, approval]);
   const [open, setOpen] = React.useState<boolean | null>(null);
   const waiting = rows.find((r) => r.state === "waiting");
   // Between two steps the agent is reading the page and deciding: still working, nothing running.
