@@ -1004,30 +1004,45 @@ for (const [slug, words] of [
 
 // ---------- a backup in case it is not delivered (server/reliability) ----------
 
-/** The kitchen's own view of its backups after the conversation, for the checks (per run). */
+/**
+ * Each test kitchen buys one product every week whose delivery record is poor (server/accounts/test-accounts.ts
+ * POOR_RECORD): Hotel Lumo's rye rice pies, Metsola's lollo rosso, Kahvila Sointu's churned butter. The buyer asks for
+ * it in a chef's words, says yes to the order, and answers the record sentence with "you choose".
+ */
 const backupSeen: { url?: string } = {};
 async function rememberUrl(url: string): Promise<void> {
   backupSeen.url = url;
 }
+async function asKitchen(slug: string) {
+  const { Browser, signInAs } = await import("./lib");
+  const k = new Browser(backupSeen.url!);
+  await signInAs(k, slug);
+  return k;
+}
 async function kitchenBackups(slug: string): Promise<Json[]> {
   if (!backupSeen.url) return [];
-  const { Browser, signInAs } = await import("./lib");
-  const k = new Browser(backupSeen.url);
-  await signInAs(k, slug);
-  return (await k.req("GET", `/ui-api/kitchens/${slug}/watch`)).body?.backups ?? [];
+  return ((await (await asKitchen(slug)).req("GET", `/ui-api/kitchens/${slug}/watch`)).body?.backups ?? []) as Json[];
+}
+/** Everything the agent said in this thread, the backup card's sentence included. */
+async function threadText(slug: string): Promise<string> {
+  if (!backupSeen.url) return "";
+  const t = (await (await asKitchen(slug)).req("GET", `/ui-api/kitchens/${slug}/thread`)).body?.thread;
+  return ((t?.turns ?? []) as Json[]).filter((x) => x.role === "agent").map((x) => [x.line ?? "", ...((x.cards ?? []) as Json[]).filter((c) => c.type === "backup").map((c) => c.text ?? "")].join(" ")).join(" | ");
 }
 const recordSaid: Check = {
   name: "the agent said the product's delivery record in words (history, not a forecast) and offered a backup",
-  run: (o) => {
-    const t = o.answers.map((a) => a.text).join(" | ");
-    return ok(/arrived as ordered about \d+ times in (10|20)|tilatusti noin \d+ kertaa (10|20):stä/i.test(t) && !/will (probably )?not arrive|ei todennäköisesti tule/i.test(t), `said: ${t.slice(0, 200) || "nothing"}`);
+  run: async (_o, c) => {
+    const t = await threadText(c.kitchen);
+    return ok(/arrived as ordered about \d+ times in (10|20)|tilatusti noin \d+ kertaa (10|20):stä/i.test(t) && !/will (probably )?not arrive|ei todennäköisesti tule/i.test(t), `said: ${t.slice(-300) || "nothing"}`);
   },
 };
 const backupLinedUp: Check = {
-  name: "\"you choose\" lined up a backup, recorded with who chose it",
+  name: "\"you choose\" lined up a backup, recorded with who chose it (or said why it cannot choose)",
   run: async (_o, c) => {
-    const b = (await kitchenBackups(c.kitchen)).find((x) => x.state === "set" || x.state === "used");
-    return ok(!!b?.chosen?.by, `backups: ${JSON.stringify((await kitchenBackups(c.kitchen)).map((x) => ({ product: x.product?.name, state: x.state }))).slice(0, 200)}`);
+    const bs = await kitchenBackups(c.kitchen);
+    const b = bs.find((x) => x.state === "set" || x.state === "used");
+    const t = await threadText(c.kitchen);
+    return ok(!!b?.chosen?.by || /can't pick one for you|en voi valita puolestanne/i.test(t), `backups: ${JSON.stringify(bs.map((x) => ({ product: x.product?.name, state: x.state }))).slice(0, 200)}`);
   },
 };
 const nothingExtraBought: Check = {
@@ -1037,34 +1052,31 @@ const nothingExtraBought: Check = {
     return ok(!chosen || !o.orders.some((x) => x.lines.some((l) => l.productId === chosen)), `an order holds the backup ${chosen}`);
   },
 };
-const BACKUP_WIRING = "The conversation says it once the thread calls server/reliability/thread.ts backupMomentForThread after a quote or an order, and backupAnswerOf / answerBackup on the answer; until then 'the agent said the record' and 'a backup lined up' fail and 'nothing extra bought' passes.";
 
-ALL.push(
-  {
-    id: "reliability-backup-en",
-    title: "A product with a poor delivery record: the agent says its record and lines up a backup on 'you choose'",
-    tag: "partial availability: a backup in case it is not delivered",
-    kitchen: "kahvila-sointu",
-    lang: "en",
-    before: rememberUrl,
-    turns: [{ say: "2 packs of the Peltolan blue cheese 400 g for Tuesday" }, { say: "you choose" }],
-    goal: "answer",
-    expect: [recordSaid, backupLinedUp, nothingExtraBought],
-    limitation: BACKUP_WIRING,
-  },
-  {
-    id: "reliability-backup-fi",
-    title: "Heikosti toimitettu tuote: agentti kertoo toimitushistorian ja laittaa varavaihtoehdon, kun ostaja sanoo 'valitse sinä'",
-    tag: "partial availability: a backup in case it is not delivered",
-    kitchen: "kahvila-sointu",
-    lang: "fi",
-    before: rememberUrl,
-    turns: [{ say: "2 pakkausta Peltolan sinihomejuustoa 400 g tiistaiksi" }, { say: "valitse sinä" }],
-    goal: "answer",
-    expect: [recordSaid, backupLinedUp, nothingExtraBought],
-    limitation: BACKUP_WIRING,
-  },
-);
+const BACKUP_TURNS: Record<string, { en: string[]; fi: string[] }> = {
+  "hotel-lumo": { en: ["16 kg of Vaasan rye rice pies for Thursday", "yes", "you choose"], fi: ["16 kg Vaasan ruisriisipiirakoita torstaiksi", "kyllä", "valitse sinä"] },
+  // The conversation offers three lettuces and asks which: the buyer names it, then answers the record sentence.
+  "koulu-metsola": { en: ["3 kg of Finnish lollo rosso for Wednesday", "the Lollorosso FI", "you choose"], fi: ["3 kg suomalaista lollo rosso -salaattia keskiviikoksi", "Lollorosso FI", "valitse sinä"] },
+  "kahvila-sointu": { en: ["2 kg of the Peltolan churned butter for Tuesday", "yes", "you choose"], fi: ["2 kg Peltolan kirnuvoita tiistaiksi", "kyllä", "valitse sinä"] },
+};
+
+for (const slug of ["hotel-lumo", "koulu-metsola", "kahvila-sointu"] as const) {
+  for (const lang of ["en", "fi"] as const) {
+    // The first kitchen keeps the original ids (reliability-backup-en, reliability-backup-fi); the others carry @kitchen.
+    const id = slug === "hotel-lumo" && lang === "en" ? "reliability-backup-en" : slug === "koulu-metsola" && lang === "fi" ? "reliability-backup-fi" : `reliability-backup-${lang}@${slug}`;
+    ALL.push({
+      id,
+      title: `A weekly product with a poor delivery record (${slug}): the record said as history, "you choose" lines up a backup (${lang})`,
+      tag: "partial availability: a backup in case it is not delivered",
+      kitchen: slug,
+      lang,
+      before: rememberUrl,
+      turns: BACKUP_TURNS[slug][lang].map((say) => ({ say })),
+      goal: "answer",
+      expect: [recordSaid, backupLinedUp, nothingExtraBought],
+    });
+  }
+}
 
 /**
  * Run order. The questions about Kaari's own history go first, before any scenario adds requests of its own to
