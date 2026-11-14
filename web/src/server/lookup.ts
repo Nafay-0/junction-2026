@@ -48,6 +48,9 @@ export function mandateMisfit(m: Mandate, p: Product): string[] {
 
 const r2 = (x: number) => Math.round(x * 100) / 100;
 
+/** Smart search's labels, as an outside agent reads them: is this the thing asked for, a variant of it, or a stand-in? */
+const MATCH: Record<string, string> = { exact: "exact", variant: "variant", standin: "stand_in", other: "not_the_kind" };
+
 /** Keys of a product that the compact view already says (or that only matter to the catalogue). Anything else passes through in `more`. */
 const SAID = new Set(["id", "name", "brand", "category", "unit", "packSize", "attributes", "allergens", "certificates", "deliveryReliability", "carbonKgPerUnit", "source", "names", "vendor", "categoryCode", "salesUnit", "baseUnit", "lotSize", "packContent", "allergenInfo", "deliveryReliabilityKnown", "carbonKnown", "carbonGroupAvgKgCo2ePerKg", "temperatureClass", "countryOfOrigin", "substitutes", "kinds", "gtin", "origin"]);
 
@@ -115,16 +118,27 @@ export async function lookupProducts(dock: Dock, session: AgentSession, raw: unk
   const input = LookupInput.parse(raw);
   if (!input.text && !input.category && !input.productIds?.length && !input.brand) throw new DockError(400, "invalid_request", "Say what to look for: text, category, brand or productIds.");
   const { requestId, opened } = await requestFor(dock, session, { requestId: input.requestId, text: `Lookup: ${describe(input)}`, deliverOn: input.deliverOn, category: input.category, productIds: input.productIds });
-  const hits = await dock.searchProducts(session, {
-    requestId,
-    ...(input.productIds?.length ? { ids: input.productIds } : {}),
-    ...(input.text && !input.productIds?.length ? { text: input.text } : {}),
-    ...(input.category ? { category: input.category } : {}),
-    ...(input.requiredClaims?.length ? { attributes: input.requiredClaims } : {}),
-    ...(input.forbiddenAllergens?.length ? { forbiddenAllergens: input.forbiddenAllergens } : {}),
-    ...(input.packSize?.min && input.packSize.unit && input.packSize.unit !== "pcs" ? { minPackContent: { amount: input.packSize.min, unit: input.packSize.unit } } : {}),
-    limit: 100,
-  });
+  // Words go through the one product search (smart search, as the kitchen's own agent gets it); ids and a bare
+  // category through the master-data search. Either way the mandate's and the buyer's hard rules apply in code.
+  const words = [input.text, input.brand].filter(Boolean).join(" ");
+  const claims = [...new Set([...(input.requiredClaims ?? []), ...session.mandate.requiredAttributes])];
+  const avoid = [...new Set([...(input.forbiddenAllergens ?? []), ...session.mandate.forbiddenAllergens])];
+  let found: Awaited<ReturnType<Dock["findProducts"]>> | undefined;
+  let hits: Product[];
+  if (words && !input.productIds?.length) {
+    found = await dock.findProducts(session, { requestId, text: words, ...(input.category ? { category: input.category } : {}), ...(claims.length ? { requiredClaims: claims } : {}), ...(avoid.length ? { forbiddenAllergens: avoid } : {}), ...(session.mandate.allergenEvidence === "declared" ? { declaredAllergensOnly: true } : {}), limit: 100 });
+    hits = found.hits.map((h) => h.product);
+  } else {
+    hits = await dock.searchProducts(session, {
+      requestId,
+      ...(input.productIds?.length ? { ids: input.productIds } : {}),
+      ...(input.category ? { category: input.category } : {}),
+      ...(input.requiredClaims?.length ? { attributes: input.requiredClaims } : {}),
+      ...(input.forbiddenAllergens?.length ? { forbiddenAllergens: input.forbiddenAllergens } : {}),
+      limit: 100,
+    });
+  }
+  const label = new Map((found?.hits ?? []).flatMap((h) => (h.label ? [[h.product.id, MATCH[h.label] ?? h.label] as const] : [])));
   const brand = input.brand?.toLowerCase();
   const filtered = hits.filter(
     (p) =>
@@ -133,7 +147,8 @@ export async function lookupProducts(dock: Dock, session: AgentSession, raw: unk
       (input.packSize?.min === undefined || p.packSize >= input.packSize.min) &&
       (input.packSize?.max === undefined || p.packSize <= input.packSize.max) &&
       (input.requiredClaims ?? []).every((c) => p.attributes.includes(c)) &&
-      !(input.forbiddenAllergens ?? []).some((a) => p.allergens.includes(a) || p.allergenInfo?.mayContain.includes(a) || p.allergenInfo?.declared === false),
+      // smart search applied the allergen rule already (with its fresh-produce reading); the master-data path is strict
+      !(input.forbiddenAllergens ?? []).some((a) => p.allergens.includes(a) || p.allergenInfo?.mayContain.includes(a) || (!found && p.allergenInfo?.declared === false)),
   );
   const allowed = filtered.filter((p) => !mandateMisfit(session.mandate, p).length);
   const outside = filtered.filter((p) => mandateMisfit(session.mandate, p).length);
@@ -152,12 +167,13 @@ export async function lookupProducts(dock: Dock, session: AgentSession, raw: unk
   const products = shown.map((p) => {
     const o = offers.find((x) => x.productId === p.id);
     const u = unavailable.find((x) => x.productId === p.id);
-    return { ...productFacts(p), ...(o ? { live: liveFacts(o, p, input) } : {}), ...(u ? { unavailable: { reason: u.message, problems: u.problems } } : {}) };
+    return { ...productFacts(p), ...(label.get(p.id) ? { match: label.get(p.id) } : {}), ...(o ? { live: liveFacts(o, p, input) } : {}), ...(u ? { unavailable: { reason: u.message, problems: u.problems } } : {}) };
   });
   return {
     requestId,
     ...(opened ? { opened: true } : {}),
     matched: filtered.length,
+    ...(found ? { search: { path: found.path, notSold: found.notSold, onlyStandins: found.onlyStandins, unsure: found.unsure, notes: found.notes } } : {}),
     products,
     outsideMandate: { count: outside.length, examples: outside.slice(0, 3).map((p) => ({ productId: p.id, name: p.name, why: mandateMisfit(session.mandate, p) })) },
     liveChecked: live ? shown.length : 0,
@@ -242,7 +258,9 @@ export async function findAlternatives(dock: Dock, session: AgentSession, raw: u
       continue;
     }
     const packs = packsOf(p);
-    const d = await dock.previewDecision(session, requestId, [{ productId: p.id, quantity: packs, substituteFor: current.id }], live.offers, { referencePrices: true }).catch(() => undefined);
+    // The gate's preview of ordering it: what stock allows when it is short (the trade-offs say so).
+    const previewPacks = o.stockKnown === false ? packs : Math.max(1, Math.min(packs, o.availablePacks));
+    const d = await dock.previewDecision(session, requestId, [{ productId: p.id, quantity: previewPacks, substituteFor: current.id }], live.offers, { referencePrices: true }).catch(() => undefined);
     const failed = d?.rules.find((x) => x.outcome === "fail");
     if (d?.outcome === "reject") {
       refused.push({ productId: p.id, name: p.name, rule: failed?.rule, reason: failed?.reason ?? d.reasons[0] ?? "the gate would refuse it" });

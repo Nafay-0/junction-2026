@@ -142,6 +142,13 @@ describe("real responses match the documented status codes and schemas", () => {
     expect((await call("POST", `/api/v1/approvals/${msg.approvalId}`, { decision: "approve", token: new URL(msg.link, BASE).searchParams.get("token") })).status).toBe(200);
     expect((await agent("GET", `/api/v1/orders/${pending.body.order.orderId}`)).body.order.status).toBe("committed");
     expect((await agent("GET", "/api/v1/orders/ord_nope")).status).toBe(404);
+    expect((await agent("GET", `/api/v1/orders/${pending.body.order.orderId}?wait=1`)).body).toMatchObject({ decided: true });
+    expect((await agent("GET", "/api/v1/orders?status=committed")).body.orders.length).toBeGreaterThan(0);
+    const looked = await agent("POST", "/api/v1/lookup", { text: "milk", requiredClaims: ["lactose_free"], quantity: { amount: 100, unit: "L" }, limit: 3 });
+    expect(looked.status, JSON.stringify(looked.body).slice(0, 400)).toBe(200);
+    expect(looked.body.products[0].live).toMatchObject({ unitPriceCents: expect.any(Number) });
+    expect((await agent("POST", "/api/v1/lookup", {})).status).toBe(400);
+    expect((await agent("POST", "/api/v1/alternatives", { requestId: looked.body.requestId, productId: "VA-1010", quantity: { amount: 1000, unit: "L" } })).body.alternatives.length).toBeGreaterThan(0);
     await call("GET", `/api/v1/ledger?requestId=${requestId}`);
     await call("GET", "/api/v1/keys");
 

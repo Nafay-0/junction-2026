@@ -205,7 +205,7 @@ describe("orders", () => {
     const [m1, m2] = outbox.messages();
     expect((await dock.decideApproval(m1.approvalId, { decision: "approve", proof: { kind: "link_token", token: tokenFrom(m1.link) } })).status).toBe("committed");
     // What a person signed off, the agent cannot take back.
-    await expect(dock.withdrawOrder(session, first.orderId)).rejects.toMatchObject({ status: 409, code: "take_back_needs_person", rule: "human_input" });
+    await expect(dock.withdrawOrder(session, first.orderId, {}, { agentTakeBack: true })).rejects.toMatchObject({ status: 409, code: "take_back_needs_person", rule: "human_input" });
     const late = await dock.decideApproval(m2.approvalId, { decision: "approve", proof: { kind: "link_token", token: tokenFrom(m2.link) } });
     expect(late.status).toBe("rejected");
     expect(budgetRule(late)).toBe("fail");
@@ -263,7 +263,8 @@ describe("orders", () => {
     const sq = await d2.requestQuote(mine, { requestId: small.requestId, lines: [{ productId: "VA-1001", quantity: 2 }] });
     const committed = await d2.placeOrder(mine, { requestId: small.requestId, quoteToken: sq.quoteToken, lines: linesOf(sq.quote) });
     // No order cut-off known for it (the seed states none), so it cannot be taken back: it may already be picked.
-    await expect(d2.withdrawOrder(mine, committed.orderId)).rejects.toMatchObject({ status: 409, code: "past_cutoff" });
+    await expect(d2.withdrawOrder(mine, committed.orderId, {}, { agentTakeBack: true })).rejects.toMatchObject({ status: 409, code: "past_cutoff" });
+    await expect(d2.withdrawOrder(mine, committed.orderId)).rejects.toMatchObject({ status: 409, code: "order_not_pending" });
   });
 
   it("a committed order can be taken back before the order cut-off: by the thread's signed-in person, or by the agent that placed it alone", async () => {
@@ -271,14 +272,16 @@ describe("orders", () => {
     // The published withdraw (any agent, MCP, REST): the agent undoes its own decision, recorded as relayed, not a person's.
     const own = await smallOrder();
     expect(own.order.status).toBe("committed");
-    const undone = await dock.withdrawOrder(session, own.order.orderId, { by: "Aino", reason: "wrong day" });
+    // Not without the published door's opt-in (the store's thread: a viewer's tap is not the agent).
+    await expect(dock.withdrawOrder(session, own.order.orderId)).rejects.toMatchObject({ status: 409, code: "order_not_pending" });
+    const undone = await dock.withdrawOrder(session, own.order.orderId, { by: "Aino", reason: "wrong day" }, { agentTakeBack: true });
     expect(undone.status).toBe("withdrawn");
     expect(ledger.entries().at(-1)).toMatchObject({ type: "order", data: { decision: "taken_back", by: "Aino", verified: false, relayedBy: session.agentId } });
     await expect(dock.withdrawOrder(session, own.order.orderId)).rejects.toMatchObject({ status: 409, code: "order_not_pending" });
     // Another agent of the same organisation cannot.
     const sibling = await dock.authenticate(await signMandate({ ...mandate, mandateId: "mnd_sibling", agentId: "agent_sibling" }, buyer), "agent_sibling");
     const { order } = await smallOrder();
-    await expect(dock.withdrawOrder(sibling, order.orderId)).rejects.toMatchObject({ status: 409, code: "take_back_not_own" });
+    await expect(dock.withdrawOrder(sibling, order.orderId, {}, { agentTakeBack: true })).rejects.toMatchObject({ status: 409, code: "take_back_not_own" });
     const back = await dock.withdrawOrder(session, order.orderId, {}, { takeBack: { by: "Aino Virtanen" } });
     expect(back.status).toBe("withdrawn");
     expect(ledger.entries().at(-1)).toMatchObject({ type: "order", data: { decision: "taken_back", by: "Aino Virtanen" } });

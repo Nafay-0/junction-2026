@@ -394,7 +394,7 @@ const CORE_TOOLS = [
     input: z.object({ orderId: z.string().min(1).describe("orderId to take back."), reason: z.string().max(300).optional().describe("Why, in the buyer's words."), by: by.optional() }),
     output: z.object({ order: OrderSchema, nextStep }),
     run: async ({ dock, session, defaultBy }, { orderId, reason, by: who }) => {
-      const order = await dock.withdrawOrder(session, orderId, { ...(reason ? { reason } : {}), ...((who ?? defaultBy) ? { by: who ?? defaultBy } : {}) });
+      const order = await dock.withdrawOrder(session, orderId, { ...(reason ? { reason } : {}), ...((who ?? defaultBy) ? { by: who ?? defaultBy } : {}) }, { agentTakeBack: true });
       return { order, nextStep: "Taken back: it no longer counts against the weekly budget. Tell the buyer in one sentence; start a new request only if they ask." };
     },
   }),

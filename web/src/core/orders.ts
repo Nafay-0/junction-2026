@@ -14,6 +14,7 @@ import {
   type SignOff,
 } from "./approval";
 import type { AlternativesAnswer, AlternativesSource } from "./alternatives";
+import type { FindRequest, FindResult } from "./catalog/finder";
 import type { EventPublisher } from "./events";
 import { CatalogError, ProductQuerySchema, scheduledOn, usableOffer, type LiveOffer, type LiveStatus, type MeteredCatalog, type Product } from "./catalog";
 import { ClaimStore, availabilityClaimInput, cutoffMs, issueClaim, originClaimInput, priceClaimInput, refOf, type IssuedClaim } from "./claims";
@@ -1092,6 +1093,40 @@ export function createDock(deps: DockDeps) {
       return products;
     },
 
+    /**
+     * Product search by the buyer's words for an outside agent: the same smart search the kitchen's own agent and the
+     * intake use (the server's finder, through the port in catalog/finder.ts), each hit labelled exact, variant,
+     * stand-in or not the kind; the catalogue's own search when no finder is wired (seed). Master data only, no live call.
+     */
+    async findProducts(session: AgentSession, input: FindRequest & { requestId: string }): Promise<FindResult> {
+      const { requestId, ...req } = input;
+      await ownRequest(session, requestId);
+      const t0 = Date.now();
+      const smart = deps.finder && req.text.trim() ? await deps.finder.find(req).catch(() => undefined) : undefined;
+      const result: FindResult =
+        smart ??
+        (await (async () => {
+          const products = await catalog.searchProducts({
+            ...(req.text.trim() ? { text: req.text } : {}),
+            ...(req.category ? { category: req.category } : {}),
+            ...(req.requiredClaims?.length ? { attributes: req.requiredClaims } : {}),
+            ...(req.forbiddenAllergens?.length ? { forbiddenAllergens: req.forbiddenAllergens } : {}),
+            ...(req.ids ? { ids: req.ids } : {}),
+            limit: Math.min(req.limit ?? 24, 100),
+          });
+          return { hits: products.map((product) => ({ product, sources: ["lexical"] })), path: "lexical" as const, notes: [], applied: { claims: req.requiredClaims ?? [], forbiddenAllergens: req.forbiddenAllergens ?? [] }, onlyStandins: false, notSold: false, unsure: false, stats: { candidates: products.length, ms: Date.now() - t0 } };
+        })());
+      const labels = result.hits.reduce<Record<string, number>>((acc, h) => ((acc[h.label ?? "unlabelled"] = (acc[h.label ?? "unlabelled"] ?? 0) + 1), acc), {});
+      ledger.append({
+        type: "lookup",
+        actor: agentActor(session),
+        requestId,
+        summary: `Agent searched the assortment for "${req.text.slice(0, 80)}"${req.category ? ` in ${req.category}` : ""}: ${result.hits.length} products (${result.path === "judge" ? "ranked by the relevance judge" : result.path === "ranked" ? "fused ranking" : "lexical search"})${result.notSold ? "; the wholesaler does not sell that kind" : result.onlyStandins ? "; nothing is the kind asked, only stand-ins" : ""}. No live API call.`,
+        data: { source: "master_data", path: result.path, query: req, labels, notSold: result.notSold, onlyStandins: result.onlyStandins, resultIds: result.hits.map((h) => h.product.id) },
+      });
+      return result;
+    },
+
     /** Live price and availability for a short list. This is the partner's API; it is metered and capped. */
     async checkAvailability(session: AgentSession, input: z.input<typeof AvailabilityInput>): Promise<LiveOffer[]> {
       return (await dock.lookupAvailability(session, input)).offers;
@@ -1554,7 +1589,7 @@ export function createDock(deps: DockDeps) {
      * approver's phone shows it as withdrawn, and the ledger says who asked (relayed by the agent). Only the
      * organisation's own pending orders; anything decided stays as it is.
      */
-    async withdrawOrder(session: AgentSession, orderId: string, input: z.input<typeof WithdrawInput> = {}, internal: { takeBack?: { by: string } } = {}): Promise<PublicOrder> {
+    async withdrawOrder(session: AgentSession, orderId: string, input: z.input<typeof WithdrawInput> = {}, internal: { takeBack?: { by: string }; agentTakeBack?: boolean } = {}): Promise<PublicOrder> {
       const { reason, by } = parse(WithdrawInput, input ?? {});
       const orgId = session.mandate.issuer.orgId;
       const found = await repo.getOrder(orderId);
@@ -1583,9 +1618,12 @@ export function createDock(deps: DockDeps) {
           publish({ type: "order_withdrawn", at, orgId, orderId, totalCents: order.totalCents, summary: `${order.orgName}: a ${formatEur(order.totalCents)} order was taken back before the cut-off.` });
           return toPublicOrder(order);
         }
-        // An agent may undo its own decision: an order it placed alone, inside its mandate (no person signed it), until
-        // the wholesaler's order cut-off. An order a person signed off is theirs to take back, in the kitchen's store.
-        if (order.status === "committed" && !internal.takeBack) {
+        // `agentTakeBack`: the published doors (MCP withdraw_order, REST withdraw, place_order replaces), where the
+        // caller is the agent holding the mandate. It may undo its own decision: an order it placed alone, inside its
+        // mandate (no person signed it), until the wholesaler's order cut-off. An order a person signed off is theirs to
+        // take back, in the kitchen's store. The store's own thread does not pass it: there a tap without a signed-in
+        // person is a viewer of the page, not the agent, and a committed order stays.
+        if (order.status === "committed" && !internal.takeBack && internal.agentTakeBack) {
           const until = takeBackUntil(order, now());
           const actor = agentActor(session);
           const ids = { requestId: order.requestId, orderId };
@@ -1739,7 +1777,7 @@ export function createDock(deps: DockDeps) {
       const order: PublicOrder & { replaced?: ReplacedOrder } = await dock.placeOrder(session, signed, internal);
       if (body.replaces && (order.status === "committed" || order.status === "pending_approval")) {
         try {
-          const back = await dock.withdrawOrder(session, body.replaces, { reason: `replaced by order ${order.orderId}` });
+          const back = await dock.withdrawOrder(session, body.replaces, { reason: `replaced by order ${order.orderId}` }, { agentTakeBack: true });
           order.replaced = { orderId: back.orderId, status: back.status };
           ledger.append({ type: "order", actor: agentActor(session), requestId: body.requestId, orderId: order.orderId, summary: `Order ${order.orderId} replaces order ${back.orderId}, which was taken back; one order stands.`, data: { replaces: back.orderId } });
         } catch (err) {

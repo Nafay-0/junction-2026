@@ -170,7 +170,29 @@ Start every order with \`submit_need\`: the buyer's need as fields (what, how mu
 
 **The buyer answers, not you.** A mistake confirmation and a clarifying answer must come from the human buyer: relay Dock's question in plain words and pass on exactly what they say. Never confirm or answer for them. These two tools are marked \`_meta["${HUMAN_INPUT_META}"]\` in tools/list. If your client supports MCP elicitation (2026-07-28), Dock asks the buyer directly with an \`input_required\` form and your arguments only pre-fill it. While a confirmation is pending, quotes and orders for that request are refused (rule human_input).
 
-Lower-level tools for follow-up: open_request, search_products (free master data), check_availability (live, at most ${MAX_LIVE_IDS_PER_CALL} products per call), request_quote. Then get_order and explain. Approving an order is never a tool: only the approver can, with their passkey.
+**A relayed answer is not a person's.** When your client cannot show Dock's form, the answer you pass on is recorded as relayed by the agent, not verified. Dock gives you \`answerUrl\` (a one-time page where the buyer taps the answer themselves); hand it over instead of relaying when you can. Where a relayed confirmation matters (an unusual amount, a rule broken), the order still goes to a named person's sign-off.
+
+## Look before you order
+
+- \`find_products\` (REST POST /lookup): products, prices and availability in one call. Filters: words, category, brand, requiredClaims (lactose_free, organic, gluten_free, ...), forbiddenAllergens, packSize, deliverOn, quantity. Words go through the same product search the wholesaler's own store agent uses; each product says \`match\`: exact, variant, stand_in or not_the_kind, and \`search.notSold\` says when the wholesaler does not sell that kind at all. Each product carries pack, claims, labels, allergens (declared or not), origin, delivery reliability, carbon (product-group average) and, live for at most ${MAX_LIVE_IDS_PER_CALL}, price per pack and per litre or kilo, stock (or "not reported"), earliest delivery, order-by cut-off and whether it meets the day.
+- \`find_alternatives\` (REST POST /alternatives): when a product is short, late or not wanted, what can stand in inside the mandate, ranked best, better, good, each with trade-offs and what the gate would decide.
+- Several products in one order: \`request_quote\` with several lines (substituteFor on a substitute), then \`place_order\` with just the requestId.
+
+## After the order
+
+- \`list_orders\` (GET /orders): what is committed and what waits for a person's sign-off, and what can still be taken back.
+- \`await_decision\` (GET /orders/{id}?wait=25): wait for the person's decision on their phone; it only reads.
+- \`withdraw_order\` (POST /orders/{id}/withdraw): take back an order waiting for sign-off, or one you placed alone, until the wholesaler's order cut-off. What a person signed is theirs to take back.
+- \`place_order\` with \`replaces\`: change an order (another amount, day or product); the old one is taken back once the new one is placed.
+- \`explain\` (GET /ledger): the audit trail in plain words, hash-chained; the buyer's side and the wholesaler read the same record.
+
+Lower-level tools: open_request, search_products (free master data), check_availability (live, at most ${MAX_LIVE_IDS_PER_CALL} products per call). Approving an order is never a tool: only the approver can, with their passkey.
+
+## Your mandate can change under you
+
+- A kitchen that tightens its rules (a forbidden allergen, a required claim) reissues its mandate: every earlier mandate is refused from that second (rule mandate_window). Ask your organisation for the current one; read_mandate shows what you present.
+- When the wholesaler enforces crash-test licences, the gate applies the stricter of your mandate and the licence your agent earned on the public crash test. An agent with no licence bound to it is treated as unlicensed: every order goes to a person. The answer says so when the licence, not the mandate, sent an order to a person.
+- A kitchen's connector address (for assistants that take only a URL) is the same door with the same mandate; it can be revoked at any time (HTTP 404, never 401).
 
 ## Rules an agent must follow
 

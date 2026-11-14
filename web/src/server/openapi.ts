@@ -2,6 +2,7 @@ import { z } from "zod";
 import { MAX_LIVE_IDS_PER_CALL } from "@/core/catalog";
 import { AnswersInput, ChoiceInput, ConcernResponseInput, OpenIntakeInput } from "@/core/intake";
 import { InterpretBody, InterpretResponse } from "@/server/agent/interpret";
+import { AlternativesInput, ListOrdersInput, LookupInput } from "@/server/lookup";
 import { AvailabilityInput, OpenRequestInput, PlaceOrderInput, QuoteInput, SearchInput } from "@/core/orders";
 import {
   ApprovalViewSchema,
@@ -90,6 +91,45 @@ const OfferList = named("OfferList", z.object({
 }));
 const nextStepOut = z.string().describe("What to do next, in one or two sentences: the same guidance an MCP tool result carries.");
 const OrderEnvelope = named("OrderEnvelope", z.object({ order: OrderSchema, nextStep: nextStepOut.optional() }));
+const PlacedEnvelope = named("PlacedEnvelope", z.object({ order: OrderSchema, nextStep: nextStepOut.optional(), replaced: z.object({ orderId: z.string(), status: z.string(), refused: z.object({ code: z.string(), rule: z.string().optional(), message: z.string() }).optional() }).optional().describe("With replaces: the earlier order's new status, or why it still stands.") }));
+const WaitedEnvelope = named("WaitedEnvelope", z.object({ order: OrderSchema, nextStep: nextStepOut.optional(), decided: z.boolean().optional(), waitedSeconds: z.number().optional() }));
+const LiveFacts = z.looseObject({
+  unitPriceCents: z.number().int().describe("Live price per pack, euro cents ex VAT."),
+  perUnit: z.object({ cents: z.number(), unit: z.string() }),
+  availablePacks: z.number().nullable().describe("null: the wholesaler reports no real stock figure (supplier-shipped)."),
+  stock: z.enum(["reported", "not_reported"]),
+  earliestDelivery: z.iso.date(),
+  orderBy: z.string().optional().describe("Order cut-off for that delivery, as the wholesaler states it."),
+  meetsDay: z.boolean().optional().describe("With deliverOn: can arrive that day."),
+  packsForQuantity: z.number().optional(),
+  coversQuantity: z.boolean().nullable().optional(),
+});
+const ProductFactsOut = z.looseObject({
+  productId: z.string(),
+  name: z.string(),
+  brand: z.string(),
+  category: z.string(),
+  match: z.enum(["exact", "variant", "stand_in", "not_the_kind"]).optional().describe("From the product search: the kind asked for, a variant of it, or something that could stand in."),
+  pack: z.looseObject({ size: z.number(), unit: z.string() }),
+  claims: z.array(z.string()).describe("Dietary and other claims, e.g. lactose_free."),
+  labels: z.array(z.string()).describe("Certificates and labels."),
+  allergens: z.object({ declared: z.boolean(), contains: z.array(z.string()), mayContain: z.array(z.string()), freeFrom: z.array(z.string()) }),
+  origin: z.string().nullable(),
+  deliveryReliability: z.number().nullable().describe("Share of past deliveries on time; null when unknown."),
+  carbon: z.looseObject({ basis: z.enum(["product_group_average", "missing"]), kgCo2ePerUnit: z.number().nullable(), groupAverageKgCo2ePerKg: z.number().nullable() }),
+  live: LiveFacts.optional(),
+  unavailable: z.looseObject({ reason: z.string() }).optional(),
+});
+const LookupResult = named("LookupResult", z.looseObject({ requestId: z.string(), matched: z.number(), products: z.array(ProductFactsOut), outsideMandate: z.looseObject({ count: z.number() }), liveChecked: z.number(), search: z.looseObject({ path: z.string(), notSold: z.boolean(), onlyStandins: z.boolean() }).optional() }));
+const AlternativesResult = named("AlternativesResult", z.looseObject({
+  requestId: z.string(),
+  requested: ProductFactsOut,
+  rankedBy: z.string(),
+  alternatives: z.array(ProductFactsOut.extend({ rank: z.enum(["best", "better", "good"]), packs: z.number(), totalCents: z.number(), tradeOffs: z.array(z.string()), gate: z.looseObject({ outcome: z.string(), reasons: z.array(z.string()) }) })),
+  leftOut: z.array(z.looseObject({ productId: z.string(), reason: z.string() })),
+  none: z.string().optional(),
+}));
+const OrderListOut = named("OrderList", z.object({ orders: z.array(z.looseObject({ orderId: z.string(), requestId: z.string(), status: z.string(), totalCents: z.number() })), waitingForSignOff: z.number() }));
 const OrderRefused = named("OrderRefused", z.object({ error: ErrorSchema, order: OrderSchema, nextStep: nextStepOut.optional() }));
 const Refusal = named("Refusal", z.union([OrderRefused, ErrorBodySchema]));
 const ApprovalList = named("ApprovalList", z.object({ approvals: z.array(PendingApprovalSchema) }));
@@ -261,12 +301,12 @@ export const API: Operation[] = [
     path: "/api/v1/orders",
     operationId: "placeOrder",
     summary: "Place an order against a quote",
-    description: "The gate checks the order against the mandate. 201: committed with a signed confirmation. 202: waits for a human sign-off; do not retry. 422: refused, `error.rule` names the rule.",
+    description: "The gate checks the order against the mandate. `{ requestId }` alone places the latest quote Dock signed for the request (the intake's choice, or POST /api/v1/quotes). `replaces` changes an earlier order: once this one is placed, Dock takes that one back if it still can. 201: committed with a signed confirmation. 202: waits for a human sign-off; do not retry. 422: refused, `error.rule` names the rule.",
     auth: true,
     body: PlaceOrderBody,
     responses: {
-      201: { description: "Committed within the mandate.", schema: OrderEnvelope },
-      202: { description: "Waiting for a human sign-off. Do not retry; poll GET /api/v1/orders/{orderId}.", schema: OrderEnvelope },
+      201: { description: "Committed within the mandate.", schema: PlacedEnvelope },
+      202: { description: "Waiting for a human sign-off. Do not retry; GET /api/v1/orders/{orderId}?wait=25 waits for the decision.", schema: PlacedEnvelope },
       400: err("Invalid body."),
       404: err("Unknown requestId."),
       422: { description: "Refused by the gate, or the quote token does not verify (rule quote_signature).", schema: Refusal },
@@ -279,20 +319,51 @@ export const API: Operation[] = [
     operationId: "getOrder",
     summary: "Read an order",
     auth: true,
-    params: [{ name: "orderId", in: "path", schema: z.string(), required: true }],
-    responses: { 200: { description: "The order.", schema: OrderEnvelope }, 404: err("No such order for this organisation."), ...AUTH_ERRORS },
+    description: "With `wait` (seconds, at most 55), the answer comes as soon as a person decides an order that waits for sign-off, or when the time is up (`decided: false`).",
+    params: [{ name: "orderId", in: "path", schema: z.string(), required: true }, { name: "wait", in: "query", schema: z.number().int().min(0).max(55), description: "Wait up to this many seconds for a sign-off decision." }],
+    responses: { 200: { description: "The order.", schema: WaitedEnvelope }, 404: err("No such order for this organisation."), ...AUTH_ERRORS },
+  },
+  {
+    method: "get",
+    path: "/api/v1/orders",
+    operationId: "listOrders",
+    summary: "List this organisation's orders",
+    description: "Newest first: status, total, delivery day, lines, who must sign and whether they have, and whether it can still be taken back (`canTakeBack`).",
+    auth: true,
+    params: [{ name: "status", in: "query", schema: ListOrdersInput.shape.status.unwrap() }, { name: "limit", in: "query", schema: ListOrdersInput.shape.limit.unwrap() }],
+    responses: { 200: { description: "Orders.", schema: OrderListOut }, 400: err("Invalid query."), ...AUTH_ERRORS },
+  },
+  {
+    method: "post",
+    path: "/api/v1/lookup",
+    operationId: "lookupProducts",
+    summary: "Look up products, prices and availability",
+    description: `One call: products matching words, category, brand, claims, allergens to avoid, pack size and delivery day, inside the mandate, each with pack, claims, labels, allergens, origin, delivery reliability, carbon (product-group average) and whether it is the kind asked for (\`match\`), plus live price, stock, earliest delivery and order cut-off for at most ${MAX_LIVE_IDS_PER_CALL} (metered). Opens a request when none is given.`,
+    auth: true,
+    body: named("LookupBody", LookupInput),
+    responses: { 200: { description: "Products.", schema: LookupResult }, 400: err("Invalid body."), 404: err("Unknown requestId."), 429: err("Live lookup allowance used up (rule live_lookup_limit)."), ...AUTH_ERRORS },
+  },
+  {
+    method: "post",
+    path: "/api/v1/alternatives",
+    operationId: "findAlternatives",
+    summary: "Rank alternatives: good, better, best",
+    description: "What can stand in for a product inside the mandate, ranked best, better, good, each with its trade-offs, live price and delivery, and what the gate would decide if it were ordered. Keeps the product's dietary claims; never an allergen the mandate or the buyer forbids.",
+    auth: true,
+    body: named("AlternativesBody", AlternativesInput),
+    responses: { 200: { description: "Alternatives.", schema: AlternativesResult }, 400: err("Invalid body."), 404: err("Unknown product or requestId."), 429: err("Live lookup allowance used up (rule live_lookup_limit)."), ...AUTH_ERRORS },
   },
   {
     method: "post",
     path: "/api/v1/orders/{orderId}/withdraw",
     operationId: "withdrawOrder",
-    summary: "Withdraw an order that waits for sign-off",
+    summary: "Take back an order",
     description:
-      "The buyer takes back an order that is still pending_approval. It stops holding the weekly budget at once and the approver's screen shows it as withdrawn. `by` (who asked) is recorded as relayed by the agent, not verified. An order waiting for sign-off also stops holding the budget by itself when its quote's fixed price expires (status expired).",
+      "Takes back an order that is still pending_approval (it stops holding the weekly budget at once and the approver's screen shows it as withdrawn), or a committed order this agent placed alone inside its mandate, until the wholesaler's order cut-off. An order a person signed off is theirs to take back in the kitchen's store (409 take_back_needs_person); after the cut-off nothing can be (409 past_cutoff). `by` (who asked) is recorded as relayed by the agent, not verified. An order waiting for sign-off also stops holding the budget by itself when its quote's fixed price expires (status expired).",
     auth: true,
     params: [{ name: "orderId", in: "path", schema: z.string(), required: true }],
     body: z.object({ reason: z.string().max(300).optional(), by: z.string().min(1).max(120).optional() }),
-    responses: { 200: { description: "The withdrawn order.", schema: OrderEnvelope }, 404: err("No such order for this organisation."), 409: err("The order is not waiting for sign-off any more."), ...AUTH_ERRORS },
+    responses: { 200: { description: "The withdrawn order.", schema: OrderEnvelope }, 404: err("No such order for this organisation."), 409: err("A person signed it (take_back_needs_person), the cut-off passed (past_cutoff), another agent placed it (take_back_not_own), or it is decided (order_not_pending)."), ...AUTH_ERRORS },
   },
   {
     method: "get",
