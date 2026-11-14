@@ -12,6 +12,7 @@
  *   3 make it 200 instead of 100 7 OK an order over the limit (passkey on this device)
  *   4 pick the lactose-free one  8 take one back
  *   9 and 10: two orders in one conversation, the second after a person's OK, typed and through the order sheet
+ *  11 reorder last week's order (asked in words, "order again" on the list)   12 pause a standing order (from the landing screen)
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -54,6 +55,9 @@ const L = {
     choose: /^Choose this$/,
     skip: /^No preference: show me the options$/,
     takeOff: /^Take it off this order$/,
+    lastWeek: "what did we order last week?",
+    again: /^Order again$/,
+    recurring: /^Recurring orders$/,
   },
   fi: {
     usual: "Tilaa tavalliset",
@@ -78,6 +82,9 @@ const L = {
     choose: /^Valitse tämä$/,
     skip: /^Ei väliä: näytä vaihtoehdot$/,
     takeOff: /^Poista se tästä tilauksesta$/,
+    lastWeek: "mitä tilasimme viime viikolla?",
+    again: /^Tilaa uudelleen$/,
+    recurring: /^Toistuvat tilaukset$/,
   },
 }[lang];
 
@@ -175,7 +182,7 @@ async function task(name: string, n: number, body: (r: Run) => Promise<string | 
   if (s.status() !== 200) throw new Error(`sign-in: HTTP ${s.status()}`);
   await page.request.post(`${base}/ui-api/kitchens/${account.username}/thread/reset`, { data: {} });
   await ctx.addCookies([{ name: "aimopilot-lang", value: lang, url: base }]);
-  await page.goto(`${base}/k/${account.username}?agent=open`);
+  await page.goto(`${base}/k/${account.username}`);
   // The agent's panel, as a first-timer opens it if the page did not: the Agent tab.
   const log = page.getByRole("log").first();
   await page.waitForTimeout(1500);
@@ -416,6 +423,40 @@ const TASKS: [string, (r: Run) => Promise<string | void>][] = [
       await r.page.waitForTimeout(500);
       await r.tap(lead);
       await r.until((t) => cardsOf(t).filter((c) => c.type === "order" && ["committed", "pending_approval"].includes(c.status)).length >= 2);
+    },
+  ],
+  [
+    "reorder last week's order",
+    async (r) => {
+      await r.say(L.lastWeek);
+      const again = r.log.getByRole("button", { name: L.again }).first();
+      await r.waitFor(again);
+      await r.tap(again);
+      await r.until((t) => !!sheet(t));
+      const confirm = r.log.getByRole("button", { name: L.order }).last();
+      await r.waitFor(confirm);
+      await r.tap(confirm);
+      const t = await r.until(ordered(["committed", "pending_approval"]));
+      const o = cardsOf(t).findLast((c) => c.type === "order");
+      return o?.type === "order" ? `${o.lines.length} line(s), ${o.status}` : undefined;
+    },
+  ],
+  [
+    "pause a standing order",
+    async (r) => {
+      // From the landing screen's starting points: no words needed.
+      const start = r.log.getByRole("button", { name: L.recurring }).first();
+      await start.waitFor({ timeout: 30_000 });
+      await r.tap(start);
+      const sw = r.log.getByRole("switch").first();
+      await sw.waitFor({ timeout: 30_000 });
+      await r.tap(sw);
+      const t = await r.until((t) => cardsOf(t).some((c) => c.type === "standing" && c.items.some((i) => i.paused)), 30_000);
+      // Run it again, so the next run starts from the same records (not counted as a tap of the task).
+      const card = cardsOf(t).find((c) => c.type === "standing");
+      const fam = card?.type === "standing" ? card.items.find((i) => i.paused)?.family : undefined;
+      if (fam) await r.page.request.post(`${base}/ui-api/kitchens/${account.username}/thread/turns`, { data: { door: "typed", via: "tap", action: { type: "standing_pause", family: fam, paused: false }, label: "clean-up", clientTurnId: `unpause-${Date.now()}` } });
+      return fam ? `paused ${fam}` : undefined;
     },
   ],
 ];

@@ -182,10 +182,15 @@ function stepsOf(steps: ThreadStep[], label: (s: ThreadStep) => string) {
   return steps.map((s) => ({ key: s.stepId, text: label(s), state: s.status === "running" ? ("doing" as const) : s.status === "failed" ? ("failed" as const) : ("done" as const), detail: s.ms !== undefined && s.status !== "running" ? `${(s.ms / 1000).toFixed(1)} s` : undefined }));
 }
 
+const SHOWING = new Set<Card["type"]>(["today", "products", "product", "standing", "deliveries", "memory_list", "records", "rules"]);
+
 function Agent({ turn, tap, busy, gated, base, thread, memory }: { turn: AgentTurnT; tap: Tap; busy: boolean; gated: Set<string>; base: string; thread: ThreadT; memory: Map<string, (MemoryLine | string)[]> }) {
   const w = useText(THREAD_WORDS);
   const { lang } = useFormat();
-  const steps = stepsOf(turn.steps, (s) => stepLabel(s, w, lang));
+  // Showing something (the day's opening, a list, a product, the rules) has nothing to explain once it is there: its
+  // steps are drawn only while it works or if one failed. Ordering keeps its steps (how the order was checked).
+  const showing = turn.status !== "working" && turn.cards.length > 0 && turn.cards.every((c) => SHOWING.has(c.type)) && !turn.steps.some((s) => s.status === "failed");
+  const steps = showing ? [] : stepsOf(turn.steps, (s) => stepLabel(s, w, lang));
   return (
     <AgentTurn text={turn.line} status={turn.status} pending={turn.status === "working" && turn.cards.length === 0} steps={steps.length ? <StepLines steps={steps} fold={turn.status !== "working"} /> : undefined}>
       {turn.cards.length > 0 && (
@@ -355,7 +360,7 @@ function CardView({ card, tap, busy, gated, base, turn, thread, memory }: { card
         return (
           <HistoryList
             kind={tx.kind.records}
-            orders={card.rows.map((r) => ({ id: r.ref!, when: r.date ? f.day(r.date) : "", summary: r.label, total: r.totalCents !== undefined ? money(r.totalCents) : "", ...(r.detail ? { note: tx.status[r.detail] ?? r.detail } : {}) }))}
+            orders={card.rows.map((r) => ({ id: r.ref!, when: r.date ? f.day(r.date) : "", summary: r.label, total: r.totalCents !== undefined ? money(r.totalCents) : "", ...(r.detail && tx.status[r.detail] && r.detail !== "committed" ? { note: tx.status[r.detail] } : {}) }))}
             onAgain={(ref) => !busy && tap({ type: "order_again", ref }, tx.repeatWords(`“${card.rows.find((r) => r.ref === ref)?.label ?? ""}”`))}
           />
         );
