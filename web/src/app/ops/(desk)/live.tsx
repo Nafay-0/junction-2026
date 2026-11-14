@@ -21,7 +21,8 @@ export function LiveView() {
     <>
       <PageHead
         title="Live at the gate"
-        purpose="Who is at the door right now, and what happened to what they asked for. Three doors, one gate: every agent meets the same mandate check, the same rules in plain code and the same ledger."
+        purpose="Who is at the door right now, and what happened to what they asked for."
+        about="Who is at the door right now, and what happened to what they asked for. Three doors, one gate: every agent meets the same mandate check, the same rules in plain code and the same ledger."
         right={o && <LiveMark at={whenSeconds(o.at)} error={live.error} />}
       />
       <LoadError message={live.error} />

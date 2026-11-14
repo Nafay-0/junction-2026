@@ -132,7 +132,9 @@ export function OrdersScreen() {
                     <td className="whitespace-nowrap text-right font-medium tabular">{money(r.totalCents)}</td>
                     <td className="whitespace-nowrap tabular">{r.deliveryDate ? dayWords(r.deliveryDate) : "–"}</td>
                     <td className="min-w-[10rem] max-w-[16rem]">
-                      <Badge tone={statusTone(r.status)}>{STATUS_WORD[r.status] ?? fi(r.statusWords)}</Badge>
+                      <div>
+                        <Badge tone={statusTone(r.status)}>{STATUS_WORD[r.status] ?? fi(r.statusWords)}</Badge>
+                      </div>
                       <span className="mt-1 block text-[0.8rem] leading-snug text-ink-soft">
                         {how.head}
                         {r.waitingSinceAt && now !== undefined ? `, ${since(r.waitingSinceAt, now)}` : ""}

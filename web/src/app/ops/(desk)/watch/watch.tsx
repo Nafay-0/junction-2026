@@ -32,7 +32,8 @@ export function WatchScreen() {
     <>
       <PageHead
         title="Kitchen watch"
-        purpose="Each kitchen's own agent watches what it buys every week and what is still to come: one live availability call for its key products, a finding when one cannot come for its day, with good, better, best substitutes. It learns each recurring order from the kitchen's own orders and, where the kitchen switched auto-renew on, renews it before the cut-off, or holds it and asks when the amount or the price has drifted. Every order goes through the gate."
+        purpose="Products a kitchen buys every week that cannot come, with good, better and best substitutes."
+        about="Each kitchen's own agent watches what it buys every week and what is still to come: one live availability call for its key products, a finding when one cannot come for its day, with good, better, best substitutes. It learns each recurring order from the kitchen's own orders and, where the kitchen switched auto-renew on, renews it before the cut-off, or holds it and asks when the amount or the price has drifted. Every order goes through the gate."
         right={v ? <span className="tabular" title={v.schedule.minutes ? undefined : v.schedule.reason}>{num(v.stats.liveCalls)} live calls since start{v.schedule.minutes ? ` · runs every ${v.schedule.minutes} min` : " · runs when asked"}</span> : undefined}
       />
       <LoadError message={live.error} />
