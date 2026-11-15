@@ -49,7 +49,7 @@ describe("the spoken form", () => {
     const a = turn({ turnId: "t1", status: "waiting_buyer", cards: [{ type: "options", cardId: "options:r1", requestId: "r1", options: [option()], excluded: [], notes: [] }] });
     const said = readBackOf(a, { requestId: "r1", optionId: "opt1", turnId: "t1" }, "en");
     expect(said).toBe("12 litres of Valio Eila milk for Monday the sixteenth of November, 11 euros 40. Shall I order it?");
-    expect(spokenOf(a, "fi", { requestId: "r1", optionId: "opt1", turnId: "t1" })).toBe("12 litraa Valio Eila milk maanantaina 16. marraskuuta, 11 euroa 40 senttiä. Tilaanko sen?");
+    expect(spokenOf(a, "fi", { requestId: "r1", optionId: "opt1", turnId: "t1" })).toBe("12 litraa Valio Eila maito maanantaina 16. marraskuuta, 11 euroa 40 senttiä. Tilaanko sen?");
   });
 
   it("says what needs eyes or a finger, and summarises options instead of listing them", () => {
@@ -91,5 +91,15 @@ describe("the spoken form", () => {
     expect(r.say).toBe("Your usual 10-litre boxes can't come by Monday the sixteenth of November. There are 2 options. The first is Valio Eila milk at 1010 euros, for Monday the sixteenth of November. Shall I order the Valio Eila milk?");
     expect(r.say.match(/\?/g)).toHaveLength(1);
     expect(r.hold?.optionId).toBe("e");
+  });
+
+  it("from the live drive: a day alone is not a sentence, the count of options is said once, names in the buyer's language", () => {
+    expect(spokenSentences("Tavallista Eila-maitoa ei saa: sen tilausaika on mennyt umpeen. Torstaiksi {{19.11.}}.", undefined)).toBe("Tavallista Eila-maitoa ei saa: sen tilausaika on mennyt umpeen.");
+    const t = turn({ status: "waiting_buyer", line: "I've found 3 options for **1 000 l**.", cards: [{ type: "options", cardId: "options:r1", requestId: "r1", options: [option(), option({ optionId: "o2", totalCents: 990, title: "Arla lactose-free milk 1 l" }), option({ optionId: "o3", totalCents: 1500 })], excluded: [], notes: [] }] });
+    const said = spokenOf(t, "en");
+    expect(said.match(/3 options/g)).toHaveLength(1);
+    expect(said).toMatch(/^I've found 3 options for 1000 litres\. The first is Valio Eila milk/);
+    expect(spokenName("Valio Eila lactose-free whipping cream 2 dl", "fi")).toBe("Valio Eila kuohukerma");
+    expect(spokenName("Valio Eila lactose-free milk 1 l", "sv")).toBe("Valio Eila mjölk");
   });
 });

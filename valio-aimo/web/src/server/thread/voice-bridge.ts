@@ -56,8 +56,8 @@ export type Spoken = {
 /** How long the first answer to an utterance waits for the engine before it says what the engine is doing. */
 const ACK_MS = Number(process.env.DOCK_VOICE_ACK_MS ?? 250);
 /** Long work is never silent: a new step is said once the last words are this old; the same step, after STILL_MS. */
-const PROGRESS_GAP_MS = 3_000;
-const STILL_MS = 7_000;
+const PROGRESS_GAP_MS = 2_500;
+const STILL_MS = 4_500;
 
 const STOP = /^(please\s+)?(stop|never ?mind|cancel( that)?|forget (it|that)|hold on|lopeta|seis|anna olla|unohda (se|koko juttu)?|ei mitään|sluta|strunta i det|glöm det|avbryt)(\s+(please|now|thanks|kiitos|tack))?[.!]*$/i;
 const BYE = /^((ok(ay)?|thanks|thank you|kiitos|tack)[,.!]?\s+)?(bye|good ?bye|bye ?bye|that'?s all|that is all|hei hei|moi moi|heippa|näkemiin|kiitos,? siinä kaikki|hej då|det var allt)([,.!]?\s+(thanks|thank you|kiitos|tack))?[.!]*$/i;
@@ -300,8 +300,8 @@ export async function nextSpoken(k: Kitchen | string, call: Call, agentTurnId: s
 }
 
 /**
- * What to say about work still going, if anything: a new step once the last words are three seconds old; the same
- * step gone on for seven seconds, once ("Still waiting for the wholesaler's live prices."); never the same words twice
+ * What to say about work still going, if anything: a new step once the last words are two and a half seconds old; the
+ * same step gone on for four and a half seconds, once ("Still waiting for the wholesaler's live prices."); never the same words twice
  * in a row; nothing for a turn still queued behind another.
  */
 export function progressFor(a: AgentTurn, p: { keys: string[]; at: number; last?: string }, now: number, lang: Lang): { key: string; say: string } | undefined {
