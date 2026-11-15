@@ -1,3 +1,4 @@
+import { signerL } from "@/app/_i18n/signer";
 import { dayIn } from "./dish";
 import { ownCards } from "./visitor";
 import { randomBytes } from "node:crypto";
@@ -326,7 +327,7 @@ const eurOf = (cents: number) => `${(cents / 100).toFixed(2).replace(".", ",").r
 export function rulesFacts(run: Pick<TurnRun, "session">): string {
   const m = run.session.mandate;
   const who = m.approvers?.[0]?.name;
-  return `THE KITCHEN'S RULES (its signed mandate; facts, the same the store's own sentences quote): you may spend up to ${eurOf(m.perOrderLimitCents)} on one order alone; above that ${who ? `${who} gives` : "the approver gives"} the OK with their passkey on their own device; the weekly budget is ${eurOf(m.weeklyBudgetCents)}.`;
+  return `THE KITCHEN'S RULES (its signed mandate; facts, the same the store's own sentences quote): you may spend up to ${eurOf(m.perOrderLimitCents)} on one order alone; above that ${who ? signerL(who, "en") : "the approver"} gives the OK with their passkey on their own device; the weekly budget is ${eurOf(m.weeklyBudgetCents)}.`;
 }
 
 /**

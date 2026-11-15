@@ -4,7 +4,7 @@ import { lastShown, rulesFacts } from "./agent";
 describe("what the model is told each turn", () => {
   it("states the kitchen's per-order limit, who OKs above it and the weekly budget, from the signed rules", () => {
     const run = { session: { mandate: { perOrderLimitCents: 50_000, weeklyBudgetCents: 900_000, approvers: [{ name: "Kitchen manager" }] } } } as never;
-    expect(rulesFacts(run)).toBe("THE KITCHEN'S RULES (its signed mandate; facts, the same the store's own sentences quote): you may spend up to 500,00 € on one order alone; above that Kitchen manager gives the OK with their passkey on their own device; the weekly budget is 9 000,00 €.");
+    expect(rulesFacts(run)).toBe("THE KITCHEN'S RULES (its signed mandate; facts, the same the store's own sentences quote): you may spend up to 500,00 € on one order alone; above that the kitchen manager gives the OK with their passkey on their own device; the weekly budget is 9 000,00 €.");
   });
   it("gives the previous reply as the buyer saw it, with the store's own sentences, never a session boundary", () => {
     const turns = [
