@@ -15,7 +15,7 @@ export type ChapterEdit = { shots: Shot[]; callouts: Callout[] };
 
 export const EDL: Record<string, () => ChapterEdit> = {
   c00: () => ({
-    shots: [ph(start("c00"), "The landing page: the hero, then a slow scroll past “How it looks on your webshop”", "The landing page")],
+    shots: [clip("c00-01-landing", { at: start("c00"), label: "The landing page", url: K, from: 0 }, "The landing page: the hero, then a slow scroll past “How it looks on your webshop”")],
     callouts: [],
   }),
 
@@ -108,15 +108,16 @@ export const EDL: Record<string, () => ChapterEdit> = {
         : [ph(start("c04"), "The menu planner: three dishes, then “You have / I'll order / Can't get”", "Menu planner")]),
       clip("c04-01-watch", { at: partAt("c04-2", -0.2), label: "Hotel Lumo kitchen · the watch", url: `${K}/k`, until: 4.6, sync: has("c04-01-watch") ? [[ev("c04-01-watch", "the watch's opening"), cue("c04-2", "Here's its", -0.3)]] : undefined, zoom: [{ at: cue("c04-2", "Here's its", 0.2), s: 1.12, x: 0.35, y: 0.3 }] }, "The watch's opening note"),
       clip("c04-02-backup", { at: cue("c04-2", "And when", -0.3), label: "Hotel Lumo kitchen · a backup", url: `${K}/k`, from: 7.5, sync: has("c04-02-backup") ? [[ev("c04-02-backup", "a poor delivery"), cue("c04-2", "it warns you", -0.4)], [ev("c04-02-backup", "the backup lined up"), cue("c04-2", "Nothing extra", -0.2)]] : undefined }, "A backup for a product with a poor delivery record"),
-      ph(partAt("c04-3", -0.2), "An offer card from the selling agent", "Selling agent"),
+      clip("c04-08-offer", { at: partAt("c04-3", -0.2), label: "A kitchen · the selling agent's offer", url: `${K}/k`, from: 8.5, sync: has("c04-08-offer") ? [[ev("c04-08-offer", "the wholesaler's selling"), cue("c04-3", "It brings", -0.3)]] : undefined, zoom: [{ at: cue("c04-3", "It brings", 0.3), s: 1.1, x: 0.4, y: 0.6 }] }, "An offer card from the selling agent"),
       ...(has("c04-04-memory")
         ? ([
             { clip: "c04-04-memory", at: partAt("c04-4", -0.2), label: "Hotel Lumo kitchen · memory", url: `${K}/k`, from: 7.4, sync: [[ev("c04-04-memory", "what the agent remembers"), partAt("c04-4", 0.4)]] },
             { clip: "c04-04-memory", at: cue("c04-4", "Your rules shows", -0.4), label: "Hotel Lumo kitchen · Your rules", url: `${K}/k`, from: 15.6, sync: [[ev("c04-04-memory", "Your rules"), cue("c04-4", "Your rules shows", 0)]] },
           ] as Shot[])
         : [ph(partAt("c04-4", -0.2), "Your rules, with the memory", "Your rules")]),
-      clip("c04-05-orders", { at: partAt("c04-5", -0.2), label: "Hotel Lumo kitchen · Orders", url: `${K}/k`, from: 1.0, sync: has("c04-05-orders") ? [[ev("c04-05-orders", "the Orders tab"), cue("c04-5", "Orders", -0.3)]] : undefined }, "The Orders tab; the “Try everything” guide"),
-      ph(partAt("c04-6", -0.2), "The Catalogue with the agent panel opening over it (Ctrl K)", "Catalogue · Ctrl K"),
+      clip("c04-05-orders", { at: partAt("c04-5", -0.2), label: "Hotel Lumo kitchen · Orders", url: `${K}/k`, from: 1.0, sync: has("c04-05-orders") ? [[ev("c04-05-orders", "the Orders tab"), cue("c04-5", "Orders", -0.3)]] : undefined }, "The Orders tab"),
+      clip("c04-07-guide", { at: cue("c04-5", "And the Try", -0.3), label: "Hotel Lumo kitchen · Try everything", url: `${K}/k`, from: 0.6, sync: has("c04-07-guide") ? [[ev("c04-07-guide", "Try everything"), cue("c04-5", "Try everything", 0)]] : undefined }, "The “Try everything” guide"),
+      clip("c04-06-shop-popup", { at: partAt("c04-6", -0.2), label: "Hotel Lumo kitchen · Catalogue", url: `${K}/k`, from: 0.3, sync: has("c04-06-shop-popup") ? [[ev("c04-06-shop-popup", "Ctrl K"), cue("c04-6", "Control K", 0.3)], [ev("c04-06-shop-popup", "asked in the panel"), cue("c04-6", "Same agent", 0.2)]] : undefined }, "The Catalogue with the agent panel opening over it (Ctrl K)"),
     ],
     callouts: [{ at: cue("c04-3", "at most two"), text: "At most two offers a week; never an order", pos: "tr", dur: 120 }],
   }),
@@ -126,22 +127,41 @@ export const EDL: Record<string, () => ChapterEdit> = {
     callouts: [{ at: cue("c05-2", "The voice model"), text: "Same engine as typing: same rules, same gate", pos: "tr", dur: 150 }],
   }),
 
-  c06: () => ({
-    shots: [
-      clip("c06-01-live", { at: start("c06"), label: "Operations · Live", url: `${K}/ops` }, "/ops: Live"),
-      ph(cue("c06-2", "Orders lists"), "Orders: open a timeline", "Operations · Orders"),
-      ph(partAt("c06-3", -0.2), "Agents: the scorecard, Conversations, Selling agent, Kitchen watch", "Operations · Agents"),
-      ph(partAt("c06-4", -0.2), "Safeguards; Audit, verified", "Operations · Trust"),
-      ph(cue("c06-4", "Trace replays", -0.2), "Trace: step through a request", "Operations · Trace"),
-      ph(cue("c06-4", "The time machine", -0.2), "Time machine: scrub back; Recall radar", "Operations · Time machine"),
-      ph(partAt("c06-5", -0.2), "Customers, Accounts, Mail; Control: suspend and resume an agent", "Operations · Control"),
-    ],
-    callouts: [{ at: cue("c06-1", "Anyone can look"), text: "View without a passcode; acting needs staff access", pos: "tr", dur: 120 }],
-  }),
+  c06: () => {
+    const o = "c06-02-orders";
+    const ag = "c06-03-agents";
+    const tr = "c06-04-trust";
+    const tc = "c06-05-trace";
+    const tm = "c06-06-time-machine";
+    const L = (s: string) => `Operations · ${s}`;
+    const U = `${K}/ops`;
+    return {
+      shots: [
+        clip("c06-01-live", { at: start("c06"), label: L("Live"), url: U }, "/ops: Live"),
+        clip(o, { at: cue("c06-2", "Orders lists", -0.4), label: L("Orders"), url: U, from: 1.0, sync: has(o) ? [[ev(o, "Orders:"), cue("c06-2", "Orders lists", 0)], [ev(o, "one order's full"), cue("c06-2", "open one", 0)]] : undefined }, "Orders: open a timeline"),
+        clip(o, { at: cue("c06-2", "And Waiting", -0.3), label: L("Waiting for a person"), url: U, from: 19.8, sync: has(o) ? [[ev(o, "Waiting for"), cue("c06-2", "Waiting for", 0)]] : undefined }, "Waiting for a person"),
+        clip(ag, { at: partAt("c06-3", -0.2), label: L("Agents · scorecard"), url: U, from: 1.2, sync: has(ag) ? [[ev(ag, "Agents:"), cue("c06-3", "the scorecard", -0.2)]] : undefined }, "Agents: the scorecard"),
+        clip(ag, { at: cue("c06-3", "Then the", -0.2), label: L("Agents · conversations"), url: U, from: 14.6, sync: has(ag) ? [[ev(ag, "Conversations"), cue("c06-3", "conversations", 0)]] : undefined }, "Conversations"),
+        clip(ag, { at: cue("c06-3", "the selling", -0.2), label: L("Agents · selling agent"), url: U, from: 23.0, sync: has(ag) ? [[ev(ag, "Selling agent"), cue("c06-3", "selling", 0)]] : undefined }, "Selling agent"),
+        clip(ag, { at: cue("c06-3", "and the kitchen", -0.1), label: L("Agents · kitchen watch"), url: U, from: 30.5, sync: has(ag) ? [[ev(ag, "Kitchen watch"), cue("c06-3", "kitchen watch", 0)]] : undefined }, "Kitchen watch"),
+        clip(tr, { at: partAt("c06-4", -0.2), label: L("Trust · safeguards"), url: U, from: 1.5, sync: has(tr) ? [[ev(tr, "Safeguards"), cue("c06-4", "Safeguards", -0.2)]] : undefined }, "Safeguards"),
+        clip(tr, { at: cue("c06-4", "Audit is", -0.3), label: L("Trust · audit"), url: U, from: 13.6, sync: has(tr) ? [[ev(tr, "Audit"), cue("c06-4", "Audit is", 0)], [ev(tr, "the chain verified"), cue("c06-4", "Here it's", -0.2)]] : undefined }, "Audit, verified"),
+        clip(tc, { at: cue("c06-4", "Trace replays", -0.3), label: L("Trust · trace"), url: U, from: 1.8, sync: has(tc) ? [[ev(tc, "Trace"), cue("c06-4", "Trace replays", 0)], [ev(tc, "stepping"), cue("c06-4", "step by", -0.2)]] : undefined }, "Trace: step through a request"),
+        clip(tm, { at: cue("c06-4", "The time machine", -0.3), label: L("Trust · time machine"), url: U, from: 1.4, sync: has(tm) ? [[ev(tm, "Time machine"), cue("c06-4", "time machine", 0)], [ev(tm, "scrubbing"), cue("c06-4", "scrub back", -0.2)]] : undefined }, "Time machine: scrub back"),
+        clip(tr, { at: cue("c06-4", "And the recall", -0.3), label: L("Trust · recall radar"), url: U, from: 26.4, sync: has(tr) ? [[ev(tr, "Recall radar"), cue("c06-4", "recall radar", 0)]] : undefined }, "Recall radar"),
+        ph(partAt("c06-5", -0.2), "Customers, Accounts, Mail; Control: suspend and resume an agent", L("Control")),
+      ],
+      callouts: [
+        { at: cue("c06-1", "Anyone can look"), text: "View without a passcode; acting needs staff access", pos: "tr", dur: 120 },
+        { at: cue("c06-4", "Here it's", 0), text: "Hash-chained ledger: verified", pos: "tr", dur: 75 },
+      ],
+    };
+  },
 
   c07: () => ({
     shots: [
-      ph(start("c07"), "/try and /docs: the MCP tools and the OpenAPI document", "The open door"),
+      clip("c07-01-try", { at: start("c07"), label: "The open door · /try", url: `${K}/try` }, "/try: one address and a signed mandate"),
+      clip("c07-02-docs", { at: cue("c07-1", "There are", -0.3), label: "The open door · /docs", url: `${K}/docs` }, "/docs: the MCP tools and the OpenAPI document"),
       ph(partAt("c07-2", -0.2), "Platform: “Send in an Aiven agent”, one run with its steps arriving", "Platform · Aiven agent"),
     ],
     callouts: [{ at: cue("c07-2", "No tool"), text: "No tool lets an agent approve", pos: "tr", dur: 90 }],
@@ -151,19 +171,23 @@ export const EDL: Record<string, () => ChapterEdit> = {
     shots: [
       { clip: "film", at: start("c08"), full: true, from: 83.6, until: 89.0, sync: [[83.8, cue("c08-1", "On a", -0.2)], [85.6, cue("c08-1", "Textbook", 0.6)], [86.9, cue("c08-1", "AimoPilot reaches", -0.5)]] },
       { clip: "film", at: partAt("c08-2", -0.3), full: true, from: 75.8, until: 82.8, sync: [[76.4, cue("c08-2", "Embeddings", -0.2)], [78.4, cue("c08-2", "recall candidates")], [79.4, cue("c08-2", "The kitchen's rules", -0.2)], [81.2, cue("c08-2", "A decision model", -0.2)], [82.2, cue("c08-2", "code checks", -0.1)]] },
-      ph(cue("c08-2", "Claude does", -0.4), "Hosted Platform tabs: The platform, Observe, The stream, Ask the platform", "Platform"),
+      clip("c08-01-landing-search-map", { at: cue("c08-2", "Claude does", -0.4), label: "The landing page · six agents, one gate", url: K, from: 15.6 }, "Six agents, one gate"),
       { clip: "film", at: partAt("c08-3", -0.2), full: true, sync: [[89.4, partAt("c08-3", 0)]], until: 108.5 },
+      clip("c08-02-platform", { at: cue("c08-3", "Every step", -0.3), label: "Platform · what runs on Aiven, live", url: `${K}/ops/platform`, from: 0 }, "Hosted Platform: The platform, Observe, The stream, Ask the platform"),
     ],
     callouts: [{ at: cue("c08-2", "Claude does", -0.2), text: "Claude: the agents' reasoning · Gemini: embeddings, the decision model, live voice", pos: "bc", dur: 240 }],
   }),
 
   c09: () => ({
-    shots: [ph(start("c09"), "The Agents page's crash-test section; the Safeguards page", "How it was tested")],
+    shots: [
+      clip("c06-04-trust", { at: start("c09"), label: "Operations · safeguards", url: `${K}/ops`, from: 3.5, rate: 0.95, until: 13.6 }, "The Safeguards page"),
+      clip("c08-01-landing-search-map", { at: cue("c09-1", "Plus a crash", -0.3), label: "The landing page · the crash test", url: K, from: 10.6, until: 14.2 }, "The crash test"),
+    ],
     callouts: [{ at: cue("c09-1", "Plus a crash"), text: "13 scenarios, three runs each; the worst run sets the licence", pos: "tr", dur: 150 }],
   }),
 
   c10: () => ({
-    shots: [ph(start("c10"), "Landing: “How it looks on your webshop” at its end state", "The landing page")],
+    shots: [clip("c10-01-webshop-end", { at: start("c10"), label: "The landing page · how it looks on your webshop", url: K, from: 0 }, "Landing: “How it looks on your webshop” at its end state")],
     callouts: [],
   }),
 };

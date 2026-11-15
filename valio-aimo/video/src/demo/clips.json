@@ -1,4 +1,14 @@
 {
+ "c00-01-landing": {
+  "seconds": 25.3,
+  "size": "1920x1080@30/1",
+  "chapter": "c00",
+  "what": "Hosted landing page: the hero, then a slow scroll through 'How it looks on your webshop' (the agent docked in the store)",
+  "events": {
+   "the landing page: AimoPilot, built for Valio Aimo at Junction 2026": 0.01,
+   "How it looks on your webshop: the agent docked in the shop the kitchen already uses": 5.81
+  }
+ },
  "c01-01-three-ways": {
   "seconds": 16.5,
   "size": "1920x1080@30/1",
@@ -230,6 +240,40 @@
    "one order: its steps and the wholesaler's signed receipt": 7.36
   }
  },
+ "c04-06-shop-popup": {
+  "seconds": 21.133,
+  "size": "1920x1080@30/1",
+  "chapter": "c04",
+  "what": "Hotel Lumo: the Catalogue searched for lactose-free milk; Ctrl K opens the agent as a panel over the shop; a request answered there",
+  "events": {
+   "the Catalogue: the shop the kitchen already knows": 5.47,
+   "Ctrl K: the agent opens over the shop": 5.53,
+   "typed: Two cases of tomatoes for Thursday.": 7.58,
+   "asked in the panel, answered beside the catalogue": 16.61
+  }
+ },
+ "c04-07-guide": {
+  "seconds": 16.9,
+  "size": "1920x1080@30/1",
+  "chapter": "c04",
+  "what": "Hotel Lumo: the 'Try everything' guide, each capability with words to say, ticked as tried",
+  "events": {
+   "Try everything: one row per capability, ticked when the kitchen's record shows it": 2.21
+  }
+ },
+ "c04-08-offer": {
+  "seconds": 26.933,
+  "size": "1920x1080@30/1",
+  "chapter": "c04",
+  "what": "A fresh kitchen with a sample history: the wholesaler's selling agent's offer (staged for the demo, marked so), answered in words",
+  "events": {
+   "the kitchen's opening notes": 0.83,
+   "typed: No, leave that as it is.": 3.33,
+   "the wholesaler's selling agent: one signed offer with its reason": 10.98,
+   "typed: Yes, add it.": 16,
+   "answered in words": 22.93
+  }
+ },
  "c06-01-live": {
   "seconds": 11.367,
   "size": "1920x1080@30/1",
@@ -237,6 +281,128 @@
   "what": "Operations, Live: every agent at the door (sample activity marked as such)",
   "events": {
    "Live: every agent at the door, as it happens": 1.05
+  }
+ },
+ "c06-02-orders": {
+  "seconds": 23.333,
+  "size": "1920x1080@30/1",
+  "chapter": "c06",
+  "what": "Orders: the list, one order's full timeline; then Waiting for a person",
+  "events": {
+   "Orders: every order and its whole life": 2.16,
+   "one order's full timeline": 7.21,
+   "Waiting for a person: sign-offs not given yet": 20.82
+  }
+ },
+ "c06-03-agents": {
+  "seconds": 37.033,
+  "size": "1920x1080@30/1",
+  "chapter": "c06",
+  "what": "Agents group: the scorecard and crash-test licences, Conversations, Selling agent, Kitchen watch",
+  "events": {
+   "Agents: the scorecard (who performs, who fails, who escalates)": 2.65,
+   "Conversations: a kitchen and its agent, turn by turn": 15.35,
+   "Selling agent: what it offered, to whom, why": 23.57,
+   "Kitchen watch: stock-outs, drift, renewals": 31
+  }
+ },
+ "c06-04-trust": {
+  "seconds": 33.3,
+  "size": "1920x1080@30/1",
+  "chapter": "c06",
+  "what": "Trust group: Safeguards (each rule and how often it fired), Audit (the hash-chained ledger, verified), Recall radar",
+  "events": {
+   "Safeguards: each rule of the gate and how often it fired": 2.7,
+   "Audit: the hash-chained ledger, verified": 14.5,
+   "the chain verified": 18.22,
+   "Recall radar: recalls, holds, drills": 27.25
+  }
+ },
+ "c06-05-trace": {
+  "seconds": 15.933,
+  "size": "1920x1080@30/1",
+  "chapter": "c06",
+  "what": "Trace: one request replayed step by step (the request read, search, live price, the gate's rules, the sign-off)",
+  "events": {
+   "Trace: replay any request step by step": 2.54,
+   "stepping through the request": 5.4
+  }
+ },
+ "c06-06-time-machine": {
+  "seconds": 22.067,
+  "size": "1920x1080@30/1",
+  "chapter": "c06",
+  "what": "Time machine: the slider dragged back, the rules and state as they stood at that moment",
+  "events": {
+   "Time machine: the rules and state as they stood at any moment": 2.06,
+   "scrubbing back in time": 5.31
+  }
+ },
+ "c06-07-setup": {
+  "seconds": 21.533,
+  "size": "1920x1080@30/1",
+  "chapter": "c06",
+  "what": "Setup group: Customers, Accounts, Mail (receipts and alerts sent to kitchens)",
+  "events": {
+   "Customers: what kitchens share": 1.78,
+   "Accounts: kitchens with an account": 9.97,
+   "Mail: receipts and alerts to kitchens": 15.5
+  }
+ },
+ "c07-01-try": {
+  "seconds": 19.067,
+  "size": "1920x1080@30/1",
+  "chapter": "c07",
+  "what": "Hosted /try: the open door for an outside agent (MCP address, mandate, the tools)",
+  "events": {
+   "/try: connect your own agent with one address and a signed mandate": 0.01
+  }
+ },
+ "c07-02-docs": {
+  "seconds": 17.067,
+  "size": "1920x1080@30/1",
+  "chapter": "c07",
+  "what": "Hosted /docs: the documented interface (OpenAPI, MCP tools)",
+  "events": {
+   "/docs: the OpenAPI document and the MCP tools": 0
+  }
+ },
+ "c08-01-landing-search-map": {
+  "seconds": 27.4,
+  "size": "1920x1080@30/1",
+  "chapter": "c08",
+  "what": "Hosted landing: the search section (each step and its right-first share) and the map of agents and Aiven services",
+  "events": {
+   "Search: right-first on the same requests, step by step": 2.02,
+   "the map: which Aiven service does which job": 16.81
+  }
+ },
+ "c08-02-platform": {
+  "seconds": 16.267,
+  "size": "1920x1080@30/1",
+  "chapter": "c08",
+  "what": "Hosted Platform: The platform (what runs on Aiven, live)",
+  "events": {
+   "The platform: eight Aiven services, one job each, live": 0
+  }
+ },
+ "c08-03-observe": {
+  "seconds": 16.933,
+  "size": "1920x1080@30/1",
+  "chapter": "c08",
+  "what": "Hosted Platform: Observe (dashboards and alerts)",
+  "events": {
+   "Observe: dashboards and alerts": 0.02
+  }
+ },
+ "c10-01-webshop-end": {
+  "seconds": 16.8,
+  "size": "1920x1080@30/1",
+  "chapter": "c10",
+  "what": "Hosted landing: 'How it looks on your webshop' at its end state, then the page's end with the ways in, the address and the synthetic-data note",
+  "events": {
+   "the webshop section at its end state": 2.8,
+   "the end: the ways in and the address": 9.25
   }
  }
 }
