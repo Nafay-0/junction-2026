@@ -84,7 +84,7 @@ export function piecesOf(shot: Shot, dur: number): Piece[] {
     if (from >= base) play(0, f0, from, 1);
     else {
       const lead = Math.max(0, Math.round((s0 - base) * FPS));
-      out.push({ start: 0, dur: f0 - lead, src: base, rate: 0 });
+      if (f0 - lead > 0) out.push({ start: 0, dur: f0 - lead, src: base, rate: 0 });
       play(f0 - lead, lead, base, 1);
     }
   }
@@ -111,7 +111,7 @@ export function piecesOf(shot: Shot, dur: number): Piece[] {
       play(fa, frames, sb - (frames / FPS) * MAX_RATE, MAX_RATE);
     }
   }
-  return out;
+  return out.filter((p) => p.dur > 0);
 }
 
 const zoomAt = (zooms: Zoom[] | undefined, frame: number) => {

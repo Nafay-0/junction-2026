@@ -193,12 +193,12 @@ export const EDL: Record<string, () => ChapterEdit> = {
       { clip: "film", at: start("c08"), full: true, from: 83.6, until: 89.0, sync: [[83.8, cue("c08-1", "On a", -0.2)], [85.6, cue("c08-1", "Textbook", 0.6)], [86.9, cue("c08-1", "AimoPilot reaches", -0.5)]] },
       { clip: "film", at: partAt("c08-2", -0.3), full: true, from: 75.8, until: 82.8, sync: [[76.4, cue("c08-2", "Embeddings", -0.2)], [78.4, cue("c08-2", "recall candidates")], [79.4, cue("c08-2", "The kitchen's rules", -0.2)], [81.2, cue("c08-2", "A decision model", -0.2)], [82.2, cue("c08-2", "code checks", -0.1)]] },
       clip("c08-01-landing-search-map", { at: cue("c08-2", "Claude does", -0.4), label: "The landing page · six agents, one gate", url: K, from: 15.6 }, "Six agents, one gate"),
-      { clip: "film", at: partAt("c08-3", -0.2), full: true, sync: [[89.4, partAt("c08-3", 0)]], until: 108.5 },
+      { clip: "film", at: partAt("c08-3", -0.2), full: true, from: 90.4, sync: [[90.6, partAt("c08-3", 0)]], until: 108.5 },
       clip("c08-04-stream", { at: cue("c08-3", "Every step", -0.3), label: "Platform · the stream (Kafka)", url: `${K}/ops/platform`, from: 1.0 }, "The stream"),
       clip("c08-03-observe", { at: cue("c08-3", "Grafana holds", -0.3), label: "Platform · observe", url: `${K}/ops/platform`, from: 1.0 }, "Observe"),
       clip("c08-05-ask", { at: cue("c08-3", "And the platform", -0.3), label: "Platform · ask the platform", url: `${K}/ops/platform`, from: 4.6, sync: has("c08-05-ask") ? [[ev("c08-05-ask", "the answer"), cue("c08-3", "answers questions", 0)]] : undefined }, "Ask the platform"),
     ],
-    callouts: [{ at: cue("c08-2", "Claude does", -0.2), text: "Claude: the agents' reasoning · Gemini: embeddings, the decision model, live voice", pos: "bc", dur: 240 }],
+    callouts: [{ at: cue("c08-2", "Claude does", -0.2), text: "Claude: the agents' reasoning · Gemini: embeddings, the decision model, live voice", pos: "bc", dur: Math.min(240, partAt("c08-3", -0.5) - cue("c08-2", "Claude does", -0.2)) }],
   }),
 
   c09: () => ({
