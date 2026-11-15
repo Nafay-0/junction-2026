@@ -5,6 +5,7 @@ import type { LiveOffer, Product } from "@/core/catalog";
 import type { Decision } from "@/core/policy";
 import type { AgentSession, PublicOrder } from "@/core/orders";
 import { cardId, gateCard, orderCard } from "./cards";
+import { marksFor } from "./marks";
 import { humanVia, record, step, type TurnRun } from "./pipeline";
 import type { AlternativesCard, GatePreview, SheetCard } from "./types";
 
@@ -152,6 +153,7 @@ async function render(run: TurnRun, s: SheetRecord, changed?: string[]): Promise
         const picks = (usual.get(l.productId) ?? []).filter((n) => n >= 1 && n <= max);
         return picks.length ? { usualPacks: picks } : {};
       })()),
+      ...marksFor(l.productId, l.packs, p),
     };
   });
   const card: SheetCard = {

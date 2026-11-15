@@ -382,6 +382,22 @@ function changed(m: ChangedModel, ctx: RenderContext): RenderedMail {
       did.push(t.noneOrdered);
       break;
     }
+    case "confirmed": {
+      subject = t.confirmedSubject(day);
+      preheader = t.confirmedPre;
+      title = t.confirmedTitle;
+      first = t.confirmedFirst(m.orderId ?? "", total, day);
+      break;
+    }
+    case "not_confirmed": {
+      subject = t.notConfirmedSubject(m.orderId ?? "");
+      preheader = t.notConfirmedPre;
+      title = t.notConfirmedTitle;
+      first = t.notConfirmedFirst(m.orderId ?? "", total);
+      if (m.reason) happened.push(m.reason);
+      you.push(t.notConfirmedYou);
+      break;
+    }
     case "withdrawn": {
       subject = t.withdrawnSubject(m.orderId ?? "");
       preheader = t.withdrawnPre;

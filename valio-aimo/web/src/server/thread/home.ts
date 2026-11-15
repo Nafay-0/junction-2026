@@ -8,6 +8,20 @@ import { radarStore } from "@/server/radar/store";
 import { nextSameWeekday } from "@/app/k/[kitchen]/memory";
 import { cardId, orderCard } from "./cards";
 import { record, step, type TurnRun } from "./pipeline";
+import { readable } from "./refusal";
+import { shortName } from "./watch";
+
+const COMMON = /^(yoghurt|yogurt|natural|milk|cream|butter|cheese|lettuce|salad|bread|juice|drink|oat|rye|rice|pies?|sauce|soup|fillet|potato(es)?|eggs?|quark|mince)$/i;
+
+/** A product as said in a sentence: "Salakis Turkish Yoghurt Natural 1kg" is "Salakis Turkish yoghurt natural", "LOLLOROSSO FI" is "lollorosso". */
+export function spokenProduct(name: string): string {
+  const raw = name.replace(/[®™]/g, "").trim();
+  let s = readable(shortName(raw), "en").replace(/(\s+[A-Z]{2})+$/, "");
+  const words = s.split(/\s+/);
+  if (words.length === 1 && /^[A-ZÄÖÅ]{3,}\b/.test(raw)) return s.toLowerCase();
+  s = words.map((w, i) => (i > 0 && COMMON.test(w) ? w.toLowerCase() : w)).join(" ");
+  return s;
+}
 import { createSheet } from "./sheet";
 import type { DeliveriesCard, MemoryCard, MemoryListCard, ProductCard, ProductTile, ProductsCard, RecordsCard, StandingCard, ThreadAction, TodayCard, TodayItem } from "./types";
 
@@ -56,7 +70,7 @@ export async function todayItems(run: TurnRun): Promise<TodayItem[]> {
       if (!s || profile?.pausedStanding?.includes(s.family)) continue;
       const [p] = await run.rt.catalog.searchProducts({ ids: [c.productId], limit: 1 });
       if (!p) continue;
-      items.push({ kind: "cutoff", family: c.family, productId: c.productId, name: c.name, orderBy: offer.orderBy, deliveryDate: offer.deliveryDate, usual: s.usual, packs: Math.max(1, Math.ceil(s.usual.amount / p.packSize - 1e-9)) });
+      items.push({ kind: "cutoff", family: c.family, productId: c.productId, name: c.name, short: spokenProduct(c.name), orderBy: offer.orderBy, deliveryDate: offer.deliveryDate, usual: s.usual, packs: Math.max(1, Math.ceil(s.usual.amount / p.packSize - 1e-9)) });
     }
   } catch {
     // the partner's live service did not answer: no cut-off is claimed

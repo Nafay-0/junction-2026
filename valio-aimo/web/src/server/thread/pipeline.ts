@@ -63,6 +63,8 @@ export type TurnRun = {
   offerAsked?: string;
   /** The buyer's language as the store sent it (en when not said). */
   lang?: "en" | "fi" | "sv";
+  /** The first turn after another browser session's, in a shared kitchen: no earlier history (visitor.ts). */
+  fresh?: boolean;
   /** A question still open after this turn answered another one (the receipt after the offer): asked again. */
   askAgain?: string;
   t0: number;

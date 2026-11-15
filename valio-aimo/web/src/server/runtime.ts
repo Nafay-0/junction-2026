@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import type { JWK } from "jose";
 import { connection } from "next/server";
 import { InMemoryOutbox } from "@/core/approval";
-import { InMemoryCatalog, MeteredCatalog } from "@/core/catalog";
+import { InMemoryCatalog, MeteredCatalog, type Product } from "@/core/catalog";
 import type { InMemoryEventBus } from "@/core/events";
 import type { KitchenRepository } from "@/core/kitchen";
 import { generateEd25519KeyPair, importEd25519KeyPair } from "@/core/keys";
@@ -40,6 +40,7 @@ import { playingNow, sampleNow } from "./alive/clock";
 import { SampleAwareLive, sampleLiveLabel } from "./alive/live";
 import { ledgerVisibility, orderVisibility, stampSample } from "./alive/marks";
 import { toDockProduct } from "@/core/catalog/product";
+import { setMarkProducts } from "./thread/marks";
 
 /**
  * The one Dock instance of this server process, with in-memory storage.
@@ -118,6 +119,7 @@ async function buildRuntime(): Promise<Runtime> {
   const demoOrg = await demoOrgKeyPair();
   const demoKitchen = await demoKitchenKeyPair();
   const { catalog, catalogSource } = buildCatalog(wantsRealCatalog() ? await resolveCatalogIndex() : undefined);
+  setMarkProducts(markProducts(catalog));
   const outbox = new InMemoryOutbox();
   const trustedIssuers = createTrustRegistry([
     { kid: demoOrg.kid, orgId: DEMO_ORG.orgId, publicKey: demoOrg.publicKey },
@@ -246,6 +248,22 @@ const wantsRealCatalog = () => envValue("DOCK_CATALOG") !== "seed" && !!envValue
  * Pick the catalogue from the environment. Never throws for a missing index or key: it falls back to the seed.
  * `indexFile`: where `resolveCatalogIndex()` found the index (a local file, or a copy fetched from PostgreSQL).
  */
+/** A synchronous product lookup for the thread's quiet marks (server/thread/marks.ts): master data only, cached by id. */
+function markProducts(catalog: InMemoryCatalog | ValioCatalog): (id: string) => Product | undefined {
+  if (!(catalog instanceof ValioCatalog)) {
+    const seed = new Map(SEED_PRODUCTS.map((p) => [p.id, p]));
+    return (id) => seed.get(id);
+  }
+  const cache = new Map<string, Product | undefined>();
+  return (id) => {
+    if (cache.has(id)) return cache.get(id);
+    const ip = catalog.getProduct(id);
+    const p = ip ? toDockProduct(ip) : undefined;
+    if (cache.size < 5000) cache.set(id, p);
+    return p;
+  };
+}
+
 export function buildCatalog(indexFile?: string): { catalog: InMemoryCatalog | ValioCatalog; catalogSource: CatalogSource } {
   const apiKey = envValue("VALIO_API_KEY");
   if (wantsRealCatalog() && apiKey) {

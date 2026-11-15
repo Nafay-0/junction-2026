@@ -4,6 +4,7 @@ import type { OptionCard } from "@/core/options";
 import { takeBackUntil, type PublicOrder } from "@/core/orders";
 import { decidingRule } from "@/core/policy";
 import type { Quote } from "@/core/quote";
+import { marksFor, optionMarks } from "./marks";
 import type { AnomalyCard, GateCard, NoticeCard, OptionView, OptionsCard, OrderCard, PriceCard, QuestionCard, UnderstoodCard } from "./types";
 
 /**
@@ -77,6 +78,7 @@ export function optionView(o: OptionCard): OptionView {
     delivered: { amount: o.delivered.amount, unit: o.delivered.unit },
     co2Kg: o.co2.kg,
     reliability: o.reliability,
+    ...optionMarks(o.lines.map((l) => ({ productId: l.productId, quantity: l.packs }))),
     signOff: o.signOff,
     pros: o.pros,
     cons: o.cons,
@@ -169,7 +171,7 @@ export function orderCard(o: PublicOrder, passedOver: OrderCard["passedOver"] = 
     status: o.status,
     totalCents: o.totalCents,
     deliveryDate: o.lines[0]?.deliveryDate ?? "",
-    lines: o.lines.map((l) => ({ productId: l.productId, name: l.name, quantity: l.quantity, packSize: l.packSize, unit: l.unit, unitPriceCents: l.unitPriceCents, ...(l.substituteFor ? { substituteFor: l.substituteFor.productId, substituteForName: l.substituteFor.name } : {}) })),
+    lines: o.lines.map((l) => ({ productId: l.productId, name: l.name, quantity: l.quantity, packSize: l.packSize, unit: l.unit, unitPriceCents: l.unitPriceCents, ...(l.substituteFor ? { substituteFor: l.substituteFor.productId, substituteForName: l.substituteFor.name } : {}), ...marksFor(l.productId, l.quantity) })),
     authorised,
     ...(o.confirmation ? { confirmation: o.confirmation } : {}),
     ...((() => {

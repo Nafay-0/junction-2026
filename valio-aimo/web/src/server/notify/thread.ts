@@ -59,16 +59,17 @@ export function mailWordsOf(words: string): MailIntent | undefined {
 export async function mailFactAfterOrder(rt: Runtime, k: ThreadKitchen, order: { orderId: string; status: string }, opts: { lang?: Lang; threadId: string }): Promise<string | undefined> {
   const t = MAIL_SAY_TEXT[opts.lang ?? "en"];
   if (order.status !== "committed" && order.status !== "pending_approval") return undefined;
-  if (!transportOf(rt)) return undefined; // never claim a mail that cannot go
+  // A placed order is with the wholesaler's team to confirm for delivery (server/fulfilment): said first, always true.
+  const placed = order.status === "committed";
+  if (!transportOf(rt)) return placed ? t.withTeamHere : undefined; // never claim a mail that cannot go
   const a = await addressOf(rt, k.info.orgId, { own: false });
   if (a.state === "confirmed" && a.masked) {
     if (order.status === "pending_approval") return t.waitingEmailed(a.masked);
     const r = await receiptStatus(rt, { orderId: order.orderId, orgId: k.info.orgId, status: order.status });
-    return r.status === "sent" || r.status === "sending" ? t.emailed(a.masked) : undefined;
+    return r.status === "sent" || r.status === "sending" ? t.withTeamEmailed(a.masked) : t.withTeamMail;
   }
-  if (a.state === "pending" && a.masked) return t.pendingConfirm(a.masked);
-  if (a.state === "none" && !(await askedInThread(rt, opts.threadId, true))) return t.offer;
-  return undefined;
+  const mail = a.state === "pending" && a.masked ? t.pendingConfirm(a.masked) : a.state === "none" && !(await askedInThread(rt, opts.threadId, true)) ? t.offer : undefined;
+  return [placed ? t.withTeamHere : "", mail ?? ""].filter(Boolean).join(" ") || undefined;
 }
 
 /** Act on the buyer's words about email; returns the reply in the kitchen's language. */

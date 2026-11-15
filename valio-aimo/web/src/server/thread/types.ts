@@ -10,6 +10,9 @@
  * Plain types only: the browser imports this file too.
  */
 
+import type { LineMarks } from "@/core/line-marks";
+export type { LineMarks };
+
 /** Which door a buyer turn came through. `typed` is the store's composer; `voice` the call page or a microphone. */
 export type ThreadDoor = "typed" | "voice" | "photo";
 /** How the buyer's turn reached the door. `tap`: a button on a card (no words to interpret). */
@@ -110,6 +113,8 @@ export type BuyerTurn = {
   turnId: string;
   role: "buyer";
   at: string;
+  /** The browser session that sent it (a hash of its sign-in cookie), in a shared test kitchen. */
+  visitor?: string;
   door: ThreadDoor;
   via: TurnVia;
   /** The buyer's own words, exactly as typed or transcribed. Absent for a pure tap. */
@@ -141,6 +146,10 @@ export type AgentTurn = {
   turnId: string;
   role: "agent";
   at: string;
+  /** Not a reply: where a different browser session took over a shared test kitchen's conversation. What was open
+   * before it is that session's; `note`: show the quiet line that another visitor is using the kitchen. */
+  boundary?: "visitor";
+  note?: boolean;
   /** The buyer turn this answers. */
   replyTo: string;
   status: AgentTurnStatus;
@@ -237,10 +246,12 @@ export type OptionView = {
   orderBy?: string;
   stockConfirmed: boolean;
   /** `taxRatePct`: the VAT rate (prices are before VAT); `depositCents`: per pack, refunded on return, no VAT. */
-  lines: { productId: string; name: string; quantity: number; packSize?: number; unit?: string; unitPriceCents?: number; substituteFor?: string; substituteForName?: string; taxRatePct?: number; depositCents?: number }[];
+  lines: { productId: string; name: string; quantity: number; packSize?: number; unit?: string; unitPriceCents?: number; substituteFor?: string; substituteForName?: string; taxRatePct?: number; depositCents?: number; marks?: LineMarks }[];
   delivered: { amount: number; unit: string };
   co2Kg: number | null;
   reliability: number | null;
+  /** The quiet marks on the option's row (server/thread/marks.ts optionMarks): its weakest delivery record, its footprint. */
+  marks?: LineMarks;
   signOff: string[];
   pros: string[];
   cons: string[];
@@ -333,6 +344,8 @@ export type OrderCard = CardBase & {
   takeBackUntil?: string;
   /** What the agent passed over when it chose alone, so the buyer sees the trade-off without asking. */
   passedOver: { title: string; totalCents: number; why: string }[];
+  /** The wholesaler's team's side of a placed order (server/fulfilment): absent until they decide. */
+  fulfilment?: { state: "confirmed" | "refused"; at: string; reason?: string };
 };
 
 export type MemoryCard = CardBase & {
@@ -425,6 +438,7 @@ export type SheetCard = CardBase & {
     stockConfirmed: boolean;
     /** The kitchen's usual amounts of this product, in packs, from its records (one-tap picks beside the stepper). */
     usualPacks?: number[];
+    marks?: LineMarks;
   }[];
   totalCents: number;
   /** The gate's own preview of the sheet as it stands. */
@@ -508,7 +522,7 @@ export type MenuCard = CardBase & {
       /** What the covers need in total, in the product's unit. */
       need: { amount: number; unit: string };
       status: "resolving" | "ready" | "decide" | "have" | "left_out";
-      product?: { productId: string; name: string; packs: number; packSize: number; unit: string; totalCents: number; deliveryDate?: string };
+      product?: { productId: string; name: string; packs: number; packSize: number; unit: string; totalCents: number; deliveryDate?: string; marks?: LineMarks };
       /** Other products for this line (menu_line_swap), each with what it differs on. */
       options: { optionId: string; productId: string; name: string; totalCents: number; differs: { code: string; params: Record<string, string | number> }[] }[];
       /** Allergen, rule and mandate conflicts and the planner's doubts, on the line they concern. */
@@ -532,7 +546,7 @@ export type TodayItem =
   /** An order waiting for a named person's sign-off: signed in place (the gate card's sign-off widget). */
   | { kind: "sign_off"; orderId: string; requestId?: string; approvalId: string; totalCents: number; approver: { name: string; role: string }; requestedAt: string; lines: { name: string; quantity: number }[] }
   /** The order cut-off for something the kitchen usually buys closes today: order the usual now (onto the sheet). */
-  | { kind: "cutoff"; family: string; productId: string; name: string; orderBy: string; deliveryDate: string; usual: { amount: number; unit: string }; packs: number }
+  | { kind: "cutoff"; family: string; productId: string; name: string; /** As said in a sentence (home.ts spokenProduct). */ short?: string; orderBy: string; deliveryDate: string; usual: { amount: number; unit: string }; packs: number }
   /** A recurring order whose amount or price has drifted from the usual. */
   | { kind: "drift"; family: string; warning: string; productId: string; name: string; usual: { amount: number; unit: string }; recent: number; amountPct: number | null; pricePct: number | null; nextDue?: string }
   /** A recall hold on a product the kitchen has bought. */
@@ -701,11 +715,13 @@ export type DishesCard = CardBase & {
    */
   groups?: {
     have: { name: string; need?: string; basis?: string }[];
-    order: { name: string; need?: string; instead?: string }[];
+    order: { name: string; need?: string; instead?: string; marks?: LineMarks }[];
     cannot: { name: string; need?: string; why: string }[];
     totalToOrderCents: number;
     complete: boolean;
   };
+  /** The marks of every product the plan buys (one per line), for the quiet line under the total. */
+  marks?: LineMarks[];
 };
 
 /** A backup in case a product with a poor delivery record does not come (server/reliability), said after the order. */

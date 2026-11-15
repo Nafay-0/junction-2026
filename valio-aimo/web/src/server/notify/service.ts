@@ -483,6 +483,17 @@ async function onOrderEvent(rt: Runtime, e: DockEvent): Promise<void> {
   }
 }
 
+/**
+ * The wholesaler's team confirmed an order for delivery, or could not (server/fulfilment): one mail to the kitchen's
+ * confirmed address, the same caps, masking and stop link as every other; undefined when there is no address.
+ */
+export async function mailFulfilment(rt: Runtime, o: PublicOrder, decision: "confirmed" | "not_confirmed", extra: { by?: string; reason?: string } = {}): Promise<MailRecord | undefined> {
+  const s = await ready(rt);
+  const c = s.contacts.get(o.orgId);
+  if (!c || c.state === "removed") return undefined;
+  return deliver(rt, { eventKey: `${decision}:${o.orderId}`, kind: "changed", orgId: o.orgId, orderId: o.orderId, model: { kind: "changed", change: decision, kitchen: kitchenOf(c), orderId: o.orderId, totalCents: o.totalCents, date: o.lines[0]?.deliveryDate, links: links(c, o.orderId), ...(extra.by ? { by: extra.by } : {}), ...(extra.reason ? { reason: extra.reason } : {}) } });
+}
+
 async function onRefusedAtPlacement(rt: Runtime, orderId: string, at: string): Promise<void> {
   const s = await ready(rt);
   const orgId = await rt.dock.orgOfOrder(orderId);

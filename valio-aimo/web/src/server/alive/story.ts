@@ -417,6 +417,8 @@ export async function playStory(rt: Runtime, opts: PlayOptions = {}): Promise<Se
   if (parts.includes("sample")) await (await import("./kitchens")).sampleKitchenBeats(c);
   if (opts.fresh?.waiting) await waiting(c);
   if (opts.fresh?.slow) await (await import("./kitchens")).slowTurns(c);
+  // The wholesaler's team confirms most of the set's placed orders for delivery; the newest wait (server/fulfilment).
+  await beat(c, "the wholesaler's team confirms placed orders", 0, async () => (await import("./fulfil")).confirmPlaced(c));
   // Whatever was played: nothing left waiting or staged in a kitchen a person signs into.
   await beat(c, "closing: nothing left open in a kitchen people sign into", 0, async () => (await import("./kitchens")).closeOpen(c));
   const ok = c.beats.filter((b) => b.ok).length;

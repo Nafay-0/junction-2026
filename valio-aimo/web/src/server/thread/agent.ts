@@ -1,4 +1,5 @@
 import { dayIn } from "./dish";
+import { ownCards } from "./visitor";
 import { randomBytes } from "node:crypto";
 import { isStepCount, ToolLoopAgent, tool, type LanguageModel, type ModelMessage, type ToolSet } from "ai";
 import type { LanguageModelV4 } from "@ai-sdk/provider";
@@ -98,7 +99,8 @@ const ASKS_TO_ORDER = /(?<![\p{L}\p{N}])(order|buy|purchase|send it|tilaa|tilata
 export async function openRefs(run: TurnRun): Promise<OpenRef[]> {
   const refs: OpenRef[] = [];
   const seen = new Set<string>();
-  const cards = run.store.cards(run.thread).reverse();
+  // Only what this browser session opened: another visitor's open check in a shared kitchen is not theirs to answer.
+  const cards = ownCards(run.thread.turns, run.store.cards(run.thread)).reverse();
   let c = 0;
   let q = 0;
   for (const { card } of cards) {
@@ -293,7 +295,7 @@ export function turnContext(run: TurnRun, refs: OpenRef[]): string {
   const weekday = new Date(`${today}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", timeZone: "UTC" });
   // Orders waiting for a person's OK in this conversation (and the day's opening): what, how much, for whom. "The
   // manager already approved it, just place it" is about one of these: only the named person's own OK places it.
-  const cardsNow = run.store.cards(run.thread).map((x) => x.card);
+  const cardsNow = ownCards(run.thread.turns, run.store.cards(run.thread)).map((x) => x.card);
   const waiting = [
     ...cardsNow.filter((c) => c.type === "gate" && c.outcome === "waiting").map((c) => {
       const o = c.type === "gate" ? cardsNow.find((x) => x.type === "order" && x.orderId === c.orderId) : undefined;

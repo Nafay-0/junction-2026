@@ -1,3 +1,4 @@
+import { ownTurns } from "./visitor";
 import type { TurnRun } from "./pipeline";
 import type { Card } from "./types";
 
@@ -16,7 +17,8 @@ export type Subject =
 const SIDE = new Set<Card["type"]>(["records", "rules", "today", "products", "standing", "deliveries", "memory_list", "offer", "watch", "scenario", "dishes"]);
 
 export function subjectOf(run: TurnRun): Subject | undefined {
-  const turns = run.thread.turns;
+  // What this browser session opened: another visitor's request in a shared kitchen is not the subject (visitor.ts).
+  const turns = ownTurns(run.thread.turns);
   let seen = 0;
   for (let i = turns.length - 1; i >= 0 && seen < 8; i--) {
     const t = turns[i];

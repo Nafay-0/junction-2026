@@ -6,6 +6,7 @@ import type { DraftIngredient, DraftOutline } from "@/server/agent/menu/draft";
 import { toBase, type PlanLineView, type PlanView } from "@/server/agent/menu/plan";
 import type { PlanEdit, PlanProgress, PlanRecord } from "@/server/agent/menu/service";
 import { cardId } from "./cards";
+import { optionMarks } from "./marks";
 import { byLine, record, step, type TurnRun } from "./pipeline";
 import { createSheet, gateOf } from "./sheet";
 import { allergenReason } from "./differences";
@@ -191,6 +192,7 @@ function cardLine(p: PlanRecord, l: PlanLineView, dishId: string, decision: Deci
             unit: c.delivered.unit,
             totalCents: c.totalCents,
             deliveryDate: c.deliveryDate,
+            ...optionMarks(c.products.map((x) => ({ productId: x.productId, quantity: x.packs }))),
           },
         }
       : {}),
@@ -689,6 +691,10 @@ export async function dishesCard(run: TurnRun, planId: string, before?: Dishes, 
   const stopped = new Map((menuCard?.dishes ?? []).flatMap((d) => d.lines).flatMap((l) => l.conflicts.filter((c) => c.blocking && c.code === "forbidden_allergens").map((c) => [l.lineId, c.text] as const)));
   const stoppedLines = view.lines.filter((l) => stopped.has(l.lineId));
   const total = view.totals.totalCents - stoppedLines.reduce((n, l) => n + (l.chosen?.totalCents ?? 0), 0);
+  // The delivery record and carbon estimate of what is bought (catalogue index, no live call), one per line priced.
+  const lineMarksOf = (l: (typeof view.lines)[number]) => (l.chosen ? optionMarks(l.chosen.products.map((x) => ({ productId: x.productId, quantity: x.packs }))).marks : undefined);
+  const bought = view.lines.filter((l) => (l.status === "ready" || l.status === "needs_decision") && l.chosen && !stopped.has(l.lineId));
+  const marks = bought.map(lineMarksOf);
   // One dish: the planner's three groups (you have, I'll order, can't get), each ingredient with its amount and why.
   let groups: Dishes["groups"];
   if (p.draft.dishes.length === 1 && covers) {
@@ -715,6 +721,14 @@ export async function dishesCard(run: TurnRun, planId: string, before?: Dishes, 
         const r = u === "g" || u === "ml" ? (n >= 100 ? Math.round(n / 10) * 10 : Math.max(1, Math.round(n))) : n >= 10 ? Math.round(n) : Math.round(n * 10) / 10;
         return `${String(r).replace(".", ",")} ${u}`;
       };
+      // Each item to order with its line's marks: the planner's coverage lists them in the same order (groupsOf).
+      const covered = view.totals.coverage.filter((c) => c.status === "ordered" || c.status === "swapped");
+      const markOf = (x: (typeof g.toOrder)[number]) => {
+        const c = covered.length === g.toOrder.length ? covered[g.toOrder.indexOf(x)] : undefined;
+        const l = c?.lineId ? view.lines.find((v) => v.lineId === c.lineId) : undefined;
+        const m = l ? lineMarksOf(l) : undefined;
+        return m ? { marks: m } : {};
+      };
       const staples = g.onHand.filter((x) => x.status === "staple");
       const keep = { en: "staples you keep", fi: "perusaineita, joita teillä on aina", sv: "basvaror ni alltid har" }[lang];
       const foldN = (t: string) => t.toLowerCase().replace(/\s*\([^)]*\)/g, "").trim();
@@ -729,7 +743,7 @@ export async function dishesCard(run: TurnRun, planId: string, before?: Dishes, 
       };
       groups = {
         have: g.onHand.map((x) => ({ name: x.ingredient, ...(grams(x.need) ? { need: grams(x.need) } : {}), ...(x.status === "staple" ? (x === staples.at(-1) ? { basis: keep } : {}) : x.basis ? { basis: basisWords(x.basis, lang) } : {}) })),
-        order: g.toOrder.filter((x) => !isStopped(x.ingredient)).map((x) => ({ name: x.ingredient, ...(grams(x.need) ? { need: grams(x.need) } : {}), ...(x.standIn && !itself(x.ingredient, x.standIn) ? { instead: readable(shortName(x.standIn), lang) } : {}) })),
+        order: g.toOrder.filter((x) => !isStopped(x.ingredient)).map((x) => ({ name: x.ingredient, ...(grams(x.need) ? { need: grams(x.need) } : {}), ...(x.standIn && !itself(x.ingredient, x.standIn) ? { instead: readable(shortName(x.standIn), lang) } : {}), ...markOf(x) })),
         // The reason in a few words ("cannot arrive by Tue 17 Nov"), never the products and ids behind it (the steps hold those).
         cannot: [...g.toOrder.filter((x) => isStopped(x.ingredient)).map((x) => ({ name: x.ingredient, ...(grams(x.need) ? { need: grams(x.need) } : {}), why: stopWhy(x.ingredient) })), ...g.cannotGet.map((x) => ({ name: x.ingredient, ...(grams(x.need) ? { need: grams(x.need) } : {}), why: shortWhy(x.code, x.words, deliverBy, lang) }))],
         totalToOrderCents: total,
@@ -747,6 +761,7 @@ export async function dishesCard(run: TurnRun, planId: string, before?: Dishes, 
     dishes: dishes.filter((d) => d.items.length),
     totalCents: total,
     ...(covers && total ? { costPerCoverCents: Math.round(total / covers) } : {}),
+    ...(marks.some((m) => m) ? { marks: marks.map((m) => m ?? {}) } : {}),
   };
 }
 

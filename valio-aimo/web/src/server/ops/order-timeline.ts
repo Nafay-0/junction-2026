@@ -260,6 +260,8 @@ function ownStep(e: LedgerEntry, viewer: Viewer, names: Record<string, string>):
     return { ...plain, phase: "after", tone: "safety", title: `Taken back by ${by}${d.verified === true ? " (signed in)" : " (relayed by the agent, not verified)"}, before the order cut-off`, lines: [typeof d.reason === "string" && d.reason ? `Why: “${d.reason}”` : "", "The wholesaler's confirmation no longer holds; it no longer counts against the weekly budget."].filter(Boolean), facts: typeof d.cutoff === "string" ? [{ label: "Cut-off", value: d.cutoff.slice(0, 16).replace("T", " ") + " UTC" }] : [] };
   }
   if (e.type === "order" && typeof d.replaces === "string") return { ...plain, phase: "after", title: say(e.summary) };
+  // The wholesaler's team confirmed it for delivery, or could not (server/fulfilment).
+  if (e.type === "order" && d.step === "fulfilment") return { ...plain, phase: "after", tone: d.decision === "confirmed" ? "plain" : "safety", title: d.decision === "confirmed" ? `Confirmed for delivery by ${String(d.by ?? "the wholesaler's team")} of the wholesaler's team` : `The wholesaler's team (${String(d.by ?? "staff")}) could not confirm it for delivery`, lines: typeof d.reason === "string" && d.reason ? [`Why: “${d.reason}”`] : [] };
   if (e.type === "approval" && (d.decision === "withdrawn" || d.decision === "expired")) return { ...plain, phase: "after", tone: "safety", title: say(e.summary) };
   if (e.type === "control") return viewer === "ops" ? { ...plain, phase: "control", title: say(e.summary) } : undefined;
   return undefined;
