@@ -171,11 +171,16 @@ async function main() {
     // Older builds stop at "Sign the waiting order"; newer ones go straight on to the order's sign-off.
     const signLink = pp.getByText(/Sign the waiting order/).first();
     const which = await take.wait(() =>
-      Promise.race([signLink.waitFor({ timeout: 40_000 }).then(() => "link"), approve.waitFor({ timeout: 40_000 }).then(() => "approve")]),
+      Promise.race([
+        signLink.waitFor({ timeout: 40_000 }).then(() => "link", () => new Promise<string>(() => undefined)),
+        approve.waitFor({ timeout: 40_000 }).then(() => "approve", () => new Promise<string>(() => undefined)),
+        sleep(45_000).then(() => "none"),
+      ]),
     );
     if (which === "link") {
-      await sleep(1500);
-      await click(signLink);
+      // newer builds show "Done" for a moment and then go on to the sign-off by themselves
+      await sleep(2500);
+      if (!(await approve.isVisible().catch(() => false)) && (await signLink.isVisible().catch(() => false))) await click(signLink);
     }
   }
   await take.wait(() => approve.waitFor({ timeout: 30_000 }));

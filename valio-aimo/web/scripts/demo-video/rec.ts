@@ -15,7 +15,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { chromium, type Browser, type BrowserContext, type CDPSession, type Locator, type Page } from "@playwright/test";
 
-export const CLIPS = "/Users/macbookair/dock-shots/demo-video/clips";
+export const CLIPS = process.env.DEMO_CLIPS || "/Users/macbookair/dock-shots/demo-video/clips";
 export const WORK = process.env.DEMO_WORK || "/Users/macbookair/dock-shots/demo-video/.work";
 const FPS = 30;
 const WAIT_MAX = 1.2;
