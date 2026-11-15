@@ -2,7 +2,7 @@
 
 import { browserSupportsWebAuthn, startRegistration, type PublicKeyCredentialCreationOptionsJSON } from "@simplewebauthn/browser";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "../../_client/api";
 import { useLang, useText } from "../../_i18n/provider";
@@ -26,6 +26,14 @@ export function DeviceFlow() {
   const [done, setDone] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<{ title: string; body: string }>();
+  const router = useRouter();
+  // Added for an order or a change waiting to be signed: straight on to it (the link below stays for a slow phone).
+  useEffect(() => {
+    if (done && next !== "/approver") {
+      const t = setTimeout(() => router.replace(next), 900);
+      return () => clearTimeout(t);
+    }
+  }, [done, next, router]);
   useEffect(() => {
     void api<Begin>("POST", "/ui-api/account/device", { step: "begin", link }).then((r) => (r.ok ? setBegin(r.data) : setProblem({ title: tx.deviceExpired, body: r.error.message })));
   }, [link, tx.deviceExpired]);
