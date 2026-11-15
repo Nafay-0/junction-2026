@@ -184,7 +184,9 @@ export class TryCaps {
         if (given) return;
         given = true;
         if (taken.count > 0) taken.count--;
-        if (def.perDay !== null && d.day === utcDay(Date.now()) && d.count > 0) d.count--;
+        // Only while that day's count is still the one in use: after midnight UTC the old day's count is gone, and
+        // a try taken yesterday must not lower today's. (Not the real clock: a caller may pass its own `now`.)
+        if (def.perDay !== null && this.days.get(door) === d && d.count > 0) d.count--;
       },
     };
   }
