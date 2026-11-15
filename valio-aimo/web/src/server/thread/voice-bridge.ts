@@ -316,7 +316,13 @@ export function progressFor(a: AgentTurn, p: { keys: string[]; at: number; last?
 function afterSignOff(a: AgentTurn, lang: Lang): string {
   const gate = [...a.cards].reverse().find((c) => c.type === "gate");
   const who = gate?.type === "gate" ? (gate.approver?.name ?? "") : "";
-  if (gate?.type === "gate" && gate.outcome === "approved") return say3(lang, { en: `${who || "The approver"} signed it: it's ordered.`, fi: `${who || "Hyväksyjä"} hyväksyi sen: tilaus on tehty.`, sv: `${who || "Godkännaren"} har godkänt den: den är beställd.` });
+  if (gate?.type === "gate" && gate.outcome === "approved")
+    // Ordered is not delivered: a placed order is with the wholesaler's team to confirm (server/fulfilment), said here as in the typed conversation.
+    return say3(lang, {
+      en: `${who || "The approver"} signed it: it's ordered, and now with the wholesaler's team to confirm for delivery.`,
+      fi: `${who || "Hyväksyjä"} hyväksyi sen: tilaus on tehty, ja tukkurin tiimi vahvistaa sen nyt toimitukseen.`,
+      sv: `${who || "Godkännaren"} har godkänt den: den är beställd och ligger nu hos grossistens team för bekräftelse.`,
+    });
   if (gate?.type === "gate" && gate.outcome === "declined") return say3(lang, { en: `${who || "The approver"} declined it, so nothing was ordered.`, fi: `${who || "Hyväksyjä"} hylkäsi sen, joten mitään ei tilattu.`, sv: `${who || "Godkännaren"} avböjde den, så inget beställdes.` });
   return spokenOf(a, lang);
 }
