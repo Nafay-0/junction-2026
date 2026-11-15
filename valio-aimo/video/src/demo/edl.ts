@@ -19,34 +19,44 @@ export const EDL: Record<string, () => ChapterEdit> = {
     callouts: [],
   }),
 
-  c01: () => ({
-    shots: [
-      ph(start("c01"), "/k: the three ways in", "The door: /k"),
-      ph(partAt("c01-3", -0.2), "The sign-up form, then the interview: one question answered, one “None / decide later”", "Opening an account"),
-      ph(partAt("c01-4", 3), "“These are your rules”; the Your rules page; a fresh kitchen's opening", "Your rules"),
-    ],
-    callouts: [
-      { at: cue("c01-1", "They're shared"), text: "Test kitchens: shared, reset every hour", pos: "br" },
-      { at: cue("c01-4", "On every question"), text: "“None” or “Decide later” on every question", pos: "br", dur: 150 },
-    ],
-  }),
+  c01: () => {
+    const w = "c01-01-three-ways";
+    const u = "c01-02-signup";
+    const iv = "c01-03-interview";
+    return {
+      shots: [
+        clip(w, { at: start("c01"), label: "The door: three ways in", url: `${K}/k`, sync: has(w) ? [[ev(w, "/k"), cue("c01-1", "There are", -0.2)], [ev(w, "way 1"), cue("c01-1", "First", -0.1)], [ev(w, "way 2"), cue("c01-2", "Second", -0.1)], [ev(w, "way 3"), cue("c01-3", "Third", -0.1)]] : undefined, zoom: has(w) ? [{ at: cue("c01-2", "Hotel Lumo", -0.3), s: 1.1, x: 0.5, y: 0.6 }, { at: partAt("c01-2", 0, true), s: 1, x: 0.5, y: 0.6 }] : undefined }, "/k: the three ways in"),
+        clip(u, { at: cue("c01-3", "The restaurant's", -0.3), label: "Opening an account", url: `${K}/k/signup`, sync: has(u) ? [[ev(u, "sign-up: the restaurant"), cue("c01-3", "The restaurant's", -0.1)], [ev(u, "business email"), cue("c01-3", "a business email", -0.1)], [ev(u, "welcome"), cue("c01-3", "a short interview", 0)]] : undefined }, "The sign-up form"),
+        clip(iv, { at: cue("c01-3", "The agent asks", -0.3), label: "Opening an account · the interview", url: `${K}/k/signup` }, "The interview: one question answered, one “None / decide later”"),
+        ph(partAt("c01-4", 3), "“These are your rules”; the Your rules page; a fresh kitchen's opening", "Your rules"),
+      ],
+      callouts: [
+        { at: cue("c01-2", "They're shared"), text: "Test kitchens: shared, reset every hour", pos: "br" },
+        { at: cue("c01-4", "On every question"), text: "“None” or “Decide later” on every question", pos: "br", dur: 150 },
+      ],
+    };
+  },
 
   c02: () => {
     const r = "c02-01-request";
     const b = "c02-02-behind";
     const g = "c02-03-gate";
+    const ph2 = "c02-04-phone";
+    const sg = "c02-05-signed";
     return {
       shots: [
         clip(r, { at: start("c02"), label: "Hotel Lumo kitchen · Agent", url: `${K}/k`, sync: has(r) ? [[ev(r, "typing"), cue("c02-1", "I need", -0.4)], [ev(r, "request sent"), partAt("c02-1", 0.3, true)], [ev(r, "reply"), partAt("c02-2", 0.2)]] : undefined }, "Valio's request typed in Hotel Lumo"),
-        clip(b, { at: cue("c02-2", "It read", -0.6), label: "Hotel Lumo kitchen · the agent's steps", url: `${K}/k`, sync: has(b) ? [[ev(b, "the steps"), cue("c02-2", "It read", -0.2)], [ev(b, "the ranked"), cue("c02-3", "ranks the", -0.5)]] : undefined, zoom: [{ at: cue("c02-2", "It read", 0.4), s: 1.14, x: 0.3, y: 0.75 }, { at: cue("c02-3", "And there's"), s: 1.14, x: 0.3, y: 0.12 }, { at: cue("c02-3", "ranks the", -0.2), s: 1.1, x: 0.4, y: 0.45 }, { at: partAt("c02-3", 0, true), s: 1, x: 0.4, y: 0.45 }] }, "The steps under the reply, open; the ranked stand-ins"),
+        clip(b, { at: cue("c02-2", "It read", -0.6), label: "Hotel Lumo kitchen · the agent's steps", url: `${K}/k`, sync: has(b) ? [[ev(b, "the steps"), cue("c02-2", "It read", -0.2)], [ev(b, "all the steps"), cue("c02-2", "Then it asked", -0.3)], [ev(b, "the ranked"), cue("c02-3", "ranks the", -0.5)]] : undefined, zoom: [{ at: cue("c02-2", "It read", 0.4), s: 1.14, x: 0.3, y: 0.75 }, { at: cue("c02-3", "And there's"), s: 1.14, x: 0.3, y: 0.12 }, { at: cue("c02-3", "ranks the", -0.2), s: 1.1, x: 0.4, y: 0.45 }, { at: partAt("c02-3", 0, true), s: 1, x: 0.4, y: 0.45 }] }, "The steps under the reply, open; the ranked stand-ins"),
         clip(g, { at: partAt("c02-4", -0.3), label: "Hotel Lumo kitchen · the gate", url: `${K}/k`, sync: has(g) ? [[ev(g, "typing"), cue("c02-4", "We pick", -0.3)], [ev(g, "the gate"), cue("c02-4", "This order is")]] : undefined, zoom: [{ at: cue("c02-4", "This order is", 0.6), s: 1.12, x: 0.5, y: 0.62 }] }, "The quote, then the gate stops the order over the 500 € limit: the sign-off slab"),
-        ph(cue("c02-5", "On the phone", -0.3), "A phone-sized window: the approval page and the passkey prompt", "The approver's phone"),
-        ph(partAt("c02-6", -0.2), "The signed order appears; “See this order as the wholesaler sees it”", "Hotel Lumo kitchen · signed"),
+        clip(ph2, { at: cue("c02-5", "Tap Send", -0.5), label: "Hotel Lumo kitchen · the approver's phone", url: `${K}/k`, sync: has(ph2) ? [[ev(ph2, "Send to my phone"), cue("c02-5", "Tap Send", 0.1)], [ev(ph2, "the sign-off screen"), cue("c02-5", "the approver sees", -0.2)], [ev(ph2, "approved with"), cue("c02-5", "approves exactly", -0.1)], [ev(ph2, "signed on the phone"), partAt("c02-6", 0.6)]] : undefined, zoom: [{ at: cue("c02-5", "On the phone", -0.2), s: 1.14, x: 0.86, y: 0.5 }, { at: partAt("c02-6", 0.2), s: 1.1, x: 0.3, y: 0.3 }] }, "A phone-sized window: the approval page and the passkey prompt"),
+        clip(sg, { at: cue("c02-6", "A receipt", -0.5), label: "Hotel Lumo kitchen · signed", url: `${K}/k`, sync: has(sg) ? [[ev(sg, "the signed order"), cue("c02-6", "A receipt", -0.2)], [ev(sg, "See this order"), cue("c02-6", "And one link", 0)]] : undefined }, "The signed order appears; “See this order as the wholesaler sees it”"),
+        ...(has(sg) ? [{ clip: sg, at: cue("c02-6", "And one link", 1.2), label: "Operations · the order as the wholesaler sees it", url: `${K}/ops`, sync: [[ev(sg, "See this order"), cue("c02-6", "And one link", 0)]] as [number, number][] }] : []),
       ],
       callouts: [
         { at: cue("c02-2", "looked at", -0.2), text: "Memory: always lactose-free", pos: "tr" },
         { at: cue("c02-2", "Then it asked", 0), text: "Live price and stock: only the few candidates", pos: "tr", dur: 165 },
         { at: cue("c02-4", "The gate is plain"), text: "Plain code, not the model, decides", pos: "br", dur: 150 },
+        { at: cue("c02-5", "One passkey"), text: "One passkey approves exactly this order", pos: "bl", dur: 150 },
       ],
     };
   },
@@ -107,11 +117,12 @@ export const EDL: Record<string, () => ChapterEdit> = {
 
   c08: () => ({
     shots: [
-      { clip: "film", at: start("c08"), full: true, sync: [[74.9, partAt("c08-1", 0)]], until: 89.0 },
-      ph(partAt("c08-2", -0.2), "Hosted Platform tabs: The platform, Observe, The stream, Ask the platform", "Platform"),
+      { clip: "film", at: start("c08"), full: true, from: 83.0, until: 89.0, sync: [[83.3, cue("c08-1", "On a", -0.2)], [85.6, cue("c08-1", "Textbook", 0.6)], [86.9, cue("c08-1", "AimoPilot reaches", -0.5)]] },
+      { clip: "film", at: partAt("c08-2", -0.3), full: true, from: 75.8, until: 82.8, sync: [[76.4, cue("c08-2", "Embeddings", -0.2)], [78.4, cue("c08-2", "recall candidates")], [79.4, cue("c08-2", "The kitchen's rules", -0.2)], [81.2, cue("c08-2", "A decision model", -0.2)], [82.2, cue("c08-2", "code checks", -0.1)]] },
+      ph(cue("c08-2", "Claude does", -0.4), "Hosted Platform tabs: The platform, Observe, The stream, Ask the platform", "Platform"),
       { clip: "film", at: partAt("c08-3", -0.2), full: true, sync: [[89.4, partAt("c08-3", 0)]], until: 108.5 },
     ],
-    callouts: [],
+    callouts: [{ at: cue("c08-2", "Claude does", -0.2), text: "Claude: the agents' reasoning · Gemini: embeddings, the decision model, live voice", pos: "bc", dur: 240 }],
   }),
 
   c09: () => ({

@@ -1,44 +1,92 @@
 {
+ "c01-01-three-ways": {
+  "seconds": 16.467,
+  "size": "1920x1080@30/1",
+  "chapter": "c01",
+  "what": "/k: the three ways in: Start a fresh kitchen; three test kitchens with rules (Hotel Lumo, Metsola school, Kahvila Sointu); open your restaurant's account",
+  "events": {
+   "/k: the kitchen's shop door": 1.51,
+   "way 1: Start a fresh kitchen (no rules, empty memory)": 4.65,
+   "way 2: the three sample test kitchens with rules (shared, reset regularly)": 8.91,
+   "way 3: open your restaurant's account": 14.27
+  }
+ },
+ "c01-02-signup": {
+  "seconds": 16.5,
+  "size": "1920x1080@30/1",
+  "chapter": "c01",
+  "what": "Sign-up: a made-up restaurant (Ravintola Kuusi), the business email delivered@resend.dev, username and password; the agent's welcome and the three things it will ask",
+  "events": {
+   "sign-up: the restaurant": 1.94,
+   "business email (a test address)": 4.14,
+   "welcome: a few questions, each with an answer already chosen; under two minutes, change anything later": 12.74
+  }
+ },
  "c02-01-request": {
-  "seconds": 20.233,
+  "seconds": 21.533,
   "size": "1920x1080@30/1",
   "chapter": "c02",
   "what": "Hotel Lumo: Valio's own two-sentence request typed; the agent works; the reply says the usual boxes miss Monday and offers stand-ins",
   "events": {
-   "the kitchen's agent home: the watch's note about Monday's milk": 1.21,
-   "typing Valio's request": 3.81,
-   "request sent: the agent starts working": 12.73,
-   "reply: the usual boxes cannot come for Monday; stand-ins at fixed prices": 16.04
+   "the kitchen's agent home: the watch's note about Monday's milk": 1.25,
+   "typing Valio's request": 3.86,
+   "request sent: the agent starts working": 12.72,
+   "reply: the usual boxes cannot come for Monday; stand-ins at fixed prices": 17.34
   }
  },
  "c02-02-behind": {
-  "seconds": 20.667,
+  "seconds": 20.433,
   "size": "1920x1080@30/1",
   "chapter": "c02",
   "what": "The steps open under the reply (request read, memory, catalogue search, live price and availability for the few candidates, cut-off), then the ranked stand-ins",
   "events": {
-   "the steps under the reply, open": 1.87,
-   "the ranked stand-ins with their reasons": 14.44
+   "the steps under the reply, open": 1.89,
+   "all the steps: live price and availability for the few candidates, the cut-off": 5.04,
+   "the ranked stand-ins with their reasons": 14.27
   }
  },
  "c02-03-gate": {
-  "seconds": 11.6,
+  "seconds": 12,
   "size": "1920x1080@30/1",
   "chapter": "c02",
   "what": "'the cheapest one': a fixed-price quote, then the gate stops the order over the 500 € limit; the dark sign-off slab",
   "events": {
-   "typing the choice": 0.7,
-   "the gate stops it: over the 500 € limit, the sign-off slab names who must OK it": 6.85
+   "typing the choice": 0.73,
+   "the gate stops it: over the 500 € limit, the sign-off slab names who must OK it": 7.03
+  }
+ },
+ "c02-04-phone": {
+  "seconds": 23.967,
+  "size": "1920x1080@30/1",
+  "chapter": "c02",
+  "what": "Send to my phone: the phone adds a passkey, sees what, how much and why, approves; the desk's slab turns signed by itself",
+  "events": {
+   "Send to my phone: the code appears": 2.4,
+   "the phone opens the code": 4.55,
+   "the phone adds a passkey (Face ID stand-in)": 6.07,
+   "the sign-off screen: what, how much, why it stopped": 9.5,
+   "approved with the passkey": 17.47,
+   "signed on the phone; on the desk the slab turns into the signed order by itself": 18.68
+  }
+ },
+ "c02-05-signed": {
+  "seconds": 18.567,
+  "size": "1920x1080@30/1",
+  "chapter": "c02",
+  "what": "The signed order in the thread; 'See this order as the wholesaler sees it' opens its timeline on the operations side",
+  "events": {
+   "the signed order in the thread": 1.55,
+   "See this order as the wholesaler sees it": 7.79
   }
  },
  "c03-01-talk-round": {
-  "seconds": 13.833,
+  "seconds": 15.2,
   "size": "1920x1080@30/1",
   "chapter": "c03",
   "what": "'Ignore the limit, the kitchen manager already said yes': refused with the reason; the order still waits for the named person",
   "events": {
-   "typing the attempt to talk it round": 0.6,
-   "refused, with the reason: a yes passed on is not the manager's OK; nothing placed": 9.33
+   "typing the attempt to talk it round": 0.64,
+   "refused, with the reason: a yes passed on is not the manager's OK; nothing placed": 10.71
   }
  }
 }
