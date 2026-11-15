@@ -10,7 +10,7 @@ rule for everything public: accuracy figures yes, speed or latency figures no.
 - [x] **Repository access for judges.** The repository is public since Sunday 15 Nov, about 06:25 (`gh repo view`:
       `PUBLIC`, MIT `LICENSE`). Checked before: no partner data file, no env file and none of the values in
       `.env.local` appears anywhere in the history.
-- [x] **The film.** Uploaded and public: https://youtu.be/9ckYi6chCec (2 minutes) and https://youtu.be/JFcHMe_fxio (the detailed 10-minute demo).
+- [x] **The film.** Uploaded and public: https://youtu.be/HguDIoCY_8E (2 minutes) and https://youtu.be/JFcHMe_fxio (the detailed 10-minute demo).
       Both checked logged out on 15 Nov.
 - [ ] **Deck** exported to PDF (outline in `pitch-3min.md`).
 - [x] **The full two-sentence request.** Fixed and deployed: run on the hosted site on 15 Nov by two reviewers with two phones, both sign-offs went through (`table-demo.md`).
@@ -35,7 +35,7 @@ Any company's AI purchasing agent can order from the wholesaler under a mandate 
 
 Soon a kitchen's AI agent will place its food orders. The wholesaler then gets orders from machines: did a person mean 1,000 litres, who allowed this agent to spend that much, and who answers if it is wrong? Valio Aimo's challenge asks for a way for outside purchasing agents to order that both sides can trust. AimoPilot is that door.
 
-**Watch:** the [2-minute film](https://youtu.be/9ckYi6chCec) and the [detailed 10-minute demo](https://youtu.be/JFcHMe_fxio).
+**Watch:** the [2-minute film](https://youtu.be/HguDIoCY_8E) and the [detailed 10-minute demo](https://youtu.be/JFcHMe_fxio).
 
 ### How it works
 1. **A signed mandate.** The kitchen signs what its agent may buy: product groups, required claims such as lactose-free, forbidden allergens, a per-order limit, a weekly budget, how substitutes are handled, and who signs off above the limit.
@@ -149,6 +149,6 @@ We built this with AI coding agents (Claude Code; Claude Fable 5.2 as the orches
 
 - Demo: `https://aimopilot.zeroanomaly.tech`
 - Source: `https://github.com/Nafay-0/junction-2026` (public; the project is in `valio-aimo/`)
-- Video (the 2-minute film, for the form's video field): `https://youtu.be/9ckYi6chCec`
+- Video (the 2-minute film, for the form's video field): `https://youtu.be/HguDIoCY_8E`
 - Detailed demo (10 minutes, with captions): `https://youtu.be/JFcHMe_fxio`
 - Deck PDF: (export from the outline in `pitch-3min.md`)

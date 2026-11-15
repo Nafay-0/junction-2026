@@ -10,7 +10,7 @@ Built at Junction 2026 (13 to 15 November, Espoo) for Valio Aimo's challenge, "T
 
 Live demo: <https://aimopilot.zeroanomaly.tech>
 
-Watch: the [2-minute film](https://youtu.be/9ckYi6chCec) and the [detailed 10-minute demo](https://youtu.be/JFcHMe_fxio).
+Watch: the [2-minute film](https://youtu.be/HguDIoCY_8E) and the [detailed 10-minute demo](https://youtu.be/JFcHMe_fxio).
 
 The site runs on Aiven Runtime (the app `dock-app`). The address above is a custom domain in front of the app's own Aiven host, `jolly-wondrous-bunny.eur-1.aiven.app`, which still answers. Use the custom domain: links, QR codes, mail and passkeys belong to it (`infra/aiven-deploy.mjs`, `DOCK_DEPLOY_CUSTOM_DOMAIN`).
 

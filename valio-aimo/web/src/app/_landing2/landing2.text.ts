@@ -147,7 +147,7 @@ export const L2 = {
     title: "The two-minute film",
     note: "Coming here soon. Until then, every picture on this page is the product itself.",
     label: "AimoPilot in two minutes",
-    filmHref: "https://youtu.be/9ckYi6chCec",
+    filmHref: "https://youtu.be/HguDIoCY_8E",
     onYouTube: "The film on YouTube",
   },
 

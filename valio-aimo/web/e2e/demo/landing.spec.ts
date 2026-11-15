@@ -39,7 +39,7 @@ test("/ is the landing page: the ways in, no sideways scroll, every picture desc
     "Talk to the agent",
   ]);
   // The film comes first, with the same film on YouTube; the detailed demo closes the page as a link, never a player.
-  await expect(page.locator("#film").getByRole("link", { name: "The film on YouTube" })).toHaveAttribute("href", "https://youtu.be/9ckYi6chCec");
+  await expect(page.locator("#film").getByRole("link", { name: "The film on YouTube" })).toHaveAttribute("href", "https://youtu.be/HguDIoCY_8E");
   await expect(page.locator("#demo").getByRole("link", { name: /detailed ten-minute demo/ })).toHaveAttribute("href", "https://youtu.be/JFcHMe_fxio");
   await expect(page.locator("#demo iframe")).toHaveCount(0);
   // The agent inside the shop: the captured store on a desk and a phone, the three points, one way into the live shop,
