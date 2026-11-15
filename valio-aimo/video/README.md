@@ -55,3 +55,27 @@ ffmpeg -i out/aimopilot-film-raw.mp4 -c:v copy -af loudnorm=I=-16:TP=-1.5:LRA=11
 
 brings the whole mix to about -16 LUFS for the web. The landing page plays `web/public/landing/film.mp4` with
 `film-poster.webp` and `film.vtt` beside it.
+
+## The ten-minute demo (`Demo` composition)
+
+A separate composition beside the film, built from real screen recordings of the product; it shares only the theme.
+
+- `src/demo/script.json`: the narration, chapter by chapter (one clip per paragraph). `src/demo/voice.json`: the
+  voice and its settings in one place (Patrick, `eleven_v4_turbo`, stability 0.35, style 0.6, tempo 1.0); change
+  `voice` and run `node scripts/demo-vo.mjs` to re-record every chapter with another voice. `seeds` re-takes one part.
+- `node scripts/demo-vo.mjs [c02 | c02-3 ...]` records into `public/demo-vo/` and writes `src/demo/vo.json` (word
+  times); `node scripts/vo-check.mjs public/demo-vo/<part>.mp3` transcribes a take back.
+- `public/demo-clips` is a link to the capture session's clips folder (not in git); `node scripts/demo-clips.mjs`
+  lists them with their events into `src/demo/clips.json`. `public/demo-film.mp4` is a copy of the finished film,
+  used silently for the gate, search and Aiven illustrations (not in git).
+- `src/demo/timeline.ts`: the timeline is the narration plus `src/demo/edit.json` (lead, gap, tail, pads, end card).
+  `src/demo/edl.ts`: per chapter, the shots and callouts, placed on the narrator's words with `cue(part, phrase)`;
+  a shot's `sync` anchors put a clip's event on a spoken word, playing between anchors at 0.9 to 1.5 times, holding a
+  frame when the clip runs short and cutting when it runs long. A clip that has not arrived renders as a placeholder.
+- `node scripts/demo-music.mjs 600 <name>` makes a bed with ElevenLabs Music; `public/demo-music/bed-loop.mp3` is
+  the one used (its body looped with crossfades), ducked under the voice in `src/demo/Demo.tsx`.
+
+```bash
+npx remotion render Demo out/demo-raw.mp4 --codec=h264 --crf=17 --jpeg-quality=92 --concurrency=4
+scripts/demo-finish.sh out/demo-raw.mp4 <delivery dir>   # -16 LUFS, the small copy, the contact sheet, captions, script
+```
