@@ -48,7 +48,7 @@ test("a placed order is with the wholesaler's team to confirm; staff confirm it,
   const ops = await desk.newPage();
   await enterOps(ops, "E2E dispatcher");
   await ops.goto(`/ops/orders?status=to_confirm`);
-  await expect(ops.getByText("Waiting for the wholesaler's confirmation").first()).toBeVisible({ timeout: 20_000 });
+  await expect(ops.locator('[data-fulfilment="waiting"]').first()).toContainText("Waiting for your team to confirm", { timeout: 20_000 });
   await ops.goto(`/ops/orders/${orderId}`);
   await ops.getByRole("button", { name: "Confirm for delivery" }).click();
   await expect(ops.locator('[data-fulfilment="confirmed"]')).toContainText("Confirmed for delivery by E2E dispatcher", { timeout: 20_000 });
