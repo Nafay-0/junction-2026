@@ -64,7 +64,7 @@ const SCREEN_ONLY = /^(tap|click|press|see|scroll|open|use the button|napauta|kl
  * The written line as it is spoken: no marks, no codes or addresses, money and days as said, units in words,
  * thousands without spaces. `max` words, whole sentences only; what is cut is said as what it is.
  */
-export function speakable(text: string, lang: Lang, max = 45): string {
+export function speakable(text: string, lang: Lang, max = 45, rest = true): string {
   let t = text.replace(/\*\*|\{\{|\}\}|__|`/g, "");
   t = t.replace(/https?:\/\/\S+/g, "").replace(/\b(req|ord|apr|trn|sht|pln|card|call|sbx|qt|quo|q)_[A-Za-z0-9_-]{4,}\b/g, "");
   // Money: "1 010,00 €", "€1,010.00", "11,40 €", "101 €" -> euros as said.
@@ -90,21 +90,28 @@ export function speakable(text: string, lang: Lang, max = 45): string {
   t = t.replace(/\s\+\s/g, { en: " and ", fi: " ja ", sv: " och " }[lang]);
   t = t.replace(/[•·▪]\s*/g, "").replace(/\s*\n+\s*/g, ". ").replace(/\.\s*\./g, ".").replace(/\s{2,}/g, " ").replace(/\s+([.,;:!?])/g, "$1").trim();
   const sentences = t.split(/(?<=[.!?])\s+(?=[\p{Lu}\d"“(])/u).map((x) => x.trim()).filter((x) => x && !SCREEN_ONLY.test(x));
+  // Over the limit: the first sentences, and the written reply's own closing question if it has one (the buyer has to
+  // hear what is asked); the note about the rest only when no question closes it and nothing else follows (`rest`).
+  const last = sentences.at(-1);
+  const closing = last && /\?\s*$/.test(last) ? last : undefined;
+  const body = closing ? sentences.slice(0, -1) : sentences;
+  const budget = max - (closing ? closing.split(/\s+/).length : 0);
   const out: string[] = [];
   let words = 0;
-  for (const s of sentences) {
+  for (const s of body) {
     const n = s.split(/\s+/).length;
-    if (out.length && words + n > max) break;
+    if (out.length && words + n > budget) break;
     out.push(s);
     words += n;
   }
-  const rest = sentences.length - out.length;
-  if (rest > 0) out.push({ en: "The rest is written on your screen.", fi: "Loput on kirjoitettuna näytölläsi.", sv: "Resten står på din skärm." }[lang]);
+  const cut = out.length < body.length;
+  if (closing) out.push(closing);
+  else if (cut && rest) out.push({ en: "The rest is written on your screen.", fi: "Loput on kirjoitettuna näytölläsi.", sv: "Resten står på din skärm." }[lang]);
   return out.join(" ");
 }
 
 /** Catalogue words a person would not say about a product. */
-const NAME_NOISE = /\b(hyvä suomalainen|suomalainen|arki|bag-in-box|semi[- ]?skimmed|skimmed|milk drink|drink|lactose[- ]free|laktoositon|uht|organic|luomu|\d[\d.,]*\s?(%|l|kg|g|ml|dl|kpl|pcs)\b|box|carton|cartons)/gi;
+const NAME_NOISE = /\b(food ?service|ammattilaisille|professional|hyvä suomalainen|suomalainen|arki|bag-in-box|semi[- ]?skimmed|skimmed|milk drink|drink|lactose[- ]free|laktoositon|uht|organic|luomu|\d[\d.,]*\s?(%|l|kg|g|ml|dl|kpl|pcs)\b|box|carton|cartons)/gi;
 const KINDS = ["oat drink", "whipping cream", "cooking cream", "sour cream", "cream cheese", "cream", "milk", "yoghurt", "yogurt", "butter", "quark", "cheese", "eggs", "juice", "maito", "kerma", "jogurtti", "voi", "rahka", "juusto", "mjölk", "grädde"];
 
 /**
@@ -252,7 +259,7 @@ export function spokenReply(turn: AgentTurn, lang: Lang, hold?: SpokenReadBack):
   // Spoken is shorter than written: about thirty words, whole sentences, made fit to hear. With the options' question,
   // only what the question does not say (an exception: the usual cannot come, a stand-in) stays before it, and the
   // written reply's own question gives way (one question at a time).
-  const line = speakable(spokenSentences(turn.line ?? "", turn, { optionsAsked: !!ask }), lang, ask ? 22 : 32);
+  const line = speakable(spokenSentences(turn.line ?? "", turn, { optionsAsked: !!ask }), lang, ask ? 22 : 32, !ask);
   const extra = fromCards(turn, line, lang);
   const said = [line, ...extra, ask?.say ?? ""].filter(Boolean).join(" ").trim();
   if (said) return { say: said, ...(ask ? { hold: ask.hold } : {}) };
