@@ -3,7 +3,7 @@
  * (c00, c10, c08's search and map sections), /try and /docs (c07), the Platform tabs with the Aiven services live
  * (c08), one "Send in the agent" run (c07: there are 12 a day for everyone, so ONE), and Trace / Time machine (c06).
  *
- *   npx tsx scripts/demo-video/hosted.ts [--only landing,end,search,try,docs,platform,observe,stream,ask,agent,history]
+ *   npx tsx scripts/demo-video/hosted.ts [--only landing,end,search,try,docs,platform,observe,stream,ask,agent,history,tested]
  */
 import type { Page } from "@playwright/test";
 import { click, context, deliver, hover, launch, moveTo, opt, pointerAt, quiet, reveal, scrollBy, sleep, Take, type } from "./rec";
@@ -203,6 +203,24 @@ async function main() {
     await slow(page, 700, 220, 900);
     await take.stop();
     deliver(take, { id: "c06-09-hosted-trace-time", chapter: "c06", what: "Hosted (visitor): Trace list and Time machine with the site's own history" });
+  }
+  if (on("tested")) {
+    await go(page, "/ops/agents");
+    const take = new Take("c09-01");
+    const crash = page.locator("#crash");
+    if (await crash.count()) await crash.evaluate((el) => el.scrollIntoView({ block: "start" }));
+    await page.evaluate(() => window.scrollBy(0, -90));
+    await sleep(1500);
+    await take.record(page);
+    take.event("the crash test: thirteen hard purchasing situations; the worst run sets the licence");
+    await sleep(3000);
+    await slow(page, 700, 220, 1100);
+    await go(page, "/ops/safeguards");
+    take.event("Safeguards: the gate's rules and how often each fired");
+    await sleep(2500);
+    await slow(page, 700, 220, 1100);
+    await take.stop();
+    deliver(take, { id: "c09-01-crash-safeguards", chapter: "c09", what: "Hosted (visitor): the Agents page's crash-test ratings, then Safeguards with how often each rule fired" });
   }
   void hover;
   await browser.close();

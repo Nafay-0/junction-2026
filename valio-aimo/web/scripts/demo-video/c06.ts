@@ -127,14 +127,22 @@ async function main() {
       await take.wait(() => quiet(page));
     }
     await sleep(1000);
-    await moveTo(page, 1150, 650);
+    await page.locator("main h1, main h2").first().click({ position: { x: 2, y: 2 } }).catch(() => undefined);
     await page.keyboard.press("Home");
-    take.event("stepping through the request");
-    for (let i = 0; i < 9; i++) {
-      await sleep(1000);
-      await page.keyboard.press("ArrowRight");
+    await sleep(800);
+    const replay = page.getByRole("button", { name: /^(Replay|Play)/ }).first();
+    if (await replay.count()) {
+      await click(replay);
+      take.event("replaying the request step by step");
+      await sleep(9000);
+    } else {
+      take.event("stepping through the request");
+      for (let i = 0; i < 8; i++) {
+        await sleep(1000);
+        await page.keyboard.press("ArrowRight");
+      }
     }
-    await sleep(1500);
+    await browse(page, 2, 300, 1500);
     await take.stop();
     deliver(take, { id: "c06-05-trace", chapter: "c06", what: "Trace: one request replayed step by step (the request read, search, live price, the gate's rules, the sign-off)" });
   }
@@ -205,7 +213,7 @@ async function main() {
       if (pick) await sel.selectOption(pick.v);
       take.event(`chose ${pick?.t ?? "an agent"}`);
       await sleep(1000);
-      const reason = page.locator("form input[type=text], form textarea").first();
+      const reason = page.getByLabel(/reason/i).first();
       if (await reason.count()) {
         const { type } = await import("./rec");
         await type(reason, "Odd orders overnight: hold it while we look.", { cps: 22 });

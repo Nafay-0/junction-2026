@@ -21,6 +21,8 @@ async function tab(page: Page, name: RegExp, href: string) {
   await sleep(900);
 }
 
+const k0 = (page: Page) => page.getByText(/wholesaler's agent suggests/i).last();
+
 async function main() {
   const browser = await launch();
   const needLumo = ["watch", "backup", "menu", "memory", "tabs"].some(on);
@@ -62,18 +64,18 @@ async function main() {
     await take.record(k.page);
     await sleep(700);
     let t = await k.say(take, "Plan a dish for 40 covers for Friday.");
-    take.event("the menu planner asks what it needs");
+    take.event("the menu planner asks what it needs: what are you in the mood for");
     await sleep(3500);
-    for (let i = 0; i < 4; i++) {
-      const a = lastAgent(t);
-      const types = a?.cards.map((c) => c.type) ?? [];
-      console.log("  menu cards:", types.join(","), "status", a?.status);
-      if (types.includes("menu") && a?.status !== "waiting_buyer") break;
-      const isDishes = types.includes("dishes");
-      t = await k.say(take, isDishes ? "The first one." : "Something warming with fish.");
-      take.event(isDishes ? "picked the first dish" : "answered: something warming with fish");
-      await sleep(3500);
-    }
+    t = await k.say(take, "Something warming with fish.");
+    take.event("three dishes offered");
+    await sleep(4000);
+    const line = lastAgent(t)?.line ?? "";
+    const first = /1\.\s*([^:]+):/.exec(line)?.[1]?.trim();
+    t = await k.say(take, first ? `The ${first.charAt(0).toLowerCase()}${first.slice(1)}.` : "The first one.");
+    console.log("  menu cards:", lastAgent(t)?.cards.map((c) => c.type).join(","));
+    await sleep(1500);
+    const sheet = k.page.locator("text=/You have|I'll order|Can't get/").first();
+    if (await sheet.count()) await reveal(sheet, { block: "start", offset: 120, ms: 1100 });
     take.event("You have / I'll order / Can't get, with reasons");
     await sleep(2500);
     await scrollBy(k.page, -350);
@@ -130,12 +132,13 @@ async function main() {
     await sleep(500);
     await tab(k.page, /^Catalogue$/, `/k/hotel-lumo/catalogue`);
     const panel = k.page.locator("#assistant");
-    const close = panel.getByRole("button", { name: /close/i });
+    const close = panel.getByRole("button", { name: /close/i }).first();
     if (await close.isVisible().catch(() => false)) await click(close);
+    await sleep(800);
     take.event("the Catalogue: the shop the kitchen already knows");
-    const search = k.page.getByRole("searchbox").first().or(k.page.locator("main input[type=search]").first());
+    const search = k.page.getByPlaceholder(/search/i).first();
     if (await search.count()) {
-      await type(search.first(), "lactose-free milk", { enter: true });
+      await type(search, "lactose-free milk", { enter: true });
       await take.wait(() => quiet(k.page));
       await sleep(1800);
       await scrollBy(k.page, 300);
@@ -195,9 +198,18 @@ async function main() {
     await sleep(800);
     const offer = page.getByText(/offer/i).first();
     if (await offer.count()) await reveal(offer, { block: "center" }).catch(() => undefined);
-    take.event("the wholesaler's selling agent: one signed offer with its reason");
-    await sleep(4500);
-    await fk.say(take, "Yes, add it.");
+    take.event("the kitchen's opening notes");
+    await sleep(2500);
+    const t1 = await fk.say(take, "Yes, switch it.", { label: "typed: yes to the watch's switch: an order is placed" });
+    const hasOffer = lastAgent(t1)?.cards.some((c) => c.type === "offer");
+    console.log("  offer shown:", hasOffer);
+    const card = k0(fk.page);
+    if (await card.count()) await reveal(card, { block: "center" }).catch(() => undefined);
+    take.event("the wholesaler's selling agent adds one signed offer with its reason, never a purchase");
+    await sleep(5500);
+    const oc = lastAgent(t1)?.cards.find((c) => c.type === "offer");
+    const short = oc?.type === "offer" ? oc.name.split(/\s+/).slice(0, 2).join(" ") : "";
+    if (hasOffer) await fk.say(take, `No receipt. And yes, add the ${short}.`);
     take.event("answered in words");
     await sleep(4000);
     await take.stop();
