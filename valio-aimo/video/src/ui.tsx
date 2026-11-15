@@ -158,11 +158,12 @@ export const Say = ({ children, style }: { children: ReactNode; style?: CSSPrope
 export const B = ({ children }: { children: ReactNode }) => <span style={{ fontWeight: 650 }}>{children}</span>;
 export const D = ({ children }: { children: ReactNode }) => <span style={{ color: C.petrol }}>{children}</span>;
 
-export const OptionRow = ({ title, price, sub, style }: { title: string; price: string; sub: string; style?: CSSProperties }) => (
+export const OptionRow = ({ title, price, sub, style }: { title: string; price: string; sub: ReactNode; style?: CSSProperties }) => (
   <div style={{ background: C.paper, borderRadius: "1em", padding: "0.72em 1em", display: "flex", gap: "1em", justifyContent: "space-between", boxShadow: "0 1px 2px rgb(0 54 70 / 0.05)", marginTop: "0.5em", ...style }}>
-    <div>
+    <div style={{ flex: 1, minWidth: 0 }}>
       <div style={{ fontSize: "0.96em", fontWeight: 500, lineHeight: 1.35 }}>{title}</div>
-      <div style={{ fontSize: "0.83em", color: C.inkSoft, marginTop: "0.15em" }}>{sub}</div>
+      {/* The small line never wraps; it may run on under the price, which sits on the first line only. */}
+      <div style={{ fontSize: "0.83em", color: C.inkSoft, marginTop: "0.15em", whiteSpace: "nowrap", width: 0, overflow: "visible" }}>{sub}</div>
     </div>
     <div style={{ fontSize: "0.96em", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{price}</div>
   </div>
