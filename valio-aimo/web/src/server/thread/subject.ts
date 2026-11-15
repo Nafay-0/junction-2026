@@ -64,3 +64,18 @@ export function subjectLine(s: Subject | undefined): string {
     return `TALKING ABOUT NOW: ${s.item}${s.amount ? `, ${s.amount.amount} ${s.amount.unit}` : ""}${s.day ? `, for ${s.day}` : ""}${s.placed ? " (ordered)" : ""}. A short follow-up changes it ("for Friday", "no, 200", "the organic one") or adds to the same order ("and oat drink too"): call order with the buyer's words; code applies them to this request. Never ask again for what the buyer already said.`;
   return `TALKING ABOUT NOW: the menu${s.dishes.length ? ` (${s.dishes.join(", ")})` : ""}${s.covers ? ` for ${s.covers} covers` : ", covers not given yet"}${s.day ? `, for ${s.day}` : ""}. A number of covers or portions sets its covers (buyer_reply menu:covers with the amount); a day moves it (menu:day).`;
 }
+
+/** Words that frame an amount or a day, not what is bought ("2 kg of … for Friday", "make it 5 litres please"). */
+const FRAME = /^(\d+([.,]\d+)?|of|for|the|a|an|on|by|to|at|and|please|thanks|i|we|need|want|order|get|make|it|them|some|more|just|only|instead|then|yes|no|ok|okay|l|ltr|litres?|liters?|kg|kilos?|kilograms?|g|grams?|dl|ml|cl|packs?|pcs|pieces?|boxes?|bottles?|cartons?|cases?|cans?|tomorrow|today|next|week|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun|ja|tilaa|tarvitsen|litraa|kiloa|kg:aa|pakkausta|kappaletta|kpl|laatikkoa|huomiseksi|huomenna|maanantaiksi|tiistaiksi|keskiviikoksi|torstaiksi|perjantaiksi|lauantaiksi|sunnuntaiksi|och|jag|vi|behöver|beställ|liter|kilo|förpackningar|st|lådor|till|imorgon|måndag|tisdag|onsdag|torsdag|fredag|lördag|söndag)$/i;
+
+/**
+ * Whether short words complete the request that waits for its amount or day ("5 litres", "for Friday"), or are a new
+ * request of their own ("2 kg of chicken breast for Friday" while "lactose-free whipping cream" waits for an amount):
+ * they complete it unless they name something to buy that the waiting request does not.
+ */
+export function completesIncomplete(waiting: string, said: string): boolean {
+  const fold = (t: string) => t.toLowerCase().normalize("NFC").replace(/[^\p{L}\p{N}\s.,-]/gu, " ");
+  const known = new Set(fold(waiting).split(/[\s-]+/).filter(Boolean));
+  const named = fold(said).split(/[\s-]+/).filter((w) => w && !FRAME.test(w) && !/^\d/.test(w) && w.length >= 3);
+  return !named.some((w) => !known.has(w) && !known.has(w.replace(/s$/, "")) && !known.has(`${w}s`));
+}

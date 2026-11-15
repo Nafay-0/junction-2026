@@ -16,7 +16,7 @@ import { TOOLS } from "@/server/mcp/tools";
 import { cardId, gateCard, orderCard } from "./cards";
 import { withFallback } from "./fallback";
 import { byLine, combineItems, orderFromWords, record, REPEAT_SCALED, repeatScaled, runAction, step, type ItemOutcome, type TurnRun } from "./pipeline";
-import { ADDITION, isShort, subjectLine, subjectOf, type Subject } from "./subject";
+import { ADDITION, completesIncomplete, isShort, subjectLine, subjectOf, type Subject } from "./subject";
 import type { Card, RecordsCard, ThreadAction } from "./types";
 import { earlierFor } from "./earlier";
 import { dishFacts, speakFacts } from "./speak";
@@ -370,7 +370,9 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
         let followUp = false;
         let addTo: Extract<Subject, { kind: "need" }> | undefined;
         if (subj && isShort(said) && !REPEAT_SCALED.test(said)) {
-          if (subj.kind === "incomplete") said = subj.usual && yesOrNo(said) === "yes" ? `${subj.words} ${subj.usual}` : `${subj.words} ${said}`;
+          // A new request of its own ("2 kg of chicken breast for Friday" while the cream waits for an amount) is read as
+          // itself, never glued onto the waiting one.
+          if (subj.kind === "incomplete" && completesIncomplete(subj.words, said)) said = subj.usual && yesOrNo(said) === "yes" ? `${subj.words} ${subj.usual}` : `${subj.words} ${said}`;
           else if (subj.kind === "need" && ADDITION.test(said)) addTo = subj;
           else if (subj.kind === "need") followUp = true;
         }

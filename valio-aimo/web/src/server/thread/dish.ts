@@ -135,12 +135,13 @@ async function ideasFor(run: TurnRun, words: string, lang: Lang, frame: { covers
   const st = stateOf(run);
   st.ideas = { ideasId: r.ideasId, words, ...frame, ideas: r.ideas.map((d) => ({ dishId: d.dishId, name: d.name, nameFi: d.nameFi, nameSv: d.nameSv, buyable: d.buyable })) };
   record(run, "dish_ideas", `${r.ideas.length} ideas, ${r.ideas.filter((d) => d.buyable).length} the kitchen can buy completely: ${r.ideas.map((d) => `${d.name}${d.buyable ? "" : ` (needs ${d.missing.map((m) => m.ingredient).join(", ")})`}`).join("; ")}.`, { ideasId: r.ideasId });
+  const whys = ideaReasons(r.ideas.slice(0, 4).map((d) => d.reason ?? ""));
   const lines = r.ideas.slice(0, 4).map((d, i) => {
     const groups = [...new Set(d.missing.map((m) => (m.group ? m.group.split(":")[0].toLowerCase() : m.ingredient.toLowerCase())))];
     const can = d.buyable
       ? { en: "your rules cover all of it", fi: "sääntönne kattavat kaiken", sv: "era regler täcker allt" }[lang]
       : { en: `needs ${groups.join(", ")}, which your rules don't cover`, fi: `tarvitsee: ${groups.join(", ")}, joita sääntönne eivät kata`, sv: `behöver ${groups.join(", ")}, som era regler inte omfattar` }[lang];
-    const why = d.reason ? shortReason(d.reason) : "";
+    const why = whys[i];
     return `${i + 1}. ${nameL(d, lang)}${why ? `: ${why.charAt(0).toLowerCase()}${why.slice(1)}` : ""} (${can}).`;
   });
   // Fewer than asked: said plainly, never a list of one that looks like three were meant.
@@ -221,4 +222,20 @@ export function menuPickAfter(turns: Turn[], turnId: string, words: string): Ext
   if (menu?.type !== "menu" || !menu.proposals.length) return undefined;
   const i = menuPickIn(menu.proposals.map((p) => [p.title, ...p.dishes]), words);
   return i !== undefined && menu.proposals[i] ? { type: "menu_choose", planId: menu.planId, proposalId: menu.proposals[i].proposalId } : undefined;
+}
+
+/**
+ * Each idea's short reason, and a reason already given to an earlier idea is not given again (the reasons came from
+ * one model answer and can be matched to the wrong dish: "Finnish meatballs …: frozen salmon"); that idea keeps its
+ * name and the rules note only.
+ */
+export function ideaReasons(reasons: string[]): string[] {
+  const seen = new Set<string>();
+  return reasons.map((r) => {
+    const why = r ? shortReason(r) : "";
+    const key = why.toLowerCase().replace(/^(uses|built from|made from)\s+/, "").trim();
+    if (!why || seen.has(key)) return "";
+    seen.add(key);
+    return why;
+  });
 }

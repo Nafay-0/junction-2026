@@ -86,3 +86,19 @@ describe("the pack-size check", () => {
     expect(guardWords(c, "en")).toBe("Red wine comes in several pack sizes. Shall I take 40 pcs of 0,22 L (8,8 L), or 40 pcs of 1,5 L (60 L)?");
   });
 });
+
+describe("an amount said in words", () => {
+  it("is the number, in three languages; small words are not amounts", async () => {
+    const { spelledAmount } = await import("./guard");
+    expect(spelledAmount("No, make it two hundred")).toBe(200);
+    expect(spelledAmount("five hundred and fifty litres")).toBe(550);
+    expect(spelledAmount("a thousand")).toBe(1000);
+    expect(spelledAmount("ei, kaksisataa")).toBe(200);
+    expect(spelledAmount("nej, tvåhundra liter")).toBe(200);
+    expect(spelledAmount("the first one")).toBeUndefined();
+    expect(spelledAmount("two packs")).toBeUndefined();
+  });
+  it("then answers the check by its figure when the figure is offered", () => {
+    expect(guardAnswerOf(tenfold, "no, one hundred (100 L)")?.action).toMatchObject({ choice: "use_100_L" });
+  });
+});
