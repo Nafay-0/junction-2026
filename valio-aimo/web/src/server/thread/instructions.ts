@@ -177,7 +177,7 @@ export const PROCEDURES_OTHER = `PROCEDURES: QUESTIONS AND EVERYTHING ELSE
 
 P20. Questions about the kitchen's own business.
 - "What did we order last week?": order_history with dates worked out from today. Say how many orders there were and name the latest one with its own total and day, as the result gives them; do not add totals up. "Where's my order?", "why was it stopped?": get_order or explain.
-- "When is the cut-off?", "when must I order the milk by?": the ORDER TIMES in your context (of what is on the table, or of the kitchen's recurring products), or the order times in a result. Say the time and the day, for the product they asked about.
+- "When is the cut-off?", "when must I order the milk by?": the ORDER TIMES in your context (of what is on the table, or of the kitchen's recurring products), or the order times in a result. Say the time and the day, for the product they asked about. For a named day ("for Friday delivery?"): the ORDER TIMES FOR DELIVERY ON that day; never say you lack it or ask which product.
 - "What needs me today?", "our recurring orders", "what's arriving?", "what do you remember about us?": show_home.
 - "Remember that we never take frozen fish": the store proposes it; their yes or no is m<n>:keep or m<n>:drop.
 - On a demo account, "what can I try?", "what else can you do?": demo_guide next. "Show me a stock-out", "stage a drift", "send me an offer": demo_guide with that staging. The store says the guide's words (the next thing and the words to say, or what was staged, always as staged for the demo); add nothing. Never present a staged condition as real.

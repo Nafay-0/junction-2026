@@ -86,7 +86,12 @@ export function guardWords(card: AnomalyCard, lang: Lang): string {
     // Amounts with a decimal comma, as every amount in the thread ("0,11 kg").
     const r = packReadings.slice(0, 3).map((x) => x.label.replace(/(\d)\.(\d)/g, "$1,$2").replace(/ = /, " (").replace(/$/, ")"));
     const or = { en: ", or ", fi: ", vai ", sv: ", eller " }[lang];
-    return { en: `The packs come in several sizes. Shall I take ${r.join(or)}?`, fi: `Pakkauksia on eri kokoisia. Otanko ${r.join(or)}?`, sv: `Förpackningarna finns i olika storlekar. Ska jag ta ${r.join(or)}?` }[lang];
+    // What comes in those sizes, from the check's own words ("40 pcs of red wine: packs come in …").
+    const what = /^\S+\s+\S+\s+of\s+([^:]+):/.exec(k.message)?.[1]?.trim();
+    const What = what ? what.charAt(0).toUpperCase() + what.slice(1) : "";
+    return what
+      ? { en: `${What} comes in several pack sizes. Shall I take ${r.join(or)}?`, fi: `${What}: pakkauksia on eri kokoisia. Otanko ${r.join(or)}?`, sv: `${What} finns i flera förpackningsstorlekar. Ska jag ta ${r.join(or)}?` }[lang]
+      : { en: `The packs come in several sizes. Shall I take ${r.join(or)}?`, fi: `Pakkauksia on eri kokoisia. Otanko ${r.join(or)}?`, sv: `Förpackningarna finns i olika storlekar. Ska jag ta ${r.join(or)}?` }[lang];
   }
   let reason = reasonOf(k, lang);
   const use = k.corrections.map((x) => /^use_([\d.]+)_(\w+)$/.exec(x.id)).find(Boolean);
@@ -151,6 +156,14 @@ export function guardAnswerOf(card: AnomalyCard, words: string): { action: Threa
     const unitSaid = use && (use[2] === "L" ? /\d\s*(l|litr|liter|litre)/i : use[2] === "kg" ? /\d\s*(kg|kilo)/i : /\d\s*(pcs|kpl|st|pieces?|packs?)/i).test(w);
     if (use && nums.includes(Number(use[1])) && (Number(use[1]) !== asked || unitSaid)) return { action: { type: "concern", requestId: card.requestId, key: k.key, choice: x.id } };
   }
+  // A day the kitchen cannot receive: "Shall I make it Fri 20 Nov?" (the last day offered). A yes takes that day; a
+  // weekday named ("Friday then", "deliver it on Tuesday instead") takes the day offered that falls on it.
+  const days = k.corrections.filter((x) => /^deliver_\d{4}-\d{2}-\d{2}$/.test(x.id));
+  if (days.length && !k.corrections.some((x) => /^use_/.test(x.id))) {
+    const named = days.find((x) => weekdayNamed(w, x.id.slice("deliver_".length)));
+    if (named) return { action: { type: "concern", requestId: card.requestId, key: k.key, choice: named.id } };
+    if (yesOrNo(w) === "yes") return { action: { type: "concern", requestId: card.requestId, key: k.key, choice: days.at(-1)!.id } };
+  }
   const yes = yesOrNo(w) === "yes" || (Number.isFinite(asked) && nums.includes(asked));
   // The pack readings offered, the first named as the one to take: a plain yes takes it.
   const readings = packReadingsOf(k);
@@ -162,4 +175,25 @@ export function guardAnswerOf(card: AnomalyCard, words: string): { action: Threa
   if (k.confirmable && (yes || reason)) return { action: { type: "concern", requestId: card.requestId, key: k.key, choice: "confirm" }, ...(reason ? { reason } : {}) };
   if (yesOrNo(w) === "no" && k.corrections.some((x) => /^use_/.test(x.id)) && nums.length === 0) return undefined; // "no" alone: the agent asks what instead
   return undefined;
+}
+
+const WEEKDAYS: Record<number, RegExp> = {
+  1: /\b(monday|mon|maanantai\w*|ma|måndag\w*)\b/i,
+  2: /\b(tuesday|tue|tues|tiistai\w*|ti|tisdag\w*)\b/i,
+  3: /\b(wednesday|wed|keskiviikko\w*|ke|onsdag\w*)\b/i,
+  4: /\b(thursday|thu|thurs|torstai\w*|to|torsdag\w*)\b/i,
+  5: /\b(friday|fri|perjantai\w*|pe|fredag\w*)\b/i,
+  6: /\b(saturday|sat|lauantai\w*|la|lördag\w*)\b/i,
+  0: /\b(sunday|sun|sunnuntai\w*|su|söndag\w*)\b/i,
+};
+
+/** The buyer's words name the weekday of this date ("Friday then", "perjantaina", "på fredag"). */
+function weekdayNamed(words: string, iso: string): boolean {
+  const wd = new Date(`${iso}T12:00:00Z`).getUTCDay();
+  // Two-letter Finnish day abbreviations only as a word of their own with a date ("pe 20.11."), never "to" in English.
+  const re = WEEKDAYS[wd];
+  const m = re.exec(words);
+  if (!m) return false;
+  if (m[0].length <= 2) return new RegExp(`\\b${m[0]}\\s+\\d{1,2}\\.`, "i").test(words);
+  return true;
 }

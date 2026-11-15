@@ -342,8 +342,11 @@ export function englishDays(text: string): string {
     const rest = all.slice(offset + m.length);
     const mark = /^(\}\}|\*\*)/.exec(rest)?.[0] ?? "";
     const after = rest.slice(mark.length);
-    // "… Fri 20.11. I can get …": the pronoun I does not start a sentence after a date.
-    const ends = dot === "." && (/^\s*$/.test(after) || (/^\s+[\p{Lu}"“]/u.test(after) && !/^\s+I\b(?!')/.test(after)));
+    // "For Fri 20.11. I can get …": the pronoun I does not start a sentence after a date that opens a short phrase; after
+    // a whole clause ("The only cut-off I have is for delivery on Monday 16.11. I don't have …") it does.
+    const before = all.slice(0, offset);
+    const clause = before.slice(Math.max(before.lastIndexOf(". "), before.lastIndexOf("? "), before.lastIndexOf("! "), -1) + 1).trim().split(/\s+/).filter(Boolean).length;
+    const ends = dot === "." && (/^\s*$/.test(after) || (/^\s+[\p{Lu}"“]/u.test(after) && (!/^\s+I\b(?!')/.test(after) || clause >= 4)));
     return `${w}${sp}${Number(d)} ${MON[Number(mo) - 1]}${ends && !mark ? "." : ""}${ends && mark ? "" : ""}`;
   }).replace(/(\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec))(\}\}|\*\*)(?=\s+[\p{Lu}"“]|\s*$)/gu, "$1$2.");
 }
@@ -351,4 +354,9 @@ export function englishDays(text: string): string {
 /** "For Friday 20 Nov. I can get …": a day said as a fragment of its own joins the sentence after it (English). */
 export function joinDayFragment(t: string): string {
   return t.replace(/(^|[.!?]\s+)((?:For|By|On|From)\s+\{\{[^}]+\}\}|(?:For|By|On|From)\s+(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s+\d{1,2}\s+[A-Z][a-z]{2})[.:]\s+([A-Z][a-z']*)/g, (_m, lead: string, day: string, next: string) => `${lead}${day}, ${/^(I|I'[a-z]+)$/.test(next) ? next : /^(The|There|It|We|You|Your|That|This|These|Those|Both|All|Each|Every)$/.test(next) ? next.toLowerCase() : next}`);
+}
+
+/** "…missed its cut-off, so for Monday 16 Nov.": a clause cut at its connective and a day ends where the whole clause ends. */
+export function dropDanglingDay(t: string): string {
+  return t.replace(/,\s+(so|and|but|which|because)(\s+(for|on|by|until))?(\s+(\{\{[^}]+\}\}|(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday) \d{1,2} [A-Z][a-z]{2}))?\s*\.(?=\s|$)/g, ".");
 }

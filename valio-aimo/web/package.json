@@ -40,6 +40,7 @@
     "scenarios:menu": "tsx scripts/menu-scenarios.ts",
     "dev:mandate": "tsx scripts/dev-mandate.ts",
     "e2e": "next build && playwright test",
+    "e2e:buyer": "tsx eval/thread/buyer-e2e.ts",
     "e2e:quick": "playwright test --project=chromium-phone --project=webkit-phone e2e/demo/approval.spec.ts e2e/demo/store.spec.ts",
     "e2e:demo": "playwright test --project=chromium-phone --project=webkit-phone --project=firefox-phone --project=chromium-desktop --project=webkit-desktop --project=firefox-desktop",
     "e2e:room": "playwright test --project=room",
