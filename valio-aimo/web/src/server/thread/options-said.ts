@@ -45,7 +45,8 @@ export function optionNames(options: Pick<OptionView, "title" | "lines">[], lang
       const [a, b] = o.lines.map((l) => short(l.name, lang).split(/\s+/).slice(0, 2).join(" "));
       return { en: `part ${a}, part ${b}`, fi: `osin ${a}, osin ${b}`, sv: `delvis ${a}, delvis ${b}` }[lang];
     }
-    const base = short(full[i], lang);
+    // "Eleplant plant power for": a name cut at four words never ends on a word that leads on.
+    const base = short(full[i], lang).replace(/(\s+(for|with|and|of|in|the|a|ja|och|med|för|från))+$/i, "");
     const stripped = base.replace(KIND, "");
     let n = stripped.split(/\s+/).length >= 2 ? stripped : base;
     // A bare brand names nothing: the next words of the product's name, up to three in all.

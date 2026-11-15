@@ -33,6 +33,7 @@ describe("options named so the buyer can tell them apart", () => {
     expect(milk[0]).toBe("Valio Arki Eila semi");
     expect(milk[1]).toMatch(/^Valio Arki Eila skimmed/);
     expect(optionNames([one("Valio whipping cream 38% 1 l lactose free"), one("Valio whipping cream 38% 2 l lactose free")], "en")).toEqual(["Valio whipping cream 1 l", "Valio whipping cream 2 l"]);
+    expect(optionNames([one("Eleplant plant power for cooking 2 kg"), one("Valio butter 500 g")], "en")[0]).toBe("Eleplant plant power");
   });
   it("in Finnish: the kind words in Finnish, and no double stop after the day", () => {
     const said = optionsSaid([opt("Valio Hyvä suomalainen Arki® Eila® semi skimmed milk drink 1 l lactose free", 2020, ["cheapest"]), opt("Valio Hyvä suomalainen Arki® Eila® skimmed milk drink 1 l lactose free", 3120, [])].map((o) => ({ ...o, deliveryDate: "2026-11-20" })), "fi")!;

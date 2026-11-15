@@ -253,10 +253,6 @@ export async function submitTurn(kitchen: Kitchen | string, input: unknown, opts
   const sw = visitorSwitch(thread.turns, opts.visitor, TEST_USERNAMES.has(slug), Date.now());
   if (sw) {
     e.store.addTurn(thread, { turnId: newId("trn"), role: "agent", at: now, replyTo: "visitor", status: "done", steps: [], cards: [], boundary: "visitor", ...(sw.note ? { note: true } : {}) });
-    // The model starts without the other visitor's exchange, and the questions it left open in plain code are theirs.
-    thread.messages = [];
-    const open = thread as unknown as Record<string, unknown>;
-    for (const k of ["leaveOut", "anotherDay", "spokenReadBack", "ways", "dish", "askInstead"]) delete open[k];
   }
   const buyer: BuyerTurn = { turnId: newId("trn"), role: "buyer", at: now, ...(opts.visitor ? { visitor: opts.visitor } : {}), door, via: body.via, ...(body.text ? { text: body.text } : {}), ...(body.action ? { action: body.action } : {}), ...(body.label ? { label: body.label } : {}), ...(body.clientTurnId ? { clientTurnId: body.clientTurnId } : {}) };
   const agentTurn: AgentTurn = { turnId: newId("trn"), role: "agent", at: now, replyTo: buyer.turnId, status: "working", steps: [], cards: [] };
@@ -268,7 +264,7 @@ export async function submitTurn(kitchen: Kitchen | string, input: unknown, opts
   // arrives from a phone) is said in it.
   if (body.lang) (thread as unknown as { lang?: string }).lang = body.lang;
   const t0 = Date.now();
-  const run: TurnRun = { rt: r.rt, store: e.store, thread, turnId: agentTurn.turnId, buyer, k: r.k, session: r.session, person: r.person, door, ...(body.lang ? { lang: body.lang } : {}), t0, facts: [], requests: new Set(), orders: new Map(), readings: new Map() };
+  const run: TurnRun = { rt: r.rt, store: e.store, thread, turnId: agentTurn.turnId, buyer, k: r.k, session: r.session, person: r.person, door, ...(body.lang ? { lang: body.lang } : {}), ...(sw ? { fresh: true } : {}), t0, facts: [], requests: new Set(), orders: new Map(), readings: new Map() };
   // The first visible sign of work, before any model call.
   const usage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, costUsd: 0, fallbacks: 0, toolCalls: 0 };
   const turnCtx = () => ({ threadId: thread.threadId, turnId: agentTurn.turnId, door, kitchen: slug, orgId: r.k.info.orgId, agentId: r.session.agentId, usage });
@@ -326,6 +322,13 @@ function worthReading(text: string): boolean {
 
 async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof step>): Promise<void> {
   const { store, thread } = run;
+  // Another visitor's turn ran before this one (it may have finished only now, queued ahead): this turn starts without
+  // that exchange, and what it left open in plain code is theirs.
+  if (run.fresh) {
+    thread.messages = [];
+    const open = thread as unknown as Record<string, unknown>;
+    for (const k of ["leaveOut", "anotherDay", "spokenReadBack", "ways", "dish", "askInstead"]) delete open[k];
+  }
   // An email address the buyer types never goes into the record (or the steps, or telemetry): masked.
   const masked = (body.text ?? "").replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, (m) => `${m[0]}•••@${m.split("@")[1]}`);
   record(run, "turn", body.action ? `The buyer tapped "${body.label ?? body.action.type}" (${run.door}).` : `The buyer said (${run.door}): "${masked.slice(0, 300)}"`, { via: body.via, ...(body.text ? { words: masked.slice(0, 2000) } : {}), ...(body.action ? { action: body.action } : {}) });
