@@ -16,6 +16,7 @@ import { clock } from "../../_ui/plain";
 import { Target } from "../../_ui/target";
 import { changeBefore, changeLines, signedRows } from "../../k/[kitchen]/rules-change";
 import { RULES_CHANGE_TEXT } from "./rules-change-screen.text";
+import { APPROVAL_TEXT } from "./approval-screen.text";
 import { isRole, signerL } from "../../_i18n/signer";
 
 const OPTIONS_FRESH_MS = 4 * 60_000;
@@ -41,6 +42,7 @@ function when(iso: string, lang: Lang): string {
 export function RulesChangeScreen({ approvalId }: { approvalId: string }) {
   const { lang } = useLang();
   const tx = RULES_CHANGE_TEXT[lang];
+  const ax = APPROVAL_TEXT[lang];
   const [view, setView] = useState<RulesChangeView | null>(null);
   const [loadError, setLoadError] = useState<ApiError | null>(null);
   const [phase, setPhase] = useState<"idle" | "passkey" | "sending">("idle");
@@ -141,8 +143,8 @@ export function RulesChangeScreen({ approvalId }: { approvalId: string }) {
   if (loadError && !view)
     return (
       <PhoneNotice
-        title={loadError.code === "approval_not_found" ? tx.noSuch : tx.failed}
-        body={loadError.message}
+        title={loadError.code === "approval_on_signer_phone" ? ax.scanAgain : loadError.code === "approval_not_found" ? ax.onApproverPhone : tx.failed}
+        body={loadError.code === "approval_on_signer_phone" ? ax.scanAgainBody.replace(/the order|tilauksen|beställningen/, (m) => ({ "the order": "the change", tilauksen: "muutoksen", beställningen: "ändringen" })[m] ?? m) : loadError.code === "approval_not_found" ? ax.onApproverPhoneBody : loadError.message}
         mark={
           <IconDisc tone="muted" size={56}>
             <CircleSlash size={26} />

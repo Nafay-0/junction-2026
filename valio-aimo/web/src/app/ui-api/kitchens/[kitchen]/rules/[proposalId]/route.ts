@@ -1,5 +1,6 @@
 import { DockError } from "@/core/errors";
 import { approvalLink } from "@/server/approval-links";
+import { accountOfOrg, phoneJoins } from "@/server/accounts/phone-join";
 import { readJson } from "@/server/http";
 import { noStore, portalRoute } from "@/server/kitchen-portal-http";
 import { getRuntime } from "@/server/runtime";
@@ -21,7 +22,8 @@ export async function GET(req: Request, ctx: RouteContext<"/ui-api/kitchens/[kit
     const signer = await rt.passkeys.store.findApprover(a.orgId, a.approval.approver.role);
     const devices = signer ? (await rt.passkeys.store.credentialsOf(signer.approverId)).length : 0;
     const link = await approvalLink(a.approval.approvalId, req);
-    return Response.json({ approvalId: a.approval.approvalId, approver: { name: a.approval.approver.name, role: a.approval.approver.role }, mode: devices ? "passkey" : "no_device", url: link.url, qrSvg: link.qrSvg }, noStore);
+    const join = phoneJoins(await accountOfOrg(rt, a.orgId));
+    return Response.json({ approvalId: a.approval.approvalId, approver: { name: a.approval.approver.name, role: a.approval.approver.role }, mode: devices ? "passkey" : "no_device", join, url: link.url, qrSvg: link.qrSvg }, noStore);
   });
 }
 

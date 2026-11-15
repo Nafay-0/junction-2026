@@ -27,7 +27,7 @@ import { THREAD_SIGNOFF_TEXT } from "./thread-signoff.text";
  * When the sign-off lands, the thread's event stream turns this card into the signed outcome.
  */
 
-type Qr = { mode: "passkey" | "no_device" | "enrol" | "demo_link"; url?: string; qrSvg?: string };
+type Qr = { mode: "passkey" | "no_device" | "enrol" | "demo_link"; url?: string; qrSvg?: string; /** A shared test kitchen or a fresh kitchen: every phone joins as one more device. */ join?: boolean };
 type Devices = { signer?: { name: string; role: string }; devices: unknown[] };
 type View = { state: string; signIn: "passkey" | "demo_tap" | "link_token"; viewerIsApprover: boolean };
 type Phase = "idle" | "registering" | "registered" | "signing" | "signed";
@@ -121,8 +121,10 @@ export function useSignOff(card: GateCardT) {
   async function toPhone() {
     if (phone) return setPhone(undefined);
     if (!approvalId) return;
-    // No device yet, from the kitchen's own account: the code adds the phone as the signer's device, then opens this sign-off.
-    if (own && signerMatches && !hasDevice) {
+    // From the kitchen's own account, with no device yet, or in a shared test kitchen or a fresh kitchen every time (each
+    // reviewer at the table scans with their own phone): the code adds the phone as one more signing device of the
+    // approver, then opens this sign-off. A real account's later devices are the approver's own business.
+    if (own && signerMatches && (!hasDevice || qr?.join)) {
       const r = await api<{ url: string; qrSvg: string }>("POST", "/ui-api/account/device/link", { next: `/approve/${approvalId}` });
       if (r.ok) setPhone({ url: r.data.url, qrSvg: r.data.qrSvg, adds: true });
       else setProblem(r.error.message);
