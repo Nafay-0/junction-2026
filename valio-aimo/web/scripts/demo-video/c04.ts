@@ -186,6 +186,7 @@ async function main() {
   }
   if (k && on("dish")) {
     const tries: [string, string][] = [
+      ...(process.env.DISH_ASK ? [[process.env.DISH_ASK, process.env.DISH_MOOD ?? ""] as [string, string]] : []),
       ["Plan a dish for 40 covers for Friday.", "Surprise me."],
       ["Something warming with fish for 40 people on Tuesday.", ""],
     ];
