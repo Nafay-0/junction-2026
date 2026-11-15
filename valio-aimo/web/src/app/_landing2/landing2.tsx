@@ -777,7 +777,7 @@ export function Landing2() {
         {/* The detailed demo closes the page: ten minutes, every screen, on YouTube (a link, never an embedded player) */}
         <Section id="demo" title={t.demo.title} line={t.demo.line}>
           <a href={t.demo.href} target="_blank" rel="noreferrer" className="l2-film l2-demo" aria-label={t.demo.label}>
-            <Image src="/landing/demo-poster.webp" width={1600} height={900} alt="" sizes="(min-width: 1024px) 832px, 92vw" unoptimized loading="lazy" />
+            <Image src="/landing/demo-poster.webp" width={1600} height={900} alt="" aria-hidden sizes="(min-width: 1024px) 832px, 92vw" unoptimized loading="lazy" />
             <span className="l2-demo-play" aria-hidden>
               <span className="l2-demo-badge">
                 <Play size={18} aria-hidden />

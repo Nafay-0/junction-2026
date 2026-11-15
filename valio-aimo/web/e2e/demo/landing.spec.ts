@@ -24,6 +24,7 @@ test("/ is the landing page: the ways in, no sideways scroll, every picture desc
   // Every section is there, in order.
   const h2 = await page.getByRole("heading", { level: 2 }).allTextContents();
   expect(h2).toEqual([
+    "The two-minute film",
     "Watch the agent work",
     "How it looks on your webshop",
     "Search that reads the requirement",
@@ -33,10 +34,14 @@ test("/ is the landing page: the ways in, no sideways scroll, every picture desc
     "One product, every screen",
     "Run it like a business",
     "Mail a business would send",
-    "The two-minute film",
+    "The detailed demo",
     "Honest about what it is",
     "Talk to the agent",
   ]);
+  // The film comes first, with the same film on YouTube; the detailed demo closes the page as a link, never a player.
+  await expect(page.locator("#film").getByRole("link", { name: "The film on YouTube" })).toHaveAttribute("href", "https://youtu.be/9ckYi6chCec");
+  await expect(page.locator("#demo").getByRole("link", { name: /detailed ten-minute demo/ })).toHaveAttribute("href", "https://youtu.be/JFcHMe_fxio");
+  await expect(page.locator("#demo iframe")).toHaveCount(0);
   // The agent inside the shop: the captured store on a desk and a phone, the three points, one way into the live shop,
   // and the synthetic-data note beside it.
   const shop = page.locator("#webshop");
@@ -72,7 +77,10 @@ test("/ is the landing page: the ways in, no sideways scroll, every picture desc
   await expect(page.getByRole("link", { name: "How we measured" }).first()).toHaveAttribute("href", "/docs/smart-search");
   const doc = await page.request.get("/docs/smart-search");
   expect(doc.status()).toBe(200);
-  expect(errors).toEqual([]);
+  // The film is now the first thing under the hero, so its player's controls are drawn at once. Playwright's WebKit
+  // build cannot load the system's own control icons and says so on the console ("Button failed to load, iconName =
+  // pip-placard …"): the test browser's own noise, not the page's.
+  expect(errors.filter((e) => !/Button failed to load, iconName = [a-z-]+-placard/.test(e))).toEqual([]);
 });
 
 test("the first version stays at /landing/classic", async ({ page }) => {
