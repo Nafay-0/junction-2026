@@ -66,7 +66,7 @@ export function optionNames(options: Pick<OptionView, "title" | "lines">[], lang
       const have = new Set(n.split(/\s+/).map(fold));
       if (round === 0) {
         const extra = mine.filter((w) => !have.has(fold(w)) && others.some((o) => !o.has(fold(w)))).slice(0, 2);
-        if (extra.length) return `${n} ${extra.join(" ").toLowerCase()}`;
+        if (extra.length) return `${n} ${extra.map((w) => (/^[A-ZÄÖÅ]{2,4}$/.test(w) ? w : w.toLowerCase())).join(" ")}`;
         // Nothing of its own to add: its short name as the catalogue has it ("Valio Arki Eila skimmed").
         const base = short(full[i], lang);
         return base.split(/\s+/).length >= 2 ? base : n;

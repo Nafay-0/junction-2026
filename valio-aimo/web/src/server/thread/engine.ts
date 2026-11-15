@@ -18,7 +18,7 @@ import { byLine, checkOpen, read, record, runAction, step, type ItemOutcome, typ
 import { earlierFor } from "./earlier";
 import { ThreadStore, type StoredThread } from "./store";
 import { subjectOf } from "./subject";
-import { optionNames, optionsSaid, orderAsk } from "./options-said";
+import { localName, optionNames, optionsSaid, orderAsk } from "./options-said";
 import { runWidget } from "./widgets";
 import { speakFacts } from "./speak";
 import { codeLeaks, dropDanglingDay, englishDays, insideOrTell, joinDayFragment, readable } from "./refusal";
@@ -974,7 +974,9 @@ type WaysForward = {
   turnId?: string;
 };
 const waysOf = (run: TurnRun) => run.thread as unknown as { ways?: WaysForward };
-const CLOSING_ASK = /(?:^|\s)[^.!?]*\?\s*$/;
+// The reply's closing question: its whole last sentence, never cut inside it ("…for {{Monday 16 Nov}}, shall I…?" is
+// one sentence: cutting at the last space before it left "…for {{Monday").
+export const CLOSING_ASK = /(?:^|(?<=[.!?]["”»)]?)\s+)(?:(?![.!?]["”»)]?\s).)*\?\s*$/s;
 
 /**
  * Nothing left out, swapped or moved silently (differences.ts): the plan shown or changed in this turn, against what it
@@ -1069,7 +1071,7 @@ async function tellRequestDifferences(run: TurnRun): Promise<void> {
       const one = o.lines.length === 1 ? o.lines[0] : undefined;
       const pack = one?.packSize && one.unit && one.packSize !== 1 ? { count: one.quantity, size: one.packSize, unit: one.unit } : undefined;
       // A stand-in by its short name, and not again when the reply already names it.
-      const subName = sub ? readable(shortName(o.title.replace(/[®™]/g, "").replace(/^(Valio )?Hyvä suomalainen /i, "$1").replace(/\s*\(.*\)$/, "")), lang) : "";
+      const subName = sub ? localName(readable(shortName(o.title.replace(/[®™]/g, "").replace(/^(Valio )?Hyvä suomalainen /i, "$1").replace(/\s*\(.*\)$/, "")), lang), lang) : "";
       const named = !!subName && (fold(line).includes(fold(subName.split(/\s+/).slice(0, 2).join(" "))) || /\b(instead|in place of|tilalla|tilalle|i stället)\b/i.test(line) || /\b(usual|tavallinen|tavallista|vanliga)\b[^.?!]*\b(can't|cannot|won't|ei ehdi|ei tule|hinner inte|kan inte)\b|\b(can't|cannot|won't|couldn't|could not)\b[^.?!]*\busual\b/i.test(line));
       const diffs = optionDifferences({ key: u.requestId!, name: u.item, ...(asked ? { amount: asked } : {}), ...(day ? { day } : {}), exact: !!u.deliverOn }, { delivered: o.delivered, deliveryDate: sheet?.type === "sheet" ? sheet.deliveryDate : o.deliveryDate, ...(sub && !named ? { substituteFor: sub.substituteFor, title: subName } : {}), ...(pack ? { pack } : {}) });
       fresh.push(...diffs.filter((d) => !told[keyOf(d)]));

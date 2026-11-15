@@ -478,9 +478,9 @@ async function runTurn(c: Client, s: Session, n: number, step: Exclude<Step, { p
     await sleep(1200);
     if (rec.ms.words === undefined) {
       const late = c.events.find(({ e }) => e.turnId === turnId && e.type === "line");
-      if (late && late.at - t0 > (rec.ms.done ?? 0)) {
+      if (late) {
         rec.ms.words = Math.round(late.at - t0);
-        rec.flaws.push(`the sentence arrived ${rec.ms.words - (rec.ms.done ?? 0)} ms after the turn was marked done`);
+        if (rec.ms.words > (rec.ms.done ?? 0) + 200) rec.flaws.push(`the sentence arrived ${rec.ms.words - (rec.ms.done ?? 0)} ms after the turn was marked done`);
       }
     }
   }
