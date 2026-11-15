@@ -525,7 +525,10 @@ function SignOffSlab({ card, thread, tap, total, what }: { card: GateCardT; thre
         {/* What the person OKs includes what it replaces: a substitute is said on the slab, in one line. */}
         {(() => {
           const sub = order?.lines.find((l) => l.substituteForName);
-          return sub ? <p className="mt-1 text-[0.86rem] leading-snug text-safety">{tx.inPlaceOf(sub.substituteForName!.replace(/[®™]/g, "").replace(/novobox/gi, f.lang === "fi" ? "laatikko" : "box"))}</p> : null;
+          // "Your usual" only when the ranking said the product it replaces is the kitchen's usual; otherwise just its name.
+          const ranked = thread.turns.flatMap((x) => (x.role === "agent" ? x.cards : [])).find((c) => c.type === "options" && c.requestId === card.requestId);
+          const usual = ranked?.type === "options" ? ranked.notes.some((n) => /^Your usual\b/.test(n)) : true;
+          return sub ? <p className="mt-1 text-[0.86rem] leading-snug text-safety">{(usual ? tx.inPlaceOf : tx.inPlaceOfPlain)(sub.substituteForName!.replace(/[®™]/g, "").replace(/novobox/gi, f.lang === "fi" ? "laatikko" : "box"))}</p> : null;
         })()}
         <p className="text-[0.86rem] leading-snug text-paper/55">
           {[order?.deliveryDate ? f.day(order.deliveryDate).replace(/\.$/, "") : "", why].filter(Boolean).join(". ")}

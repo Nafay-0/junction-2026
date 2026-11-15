@@ -1317,7 +1317,7 @@ function sayOptionsInWords(run: TurnRun): void {
   const card = here?.cards.find((c) => c.type === "options" && !c.chosen && !c.adjusted);
   if (card?.type !== "options" || !here) return;
   const line = here.line ?? "";
-  const said = optionsSaid(card.options, run.lang ?? "en", { standInSaid: /\b(in place of|instead|i'd send|tilalle|tilalla|i stället)\b/i.test(line) });
+  const said = optionsSaid(card.options, run.lang ?? "en", { standInSaid: /\b(in place of|instead|i'd send|tilalle|tilalla|i stället)\b/i.test(line), usual: card.notes.some((n) => /^Your usual\b/.test(n)) });
   if (!said) return;
   const parts = line.split(/(?<=[.!?])\s+/).filter(Boolean);
   const lang = run.lang ?? "en";
