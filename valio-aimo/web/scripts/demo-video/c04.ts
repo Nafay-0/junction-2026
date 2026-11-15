@@ -219,6 +219,7 @@ async function main() {
       await sleep(3000);
     }
     await take.stop();
+    console.log("  ON SCREEN (dish):", (await k.page.locator("main").innerText().catch(() => "")).replace(/\s+/g, " ").slice(-2500));
     deliver(take, { id: "c04-03-dish-flow", chapter: "c04", what: "Hotel Lumo, in the conversation: a dish for 40 covers on Friday; it asks the mood; 'Surprise me.' gives three ideas; 'The first one.' gives the dish card (You have / I'll order / Can't get) and its products" });
   }
 

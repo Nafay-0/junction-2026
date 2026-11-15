@@ -219,6 +219,8 @@ async function main() {
   await sleep(500);
   t = await threadOf(desk, base, KITCHEN);
   console.log("  after sign-off:", lastSaid(t));
+  console.log("  SIGNED SLAB:", (await page.locator("[data-slab]").last().innerText().catch(() => "")).replace(/\s+/g, " ").slice(0, 600));
+  console.log("  THREAD END:", (await page.locator("main").innerText().catch(() => "")).replace(/\s+/g, " ").slice(-1200));
   const last = page.getByText(/OK'd by|OK given/).last();
   if (await last.count()) await reveal(last, { block: "start", offset: 120 }).catch(() => undefined);
   take.event("the signed order in the thread");
@@ -241,6 +243,7 @@ async function main() {
     await scrollBy(page, 360, { at: { x: 640, y: 400 } });
     await sleep(2500);
   }
+  console.log("  ON SCREEN (thread end):", (await page.locator("body").innerText().catch(() => "")).replace(/\s+/g, " ").slice(-1800));
   await take.stop();
   deliver(take, { id: "c02-05-signed", chapter: "c02", what: "The signed order in the thread; 'See this order as the wholesaler sees it' opens its timeline on the operations side" });
 
