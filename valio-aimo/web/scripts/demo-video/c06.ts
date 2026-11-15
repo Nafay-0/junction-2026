@@ -122,7 +122,7 @@ async function main() {
     await rail(take, page, "/ops/trace", "Trace: replay any request step by step");
     await sleep(1200);
     const req = page.locator("main a[href^='/ops/trace/']").first();
-    if (await req.count()) {
+    if (await req.isVisible().catch(() => false)) {
       await click(req, { pause: 100 });
       await take.wait(() => quiet(page));
     }

@@ -190,6 +190,26 @@ async function main() {
     deliver(take, { id: "c07-03-aiven-agent", chapter: "c07", what: "Hosted: Send in an Aiven agent, one live run: an agent on Aiven Managed Agents connects over MCP, searches, quotes, tries to order and stops at the sign-off" });
   }
 
+  if (on("agentview")) {
+    // The run already started by the "agent" stage, as the page shows it afterwards (no new run is started here).
+    await go(page, "/ops/platform/agent");
+    await sleep(3000);
+    const take = new Take("c07-04");
+    await take.record(page);
+    take.event("the Aiven agent's run, as it arrived: its tool calls through the MCP door and the gate's answers");
+    const right = page.locator("main .grid > div").nth(1);
+    const box = await right.boundingBox().catch(() => null);
+    const at = box ? { x: box.x + box.width / 2, y: 420 } : { x: 950, y: 420 };
+    await moveTo(page, at.x, at.y);
+    await sleep(3000);
+    for (let i = 0; i < 8; i++) {
+      await scrollBy(page, 240, { at, ms: 900 });
+      await sleep(1400);
+    }
+    await take.stop();
+    deliver(take, { id: "c07-04-aiven-run", chapter: "c07", what: "Hosted: the one live Aiven Managed Agents run (started in c07-03), its steps through the MCP door, ending at the sign-off" });
+  }
+
   if (on("history")) {
     await go(page, "/ops/trace");
     const take = new Take("c06-09");

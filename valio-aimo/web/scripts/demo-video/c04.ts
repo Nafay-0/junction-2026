@@ -25,7 +25,7 @@ const k0 = (page: Page) => page.getByText(/wholesaler's agent suggests/i).last()
 
 async function main() {
   const browser = await launch();
-  const needLumo = ["watch", "backup", "menu", "memory", "tabs"].some(on);
+  const needLumo = ["watch", "backup", "menu", "memory", "tabs", "planner"].some(on);
   const k = needLumo ? await new Kitchen(browser, base, "hotel-lumo").open({ resetAccounts: true }) : undefined;
 
   if (k && on("watch")) {
@@ -168,6 +168,36 @@ async function main() {
     }
     await take.stop();
     deliver(take, { id: "c04-07-guide", chapter: "c04", what: "Hotel Lumo: the 'Try everything' guide, each capability with words to say, ticked as tried" });
+  }
+  if (k && on("planner")) {
+    const take = new Take("c04-03b");
+    await take.record(k.page);
+    await sleep(500);
+    await tab(k.page, /^Menu planner$/, `/k/hotel-lumo/menu`);
+    take.event("the Menu planner tab: say what you serve and for how many");
+    await sleep(2000);
+    await type(k.page.locator("main textarea").first(), "Salmon soup for 40 on Friday, lactose-free.", { cps: 20 });
+    await click(k.page.getByRole("button", { name: /^Plan it$/ }));
+    take.event("Plan it: the agent drafts ingredients and amounts; plain code finds products, checks rules, fixes the price");
+    await take.wait(async () => {
+      const end = Date.now() + 180_000;
+      await sleep(3000);
+      while (Date.now() < end) {
+        const busy = await k.page.locator('main [aria-busy="true"]').count();
+        const txt = await k.page.locator("main").innerText();
+        if (!busy && /€/.test(txt) && !/Planning|Drafting|Checking/i.test(txt.slice(-400))) break;
+        await sleep(800);
+      }
+      await sleep(1500);
+    });
+    take.event("the plan: what the kitchen has, what it will order, what it can't get, at fixed prices");
+    await sleep(2500);
+    for (let i = 0; i < 5; i++) {
+      await scrollBy(k.page, 320, { at: { x: 500, y: 400 } });
+      await sleep(1700);
+    }
+    await take.stop();
+    deliver(take, { id: "c04-03b-menu-planner", chapter: "c04", what: "Hotel Lumo: the Menu planner tab, 'Salmon soup for 40 on Friday, lactose-free': ingredients drafted, products found and checked by code, a fixed-price order ready" });
   }
   await k?.ctx.close();
 
