@@ -47,7 +47,7 @@ export type Desk = {
   /** What the door said in the last half minute: words heard back from the speaker are not the buyer's. */
   said: { text: string; at: number }[];
   /** Per agent turn: the milestones already said, the status last spoken, when the door last spoke about it. */
-  progress: Record<string, { keys: string[]; status?: string; at: number }>;
+  progress: Record<string, { keys: string[]; status?: string; at: number; /** The last words said about it. */ last?: string }>;
 };
 
 export type Call = {

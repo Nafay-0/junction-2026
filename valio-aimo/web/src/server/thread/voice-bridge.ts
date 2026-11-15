@@ -5,7 +5,7 @@ import { getRuntime } from "@/server/runtime";
 import { submitTurn, threadStore } from "./engine";
 import type { SpokenReadBack } from "./pipeline";
 import type { AgentTurn } from "./types";
-import { ackOf, milestoneOf, sayAmount, spokenOf, spokenReply, type Lang } from "./voice-spoken";
+import { ackOf, milestoneOf, sayAmount, spokenOf, spokenReply, stillOf, type Lang } from "./voice-spoken";
 
 /**
  * The voice call is the ears and the mouth of the kitchen's one conversation, nothing more (docs/doors.md).
@@ -55,8 +55,9 @@ export type Spoken = {
 
 /** How long the first answer to an utterance waits for the engine before it says what the engine is doing. */
 const ACK_MS = Number(process.env.DOCK_VOICE_ACK_MS ?? 250);
-/** Milestones of long work are said at most this often. */
-const PROGRESS_GAP_MS = 8_000;
+/** Long work is never silent: a new step is said once the last words are this old; the same step, after STILL_MS. */
+const PROGRESS_GAP_MS = 3_000;
+const STILL_MS = 7_000;
 
 const STOP = /^(please\s+)?(stop|never ?mind|cancel( that)?|forget (it|that)|hold on|lopeta|seis|anna olla|unohda (se|koko juttu)?|ei mitään|sluta|strunta i det|glöm det|avbryt)(\s+(please|now|thanks|kiitos|tack))?[.!]*$/i;
 const BYE = /^((ok(ay)?|thanks|thank you|kiitos|tack)[,.!]?\s+)?(bye|good ?bye|bye ?bye|that'?s all|that is all|hei hei|moi moi|heippa|näkemiin|kiitos,? siinä kaikki|hej då|det var allt)([,.!]?\s+(thanks|thank you|kiitos|tack))?[.!]*$/i;
@@ -93,6 +94,21 @@ export function isEcho(heard: string, said: { text: string; at: number }[], now 
     }
     return hit / h.length >= 0.8;
   });
+}
+
+const FILLER = new Set(["the", "a", "an", "and", "or", "so", "but", "uh", "um", "er", "erm", "hmm", "mm", "eh", "öö", "äh", "niin", "tota", "että", "och", "eller", "den", "det"]);
+
+/**
+ * Words too few to act on: no yes or no in them, and either three letters or fewer in all, or only filler words
+ * ("the", "um"). "Yes", "no", "ok", "joo", "ei", "ja" are answers, not fragments.
+ */
+export function isFragment(text: string): boolean {
+  const t = text.trim();
+  if (yesOrNo(t) !== "unclear") return false;
+  if (/\d/.test(t)) return false;
+  const ws = tokens(t);
+  const letters = t.replace(/[^\p{L}]/gu, "").length;
+  return letters <= 3 || ws.every((w) => FILLER.has(w));
 }
 
 /** Two hearings of the numbers in one utterance: the transcript and the voice model's rendering. */
@@ -154,6 +170,13 @@ export async function heardTurn(k: Kitchen | string, call: Call, h: Heard): Prom
     ledger("overlap_asked", `A yes heard while the door's question was still playing was not taken: "${text.slice(0, 80)}".`, call, { heard: text });
     return { state: "asked", say: ask, lang, why: "overlap" };
   }
+  // A fragment (a word cut off by talking over the agent, "The"): asked again, never acted on as an answer.
+  if (isFragment(text)) {
+    const ask = say3(lang, { en: `Sorry, I only caught "${text}". Could you say that again?`, fi: `Anteeksi, kuulin vain "${text}". Sanoisitko uudelleen?`, sv: `Förlåt, jag hörde bara "${text}". Kan du säga det igen?` });
+    said(call, ask);
+    ledger("fragment_asked", `Only a fragment was heard ("${text.slice(0, 20)}"): asked again, nothing sent.`, call, { heard: text });
+    return { state: "asked", say: ask, lang, why: "fragment" };
+  }
   const slug = await slugOf(k);
   if (BYE.test(text)) {
     const bye = say3(lang, { en: "Goodbye.", fi: "Hei hei.", sv: "Hej då." });
@@ -189,6 +212,7 @@ export async function heardTurn(k: Kitchen | string, call: Call, h: Heard): Prom
   ledger("heard", `The voice door heard the buyer and sent their words to the conversation: "${text.slice(0, 200)}".`, call, { step: "heard", heard: text, ...(h.modelWords ? { model: h.modelWords.slice(0, 500) } : {}), agentTurnId: reply.agentTurnId, threadId: reply.threadId });
   if (busy) {
     const next = say3(lang, { en: "I'll finish the one before first, then this.", fi: "Teen ensin edellisen loppuun, sitten tämän.", sv: "Jag gör klart det förra först, sedan det här." });
+    call.desk.progress[reply.agentTurnId] = { keys: [], at: Date.now(), last: next };
     said(call, next);
     return { state: "working", say: next, lang, agentTurnId: reply.agentTurnId };
   }
@@ -235,13 +259,15 @@ export async function nextSpoken(k: Kitchen | string, call: Call, agentTurnId: s
     }
     // Already said, and nothing more will come (a turn waiting for a sign-off is followed until it lands).
     if (a.status !== "working" && a.status === p.status && a.status !== "waiting_approver") return { state: "reply", say: "", lang, agentTurnId };
-    if (a.status === "working" && !muted && !first) {
-      const m = milestoneOf(a, new Set(p.keys), lang);
-      if (m && Date.now() - p.at >= PROGRESS_GAP_MS) {
-        p.keys.push(m.key);
+    // A turn still queued behind another (no step yet) says nothing of its own: the one working speaks.
+    if (a.status === "working" && !muted && !first && a.steps.length) {
+      const next = progressFor(a, p, Date.now(), lang);
+      if (next) {
+        p.keys.push(next.key);
         p.at = Date.now();
-        said(call, m.say);
-        return { state: "working", say: m.say, lang, agentTurnId };
+        p.last = next.say;
+        said(call, next.say);
+        return { state: "working", say: next.say, lang, agentTurnId };
       }
     }
     const left = until - Date.now();
@@ -252,6 +278,7 @@ export async function nextSpoken(k: Kitchen | string, call: Call, agentTurnId: s
         const m = milestoneOf(a, new Set(p.keys), lang);
         if (m) p.keys.push(m.key);
         p.at = Date.now();
+        p.last = ack;
         said(call, ack);
         return { state: "working", say: ack, lang, agentTurnId };
       }
@@ -270,6 +297,19 @@ export async function nextSpoken(k: Kitchen | string, call: Call, agentTurnId: s
       }
     });
   }
+}
+
+/**
+ * What to say about work still going, if anything: a new step once the last words are three seconds old; the same
+ * step gone on for seven seconds, once ("Still waiting for the wholesaler's live prices."); never the same words twice
+ * in a row; nothing for a turn still queued behind another.
+ */
+export function progressFor(a: AgentTurn, p: { keys: string[]; at: number; last?: string }, now: number, lang: Lang): { key: string; say: string } | undefined {
+  if (a.status !== "working" || !a.steps.length) return undefined;
+  const quiet = now - p.at;
+  const m = milestoneOf(a, new Set(p.keys), lang);
+  const next = m && quiet >= PROGRESS_GAP_MS ? m : quiet >= STILL_MS ? stillOf(a, new Set(p.keys), lang) : undefined;
+  return next && next.say !== p.last ? next : undefined;
 }
 
 /** The sign-off a turn waited for, decided: said once, from the gate card. */
