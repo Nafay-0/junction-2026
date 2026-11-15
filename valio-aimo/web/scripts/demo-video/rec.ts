@@ -115,6 +115,7 @@ type Frame = { t: number; file: string };
 class Recorder {
   frames: Frame[] = [];
   private cdp?: CDPSession;
+  private onFrame?: (f: { data: string; sessionId: number; metadata: { timestamp?: number } }) => Promise<void>;
   private n = 0;
   constructor(
     readonly page: Page,
@@ -127,13 +128,14 @@ class Recorder {
     this.cdp = await this.page.context().newCDPSession(this.page);
     const vp = this.page.viewportSize()!;
     const dpr = (await this.page.evaluate(() => window.devicePixelRatio)) || 1;
-    this.cdp.on("Page.screencastFrame", async (f: { data: string; sessionId: number; metadata: { timestamp?: number } }) => {
+    this.onFrame = async (f: { data: string; sessionId: number; metadata: { timestamp?: number } }) => {
       const t = f.metadata.timestamp ? f.metadata.timestamp * 1000 : Date.now();
       const file = path.join(this.dir, `${String(this.n++).padStart(6, "0")}.jpg`);
       fs.writeFileSync(file, Buffer.from(f.data, "base64"));
       this.frames.push({ t: t - this.take.t0, file });
       await this.cdp?.send("Page.screencastFrameAck", { sessionId: f.sessionId }).catch(() => undefined);
-    });
+    };
+    this.cdp.on("Page.screencastFrame", this.onFrame);
     await this.cdp.send("Page.startScreencast", {
       format: "jpeg",
       quality: 92,
@@ -144,7 +146,7 @@ class Recorder {
   }
   async stop() {
     await this.cdp?.send("Page.stopScreencast").catch(() => undefined);
-    this.cdp?.removeAllListeners("Page.screencastFrame");
+    if (this.onFrame) this.cdp?.off("Page.screencastFrame", this.onFrame);
   }
   /** A fresh frame now, so a still page still has its current look on record (the screencast only sends changes). */
   async still() {
