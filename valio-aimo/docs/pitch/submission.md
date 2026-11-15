@@ -127,7 +127,7 @@ of each use is in `partners/`.
 ## Pre-existing code and data (statement for the form)
 
 ```
-All application code in this repository was written during Junction 2026. The first application code was committed on Friday 13 November at 21:41 EET, after hacking started at 19:30; before that the repository held only setup files and research notes about the event and the challenges. Two of us won Valio Aimo's challenge at Junction 2025; no code from that project was reused, and none of it is in this repository.
+All application code in this repository was written from scratch during Junction 2026. The first application code was committed on Friday 13 November at 21:41 EET, after hacking started at 19:30; before that the repository held only setup files and research notes about the event and the challenges.
 
 We use open-source libraries and frameworks (Next.js, React, the Model Context Protocol SDKs, jose, SimpleWebAuthn, Vercel AI SDK, kafkajs, pg, the OpenSearch and Valkey clients, Remotion, Playwright, Vitest and others, listed in valio-aimo/web/package.json and valio-aimo/examples/runtimes). The product data, mock price and availability API, delivery-reliability and carbon files are Valio Aimo's synthetic challenge materials; they are not committed to the repository. Kitchens, people and order histories in the demo are made up.
 ```
