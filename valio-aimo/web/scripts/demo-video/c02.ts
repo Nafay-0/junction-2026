@@ -13,6 +13,15 @@ import { click, context, deliver, hover, launch, opt, passkey, pointerAt, quiet,
 
 const base = opt("--url", "http://localhost:5142")!;
 const KITCHEN = "hotel-lumo";
+/** The list of products under the latest reply, opened if it is closed, held on screen with its marks. */
+async function listOpen(page: Page, take: Take) {
+  const toggle = page.getByText(/^(Show|Hide) the list/).last();
+  if (!(await toggle.count())) return;
+  if (/^Show/.test((await toggle.innerText().catch(() => "")).trim())) await click(toggle);
+  await reveal(toggle, { block: "start", offset: 140, ms: 900 }).catch(() => undefined);
+  take.event("the open list: each product with its delivery record and carbon marks, a summary under the total");
+  await sleep(4500);
+}
 const toBottom = (page: Page) => scrollBy(page, 4000, { ms: 1100, at: { x: 640, y: 360 } });
 const REQUEST = "I need 1,000 litres of lactose-free milk by Monday. Find an option that meets our requirements based on price and availability.";
 
@@ -118,6 +127,7 @@ async function main() {
   await sleep(1500);
   if (await slab.count()) await hover(slab.getByText(/1\s?010|€/).first()).catch(() => undefined);
   await sleep(2500);
+  await listOpen(page, take);
   await take.stop();
   deliver(take, { id: "c02-03-gate", chapter: "c02", what: "'the cheapest one': a fixed-price quote, then the gate stops the order over the 500 € limit; the dark sign-off slab" });
 
@@ -225,8 +235,16 @@ async function main() {
   if (await last.count()) await reveal(last, { block: "start", offset: 120 }).catch(() => undefined);
   take.event("the signed order in the thread");
   await sleep(2500);
-  await scrollBy(page, 260);
-  await sleep(1800);
+  const team = page.getByText(/wholesaler's team/).last();
+  if (await team.count()) {
+    await reveal(team, { block: "center", ms: 900 }).catch(() => undefined);
+    await hover(team).catch(() => undefined);
+    take.event("placed at the fixed price; now with the wholesaler's team to confirm for delivery (the state under the order)");
+    await sleep(4500);
+  } else {
+    await scrollBy(page, 260);
+    await sleep(1800);
+  }
   const wholesale = page.getByRole("link", { name: /See this order as the wholesaler sees it/ }).last();
   if (await wholesale.count()) {
     await reveal(wholesale);

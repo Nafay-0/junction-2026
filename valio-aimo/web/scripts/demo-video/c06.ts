@@ -6,7 +6,7 @@
  *   npx tsx scripts/demo-video/c06.ts --url http://localhost:5142 [--only live,orders,agents,trust,trace,time,setup,control]
  */
 import type { Page } from "@playwright/test";
-import { signInOps } from "./kit";
+import { signInKitchen, signInOps } from "./kit";
 import { click, context, deliver, hover, launch, moveTo, opt, pointerAt, quiet, reveal, scrollBy, sleep, Take } from "./rec";
 
 const base = opt("--url", "http://localhost:5142")!;
@@ -74,23 +74,29 @@ async function main() {
         await reveal(confirm, { block: "center" });
         await sleep(900);
         await click(confirm);
+        await take.wait(() => page.locator('[data-fulfilment="confirmed"]').first().waitFor({ timeout: 30_000 }).catch(() => undefined));
+        const done = page.locator('[data-fulfilment="confirmed"]').first();
+        if (await done.count()) await reveal(done, { block: "center" }).catch(() => undefined);
+        take.event("staff confirm it for delivery: 'Confirmed for delivery by … The kitchen was told.'");
+        await sleep(3500);
+        // back to the kitchen's conversation: the line about the confirmation
+        await signInKitchen(ctx, base, "hotel-lumo");
+        await page.goto("/k/hotel-lumo");
         await take.wait(() => quiet(page));
-        await sleep(600);
-        // a second step (a confirm dialog) if the page asks for one
-        const again = page.getByRole("button", { name: /^(Confirm|Yes, confirm)/i }).last();
-        if (await again.isVisible().catch(() => false)) {
-          await click(again);
-          await take.wait(() => quiet(page));
+        await sleep(1200);
+        await scrollBy(page, 6000, { ms: 1200, at: { x: 640, y: 360 } });
+        const line = page.getByText(/wholesaler's team confirmed/i).last();
+        if (await line.count()) {
+          await reveal(line, { block: "center" }).catch(() => undefined);
+          await hover(line).catch(() => undefined);
         }
-        take.event("staff confirm it for delivery; the timeline gains the step");
-        await sleep(2500);
-        await browse(page, 2, 300, 1500);
+        take.event("in the kitchen's conversation: the wholesaler's team confirmed the order");
+        console.log("  KITCHEN LINE:", (await line.innerText().catch(() => "(not found)")).replace(/\s+/g, " ").slice(0, 400));
+        await sleep(4000);
       }
     }
-    await rail(take, page, "/ops/control#waiting", "Waiting for a person: sign-offs not given yet");
-    await sleep(2500);
     await take.stop();
-    deliver(take, { id: "c06-02-orders", chapter: "c06", what: "Orders: the list, one order's full timeline; then Waiting for a person" });
+    deliver(take, { id: "c06-02-orders", chapter: "c06", what: "Orders: the order just placed in c02, its full timeline; staff press Confirm for delivery; back in the kitchen's conversation, the line that the wholesaler's team confirmed it" });
   }
 
   if (on("agents")) {
