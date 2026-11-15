@@ -193,5 +193,50 @@
    "typed: Yes, line it up.": 14.46,
    "the backup lined up; nothing extra bought": 20.41
   }
+ },
+ "c04-03-menu": {
+  "seconds": 65.167,
+  "size": "1920x1080@30/1",
+  "chapter": "c04",
+  "what": "Hotel Lumo: the menu planner, a dish for 40 covers on Friday: it asks, offers dishes, then sorts what the kitchen has, what it will order and what it can't get",
+  "events": {
+   "typed: Plan a dish for 40 covers for Friday.": 0.72,
+   "the menu planner asks what it needs": 7.94,
+   "typed: Something warming with fish.": 11.52,
+   "answered: something warming with fish": 19.46,
+   "typed: The first one.": 34.29,
+   "picked the first dish": 41.2,
+   "You have / I'll order / Can't get, with reasons": 56.15
+  }
+ },
+ "c04-04-memory": {
+  "seconds": 23.5,
+  "size": "1920x1080@30/1",
+  "chapter": "c04",
+  "what": "Hotel Lumo: 'What do you remember about us?' and the memory on Your rules, where an item can be changed or forgotten",
+  "events": {
+   "typed: What do you remember about us?": 0.68,
+   "what the agent remembers, each with where it came from": 8.95,
+   "Your rules: the memory, change or forget any item": 16.55
+  }
+ },
+ "c04-05-orders": {
+  "seconds": 16.4,
+  "size": "1920x1080@30/1",
+  "chapter": "c04",
+  "what": "Hotel Lumo: the Orders tab and one order opened (its timeline, steps and signed receipt)",
+  "events": {
+   "the Orders tab": 3.52,
+   "one order: its steps and the wholesaler's signed receipt": 7.36
+  }
+ },
+ "c06-01-live": {
+  "seconds": 11.367,
+  "size": "1920x1080@30/1",
+  "chapter": "c06",
+  "what": "Operations, Live: every agent at the door (sample activity marked as such)",
+  "events": {
+   "Live: every agent at the door, as it happens": 1.05
+  }
  }
 }

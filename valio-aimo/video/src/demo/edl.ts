@@ -100,12 +100,24 @@ export const EDL: Record<string, () => ChapterEdit> = {
 
   c04: () => ({
     shots: [
-      ph(start("c04"), "The menu planner: three dishes, then “You have / I'll order / Can't get”", "Menu planner"),
+      ...(has("c04-03-menu")
+        ? ([
+            { clip: "c04-03-menu", at: start("c04"), label: "Hotel Lumo kitchen · menu planner", url: `${K}/k`, from: 0.3, sync: [[ev("c04-03-menu", "the menu planner asks"), cue("c04-1", "asks what", -0.3)]] },
+            { clip: "c04-03-menu", at: cue("c04-1", "and offers", -0.4), label: "Hotel Lumo kitchen · menu planner", url: `${K}/k`, from: 17.0, sync: [[ev("c04-03-menu", "answered"), cue("c04-1", "offers three", 0)]] },
+            { clip: "c04-03-menu", at: cue("c04-1", "Pick one", -0.4), label: "Hotel Lumo kitchen · menu planner", url: `${K}/k`, from: 33.6, sync: [[ev("c04-03-menu", "typed: The first"), cue("c04-1", "Pick one", -0.1)]] },
+            { clip: "c04-03-menu", at: cue("c04-1", "and it sorts", -0.3), label: "Hotel Lumo kitchen · menu planner", url: `${K}/k`, from: 53.8, sync: [[ev("c04-03-menu", "You have"), cue("c04-1", "you have", -0.3)]], zoom: [{ at: cue("c04-1", "you have", 0.3), s: 1.1, x: 0.4, y: 0.55 }] },
+          ] as Shot[])
+        : [ph(start("c04"), "The menu planner: three dishes, then “You have / I'll order / Can't get”", "Menu planner")]),
       clip("c04-01-watch", { at: partAt("c04-2", -0.2), label: "Hotel Lumo kitchen · the watch", url: `${K}/k`, until: 4.6, sync: has("c04-01-watch") ? [[ev("c04-01-watch", "the watch's opening"), cue("c04-2", "Here's its", -0.3)]] : undefined, zoom: [{ at: cue("c04-2", "Here's its", 0.2), s: 1.12, x: 0.35, y: 0.3 }] }, "The watch's opening note"),
       clip("c04-02-backup", { at: cue("c04-2", "And when", -0.3), label: "Hotel Lumo kitchen · a backup", url: `${K}/k`, from: 7.5, sync: has("c04-02-backup") ? [[ev("c04-02-backup", "a poor delivery"), cue("c04-2", "it warns you", -0.4)], [ev("c04-02-backup", "the backup lined up"), cue("c04-2", "Nothing extra", -0.2)]] : undefined }, "A backup for a product with a poor delivery record"),
       ph(partAt("c04-3", -0.2), "An offer card from the selling agent", "Selling agent"),
-      ph(partAt("c04-4", -0.2), "Your rules, with the memory", "Your rules"),
-      ph(partAt("c04-5", -0.2), "The Orders tab; the “Try everything” guide", "Orders"),
+      ...(has("c04-04-memory")
+        ? ([
+            { clip: "c04-04-memory", at: partAt("c04-4", -0.2), label: "Hotel Lumo kitchen · memory", url: `${K}/k`, from: 7.4, sync: [[ev("c04-04-memory", "what the agent remembers"), partAt("c04-4", 0.4)]] },
+            { clip: "c04-04-memory", at: cue("c04-4", "Your rules shows", -0.4), label: "Hotel Lumo kitchen · Your rules", url: `${K}/k`, from: 15.6, sync: [[ev("c04-04-memory", "Your rules"), cue("c04-4", "Your rules shows", 0)]] },
+          ] as Shot[])
+        : [ph(partAt("c04-4", -0.2), "Your rules, with the memory", "Your rules")]),
+      clip("c04-05-orders", { at: partAt("c04-5", -0.2), label: "Hotel Lumo kitchen · Orders", url: `${K}/k`, from: 1.0, sync: has("c04-05-orders") ? [[ev("c04-05-orders", "the Orders tab"), cue("c04-5", "Orders", -0.3)]] : undefined }, "The Orders tab; the “Try everything” guide"),
       ph(partAt("c04-6", -0.2), "The Catalogue with the agent panel opening over it (Ctrl K)", "Catalogue · Ctrl K"),
     ],
     callouts: [{ at: cue("c04-3", "at most two"), text: "At most two offers a week; never an order", pos: "tr", dur: 120 }],
@@ -118,7 +130,7 @@ export const EDL: Record<string, () => ChapterEdit> = {
 
   c06: () => ({
     shots: [
-      ph(start("c06"), "/ops: Live", "Operations · Today"),
+      clip("c06-01-live", { at: start("c06"), label: "Operations · Live", url: `${K}/ops` }, "/ops: Live"),
       ph(cue("c06-2", "Orders lists"), "Orders: open a timeline", "Operations · Orders"),
       ph(partAt("c06-3", -0.2), "Agents: the scorecard, Conversations, Selling agent, Kitchen watch", "Operations · Agents"),
       ph(partAt("c06-4", -0.2), "Safeguards; Audit, verified", "Operations · Trust"),
