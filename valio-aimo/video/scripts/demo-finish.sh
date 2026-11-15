@@ -19,7 +19,7 @@ mlra=$(echo $stats | python3 -c 'import json,sys;print(json.load(sys.stdin)["inp
 mth=$(echo $stats | python3 -c 'import json,sys;print(json.load(sys.stdin)["input_thresh"])')
 off=$(echo $stats | python3 -c 'import json,sys;print(json.load(sys.stdin)["target_offset"])')
 ffmpeg -y -hide_banner -loglevel error -i "$raw" -c:v copy \
-  -af "loudnorm=I=-16:TP=-1.5:LRA=11:measured_I=$mi:measured_TP=$mtp:measured_LRA=$mlra:measured_thresh=$mth:offset=$off:linear=true,aresample=48000" \
+  -af "loudnorm=I=-16:TP=-1.5:LRA=11:measured_I=${mi}:measured_TP=${mtp}:measured_LRA=${mlra}:measured_thresh=${mth}:offset=${off}:linear=true,aresample=48000" \
   -c:a aac -b:a 256k -movflags +faststart "$dst/aimopilot-demo-10min.mp4"
 
 # 2. The small copy: two passes at a bitrate that lands near 55 MB.

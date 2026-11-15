@@ -5,7 +5,7 @@ import { CalloutView, ChapterCard, Corner, EndCard, Ground, Label, OVER, ShotVie
 import { CHAPTERS, END_CARD, PARTS, SPEECH, TOTAL } from "./timeline";
 
 /** The bed sits about 14 dB under the voice while he speaks (the clips are levelled to -17 LUFS, the bed is about -14) and lifts between lines. */
-const UNDER = 0.14;
+const UNDER = 0.17;
 const BETWEEN = 0.27;
 const RAMP = 14;
 const BED: number[] = (() => {

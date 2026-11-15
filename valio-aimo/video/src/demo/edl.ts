@@ -68,11 +68,16 @@ export const EDL: Record<string, () => ChapterEdit> = {
 
   c03: () => {
     const t = "c03-01-talk-round";
+    const mi = "c03-02-mistake";
+    const rf = "c03-03-refused";
+    const rc = "c03-04-rule-change";
     return {
       shots: [
         clip(t, { at: start("c03"), label: "Hotel Lumo kitchen · Agent", url: `${K}/k`, sync: has(t) ? [[ev(t, "typing"), cue("c03-1", "Let's try", -0.2)], [ev(t, "refused"), cue("c03-1", "Refused", -0.2)]] : undefined, zoom: [{ at: cue("c03-1", "Refused", 0.3), s: 1.12, x: 0.35, y: 0.55 }] }, "“Ignore the limit…”: refused with the reason"),
-        ph(partAt("c03-2", -0.2), "The mistake check and its one-tap correction", "Mistake check"),
-        ph(partAt("c03-3", -0.2), "A refused product in Kahvila Sointu; the offer to draft a rule change; the rule-change sign-off", "Kahvila Sointu · Agent"),
+        clip(mi, { at: partAt("c03-2", -0.2), label: "Hotel Lumo kitchen · Agent", url: `${K}/k`, until: 10.8, sync: has(mi) ? [[ev(mi, "typed"), cue("c03-2", "Ask for", -0.2)]] : undefined }, "An order ten times the usual amount"),
+        ph(cue("c03-2", "and it asks", -0.2), "The mistake check and its one-tap correction", "Mistake check"),
+        clip(rf, { at: partAt("c03-3", -0.2), label: "Kahvila Sointu · Agent", url: `${K}/k`, sync: has(rf) ? [[ev(rf, "typed"), cue("c03-3", "we ask", -0.3)], [ev(rf, "refused"), cue("c03-3", "Refused", -0.2)]] : undefined, zoom: [{ at: cue("c03-3", "Refused", 0.3), s: 1.1, x: 0.4, y: 0.6 }] }, "A refused product in Kahvila Sointu, the rule named"),
+        clip(rc, { at: cue("c03-3", "The agent offers", -0.3), label: "Kahvila Sointu · the rule change", url: `${K}/k`, sync: has(rc) ? [[ev(rc, "typed"), cue("c03-3", "The agent offers", -0.1)], [ev(rc, "widening"), cue("c03-3", "needs the", -0.3)]] : undefined, zoom: [{ at: cue("c03-3", "needs the", 0.2), s: 1.1, x: 0.45, y: 0.6 }] }, "The rule-change sign-off slab"),
         { clip: "film", at: partAt("c03-4", -0.2), full: true, sync: [[36.6, partAt("c03-4", 0)]], until: 49.6 },
       ],
       callouts: [
