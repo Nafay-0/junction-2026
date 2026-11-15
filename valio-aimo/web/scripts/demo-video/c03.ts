@@ -5,7 +5,6 @@
  *
  *   npx tsx scripts/demo-video/c03.ts --url http://localhost:5142 [--only mistake,refused]
  */
-import { resetTestAccounts } from "./kit";
 import { click, deliver, hover, launch, opt, reveal, sleep, Take } from "./rec";
 import { Kitchen } from "./talk";
 
@@ -17,10 +16,7 @@ async function main() {
   const browser = await launch();
 
   if (on("mistake")) {
-    const k = await new Kitchen(browser, base, "hotel-lumo").open();
-    await resetTestAccounts(k.ctx, base);
-    await k.page.reload();
-    await sleep(2500);
+    const k = await new Kitchen(browser, base, "hotel-lumo").open({ resetAccounts: true });
     const take = new Take("c03-02");
     await take.record(k.page);
     await sleep(800);
@@ -34,7 +30,7 @@ async function main() {
     console.log("  options:", labels.join(" | "));
     const fix = labels.find((l) => /\b(4\d0|420)\b|usual|meant|instead/i.test(l) && !/right/i.test(l)) ?? labels.find((l) => !/right|yes/i.test(l));
     if (fix) {
-      const b = k.page.getByRole("button", { name: fix }).last();
+      const b = k.page.getByText(fix, { exact: true }).last();
       if (await b.count()) {
         await hover(b);
         await sleep(900);
