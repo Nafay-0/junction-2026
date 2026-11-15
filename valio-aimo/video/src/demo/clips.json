@@ -60,6 +60,16 @@
    "Your rules: what the agent may do, who signs, what it remembers": 2.24
   }
  },
+ "c01-06-fresh": {
+  "seconds": 9.033,
+  "size": "1920x1080@30/1",
+  "chapter": "c01",
+  "what": "'Start a fresh kitchen': one click, the agent's opening for a kitchen with no rules and an empty memory",
+  "events": {
+   "Start a fresh kitchen: one click": 2.27,
+   "the fresh kitchen's opening: no rules, empty memory": 3.08
+  }
+ },
  "c02-01-request": {
   "seconds": 21.533,
   "size": "1920x1080@30/1",
@@ -128,13 +138,15 @@
   }
  },
  "c03-02-mistake": {
-  "seconds": 15.167,
+  "seconds": 24.2,
   "size": "1920x1080@30/1",
   "chapter": "c03",
   "what": "Hotel Lumo: an order ten times the usual amount; the agent stops and asks before ordering; one tap corrects it",
   "events": {
-   "typed: an order ten times the usual amount": 0.89,
-   "the mistake check: it asks before ordering anything": 11.95
+   "typed: an order ten times the usual amount": 0.86,
+   "the mistake check: it asks before ordering anything": 11.75,
+   "one tap: Make it 420 L": 17.35,
+   "corrected amount carried on": 20.69
   }
  },
  "c03-03-refused": {
@@ -157,6 +169,29 @@
    "the change drafted: meat and fish added; needs the owner's passkey": 7.37,
    "typed: yes, send it to the owner": 10.88,
    "widening the rules waits for the approver's passkey: the rule-change sign-off": 20.5
+  }
+ },
+ "c04-01-watch": {
+  "seconds": 22.867,
+  "size": "1920x1080@30/1",
+  "chapter": "c04",
+  "what": "Hotel Lumo: the watch's opening note (Monday's milk can't come, a switch proposed); asked about this week's deliveries, it lists what can't come with substitutes",
+  "events": {
+   "the watch's opening note: Monday's milk can't come; it proposes a switch": 1.35,
+   "typed: Anything I should know about this week's deliveries?": 4.87,
+   "the watch answers: what can't come, with ranked substitutes": 14.46
+  }
+ },
+ "c04-02-backup": {
+  "seconds": 24.4,
+  "size": "1920x1080@30/1",
+  "chapter": "c04",
+  "what": "Hotel Lumo: rice pies with a poor delivery record; the agent offers a backup in advance and lines it up when asked",
+  "events": {
+   "typed: Order 16.2 kg of Vaasan Rye rice pie 90x90g for Tuesday.": 0.73,
+   "a poor delivery record: it offers a backup in advance": 9.94,
+   "typed: Yes, line it up.": 14.46,
+   "the backup lined up; nothing extra bought": 20.41
   }
  }
 }

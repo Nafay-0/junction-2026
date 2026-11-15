@@ -28,6 +28,12 @@ export const EDL: Record<string, () => ChapterEdit> = {
     return {
       shots: [
         clip(w, { at: start("c01"), label: "The door: three ways in", url: `${K}/k`, sync: has(w) ? [[ev(w, "/k"), cue("c01-1", "There are", -0.2)], [ev(w, "way 1"), cue("c01-1", "First", -0.1)], [ev(w, "way 2"), cue("c01-2", "Second", -0.1)], [ev(w, "way 3"), cue("c01-3", "Third", -0.1)]] : undefined, zoom: has(w) ? [{ at: cue("c01-2", "Hotel Lumo", -0.3), s: 1.1, x: 0.5, y: 0.6 }, { at: partAt("c01-2", 0, true), s: 1, x: 0.5, y: 0.6 }] : undefined }, "/k: the three ways in"),
+        ...(has("c01-06-fresh")
+          ? [
+              { clip: "c01-06-fresh", at: cue("c01-1", "One click", -1.2), label: "A fresh kitchen", url: `${K}/k`, sync: [[ev("c01-06-fresh", "Start a fresh"), cue("c01-1", "One click", 0)], [ev("c01-06-fresh", "the fresh kitchen's"), cue("c01-1", "No rules", -0.2)]] as [number, number][] },
+              ...(has(w) ? [{ clip: w, at: partAt("c01-2", -0.3), label: "The door: three ways in", url: `${K}/k`, from: ev(w, "way 2") - 1.2, sync: [[ev(w, "way 2"), cue("c01-2", "Second", -0.1)], [ev(w, "way 3"), cue("c01-3", "Third", -0.1)]] as [number, number][], zoom: [{ at: cue("c01-2", "Hotel Lumo", -0.3), s: 1.1, x: 0.5, y: 0.6 }, { at: partAt("c01-2", 0, true), s: 1, x: 0.5, y: 0.6 }] }] : []),
+            ]
+          : []),
         clip(u, { at: cue("c01-3", "The restaurant's", -0.3), label: "Opening an account", url: `${K}/k/signup`, sync: has(u) ? [[ev(u, "sign-up: the restaurant"), cue("c01-3", "The restaurant's", -0.1)], [ev(u, "business email"), cue("c01-3", "a business email", -0.1)], [ev(u, "welcome"), cue("c01-3", "a short interview", 0)]] : undefined }, "The sign-up form"),
         clip(iv, { at: cue("c01-3", "The agent asks", -0.3), label: "Opening an account · the interview", url: `${K}/k/signup`, from: 2.4, rate: 1.5, until: 17.0 }, "The interview: one question answered, one “None / decide later”"),
         ...(has(iv)
@@ -95,7 +101,8 @@ export const EDL: Record<string, () => ChapterEdit> = {
   c04: () => ({
     shots: [
       ph(start("c04"), "The menu planner: three dishes, then “You have / I'll order / Can't get”", "Menu planner"),
-      ph(partAt("c04-2", -0.2), "The watch's opening note; a backup offer", "The watch"),
+      clip("c04-01-watch", { at: partAt("c04-2", -0.2), label: "Hotel Lumo kitchen · the watch", url: `${K}/k`, until: 4.6, sync: has("c04-01-watch") ? [[ev("c04-01-watch", "the watch's opening"), cue("c04-2", "Here's its", -0.3)]] : undefined, zoom: [{ at: cue("c04-2", "Here's its", 0.2), s: 1.12, x: 0.35, y: 0.3 }] }, "The watch's opening note"),
+      clip("c04-02-backup", { at: cue("c04-2", "And when", -0.3), label: "Hotel Lumo kitchen · a backup", url: `${K}/k`, from: 7.5, sync: has("c04-02-backup") ? [[ev("c04-02-backup", "a poor delivery"), cue("c04-2", "it warns you", -0.4)], [ev("c04-02-backup", "the backup lined up"), cue("c04-2", "Nothing extra", -0.2)]] : undefined }, "A backup for a product with a poor delivery record"),
       ph(partAt("c04-3", -0.2), "An offer card from the selling agent", "Selling agent"),
       ph(partAt("c04-4", -0.2), "Your rules, with the memory", "Your rules"),
       ph(partAt("c04-5", -0.2), "The Orders tab; the “Try everything” guide", "Orders"),
