@@ -204,18 +204,15 @@
    "the backup lined up; nothing extra bought": 20.41
   }
  },
- "c04-03-menu": {
-  "seconds": 47.533,
+ "c04-03b-menu-planner": {
+  "seconds": 25.333,
   "size": "1920x1080@30/1",
   "chapter": "c04",
-  "what": "Hotel Lumo: the menu planner, a dish for 40 covers on Friday: it asks, offers dishes, then sorts what the kitchen has, what it will order and what it can't get",
+  "what": "Hotel Lumo: the Menu planner tab, 'Salmon soup for 40 on Friday, lactose-free': ingredients drafted, products found and checked by code, a fixed-price order ready",
   "events": {
-   "typed: Plan a dish for 40 covers for Friday.": 1.05,
-   "the menu planner asks what it needs: what are you in the mood for": 8.3,
-   "typed: Something warming with fish.": 11.81,
-   "three dishes offered": 19.41,
-   "typed: The creamy salmon soup (your rules cover all of it).\n2. Fish and root vegetable stew in tomato.": 23.48,
-   "You have / I'll order / Can't get, with reasons": 38.49
+   "the Menu planner tab: say what you serve and for how many": 1.59,
+   "Plan it: the agent drafts ingredients and amounts; plain code finds products, checks rules, fixes the price": 8.32,
+   "the plan: what the kitchen has, what it will order, what it can't get, at fixed prices": 9.52
   }
  },
  "c04-04-memory": {
@@ -230,33 +227,34 @@
   }
  },
  "c04-05-orders": {
-  "seconds": 5.667,
+  "seconds": 13.4,
   "size": "1920x1080@30/1",
   "chapter": "c04",
-  "what": "Hotel Lumo: the Orders tab and one order opened (its timeline, steps and signed receipt)",
+  "what": "Hotel Lumo: the Orders tab (every order placed or tried, by the agent, the basket or an outside agent; Repeat / With a change)",
   "events": {
-   "the Orders tab": 3.01
+   "the Orders tab": 1.94,
+   "earlier history: every order the kitchen placed, by its agent, the basket or an outside agent": 6.01
   }
  },
  "c04-06-shop-popup": {
-  "seconds": 40.333,
+  "seconds": 31.167,
   "size": "1920x1080@30/1",
   "chapter": "c04",
   "what": "Hotel Lumo: the Catalogue searched for lactose-free milk; Ctrl K opens the agent as a panel over the shop; a request answered there",
   "events": {
-   "the Catalogue: the shop the kitchen already knows": 10.83,
-   "Ctrl K: the agent opens over the shop": 19.29,
-   "typed: Two cases of tomatoes for Thursday.": 22.07,
-   "asked in the panel, answered beside the catalogue": 35.82
+   "the Catalogue: the shop the kitchen already knows": 6.51,
+   "Ctrl K: the agent opens over the shop": 14.72,
+   "typed: Two cases of tomatoes for Thursday.": 17.03,
+   "asked in the panel, answered beside the catalogue": 26.67
   }
  },
  "c04-07-guide": {
-  "seconds": 16.833,
+  "seconds": 36.767,
   "size": "1920x1080@30/1",
   "chapter": "c04",
   "what": "Hotel Lumo: the 'Try everything' guide, each capability with words to say, ticked as tried",
   "events": {
-   "Try everything: one row per capability, ticked when the kitchen's record shows it": 2.04
+   "Try everything: one row per capability, ticked when the kitchen's record shows it": 21.84
   }
  },
  "c04-08-offer": {
@@ -338,13 +336,13 @@
   }
  },
  "c06-05-trace": {
-  "seconds": 15.933,
+  "seconds": 21.133,
   "size": "1920x1080@30/1",
   "chapter": "c06",
   "what": "Trace: one request replayed step by step (the request read, search, live price, the gate's rules, the sign-off)",
   "events": {
-   "Trace: replay any request step by step": 2.54,
-   "stepping through the request": 5.4
+   "Trace: replay any request step by step": 3.07,
+   "replaying the request step by step": 7.24
   }
  },
  "c06-06-time-machine": {
@@ -369,14 +367,16 @@
   }
  },
  "c06-08-control": {
-  "seconds": 10.533,
+  "seconds": 23.867,
   "size": "1920x1080@30/1",
   "chapter": "c06",
   "what": "Control: suspend an agent with a reason (read what will happen, confirm), then resume it; both written to the ledger",
   "events": {
-   "Control: suspend an agent": 1.32,
-   "chose Hotel Lumo kitchen's buyer agent, Hotel Lumo kitchen, seen just now": 3.78,
-   "read exactly what will happen, then confirm": 8.52
+   "Control: suspend an agent": 2.34,
+   "chose Hotel Lumo kitchen's buyer agent, Hotel Lumo kitchen, seen just now": 4.8,
+   "read exactly what will happen, then confirm": 12.6,
+   "suspended: its next call is refused": 16.42,
+   "resumed; both acts in the ledger": 21.36
   }
  },
  "c06-09-hosted-trace-time": {
@@ -416,6 +416,15 @@
    "Send in an Aiven agent: a buyer AimoPilot does not run": 0,
    "sent in: it connects over MCP with a mandate minted for this run": 4.74,
    "the run ended: stopped at a person's sign-off like every other agent": 4.74
+  }
+ },
+ "c07-04-aiven-run": {
+  "seconds": 23.3,
+  "size": "1920x1080@30/1",
+  "chapter": "c07",
+  "what": "Hosted: the one live Aiven Managed Agents run (started in c07-03), its steps through the MCP door, ending at the sign-off",
+  "events": {
+   "the Aiven agent's run, as it arrived: its tool calls through the MCP door and the gate's answers": 0.03
   }
  },
  "c08-01-landing-search-map": {
@@ -464,6 +473,16 @@
    "Ask the platform: the copilot answers from the records": 0.02,
    "question asked": 6.7,
    "the answer, with the query it ran": 7.91
+  }
+ },
+ "c09-01-crash-safeguards": {
+  "seconds": 35.267,
+  "size": "1920x1080@30/1",
+  "chapter": "c09",
+  "what": "Hosted (visitor): the Agents page's crash-test ratings, then Safeguards with how often each rule fired",
+  "events": {
+   "the crash test: thirteen hard purchasing situations; the worst run sets the licence": 1.54,
+   "Safeguards: the gate's rules and how often each fired": 23.92
   }
  },
  "c10-01-webshop-end": {
