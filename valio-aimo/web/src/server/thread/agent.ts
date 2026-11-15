@@ -712,7 +712,9 @@ export async function runAgent(run: TurnRun, messages: ModelMessage[], opts: { w
     id: "dock-store-agent",
     model,
     instructions: [
-      { role: "system", content: AGENT_INSTRUCTIONS, providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } } },
+      // The playbook is the same for every kitchen and turn: cached for an hour, so a turn after a pause (a reviewer
+      // reading the options for six minutes) does not pay to read 17 000 tokens again.
+      { role: "system", content: AGENT_INSTRUCTIONS, providerOptions: { anthropic: { cacheControl: { type: "ephemeral", ttl: "1h" } } } },
       { role: "system", content: context },
     ],
     tools,

@@ -5,7 +5,8 @@ import { calls, voiceLimits } from "@/server/channels/voice/calls";
 import { getRuntime, resetRuntime } from "@/server/runtime";
 import { setAgentModelForTests } from "./agent";
 import { threadStore } from "./engine";
-import { heardTurn, isEcho, nextSpoken, numbersDisagree } from "./voice-bridge";
+import { heardTurn, isEcho, isFragment, nextSpoken, numbersDisagree, progressFor } from "./voice-bridge";
+import type { AgentTurn } from "./types";
 
 /** The voice door's own guards, all plain code, before anything reaches the conversation. */
 
@@ -91,4 +92,62 @@ describe("the voice door's guards", () => {
     setAgentModelForTests(says("OK."));
     expect((await heardTurn("laakso", call, { text: "stop the emails", turn: 4 })).state).not.toBe("stopped");
   });
+
+  it("never acts on a fragment cut off by talking over the agent; asks again", async () => {
+    expect(isFragment("The")).toBe(true);
+    expect(isFragment("um, the")).toBe(true);
+    for (const answer of ["yes", "no", "OK", "joo", "ei", "ja", "The first one", "200"]) expect(isFragment(answer), answer).toBe(false);
+    const call = open();
+    const s = await heardTurn("laakso", call, { text: "The", turn: 1, duringAgent: true });
+    expect(s).toMatchObject({ state: "asked", why: "fragment" });
+    expect(s.say).toMatch(/only caught "The"/);
+    expect((await threadStore()).peek("laakso")?.turns.length ?? 0).toBe(0);
+  });
+
+  it("is never silent on long work: a new step after three seconds, the same one after seven, never the same words twice", () => {
+    const step = (kind: string, status: "running" | "done" = "running") => ({ stepId: kind, kind, label: kind, status, startedAt: "" });
+    const a = (steps: ReturnType<typeof step>[]): AgentTurn => ({ turnId: "t", role: "agent", at: "", replyTo: "b", status: "working", steps, cards: [] });
+    const p = { keys: ["step:read"], at: 0, last: "Reading that." };
+    expect(progressFor(a([step("read")]), p, 2_000, "en")).toBeUndefined();
+    expect(progressFor(a([step("read", "done"), step("lookup")]), p, 3_100, "en")).toEqual({ key: "step:lookup", say: "Checking live prices and the day." });
+    const q = { keys: ["step:read", "step:lookup"], at: 3_100, last: "Checking live prices and the day." };
+    expect(progressFor(a([step("read", "done"), step("lookup")]), q, 6_000, "en")).toBeUndefined();
+    expect(progressFor(a([step("read", "done"), step("lookup")]), q, 10_200, "en")?.say).toBe("Still waiting for the wholesaler's live prices.");
+    const r = { keys: [...q.keys, "still:lookup"], at: 10_200, last: "Still waiting for the wholesaler's live prices." };
+    expect(progressFor(a([step("read", "done"), step("lookup")]), r, 30_000, "en")).toBeUndefined();
+    // A turn still queued behind another says nothing of its own.
+    expect(progressFor(a([]), { keys: [], at: 0 }, 30_000, "en")).toBeUndefined();
+  });
+
+  it("a request spoken while another works: told it comes next, then really done, in order, and said", async () => {
+    let calls = 0;
+    const slow = {
+      id: "anthropic:scripted",
+      model: new MockLanguageModelV4({
+        provider: "anthropic.messages",
+        modelId: "scripted",
+        doStream: async () => {
+          const n = ++calls;
+          if (n === 1) await new Promise((r) => setTimeout(r, 1_500));
+          const text = n === 1 ? "First answer." : "Second answer.";
+          const parts: LanguageModelV4StreamPart[] = [{ type: "stream-start", warnings: [] }, { type: "text-start", id: "t" }, { type: "text-delta", id: "t", delta: text }, { type: "text-end", id: "t" }, { type: "finish", finishReason: { unified: "stop", raw: undefined }, usage }];
+          return { stream: new ReadableStream({ start: (c) => (parts.forEach((x) => c.enqueue(x)), c.close()) }) };
+        },
+      }),
+    };
+    setAgentModelForTests(slow);
+    const call = open();
+    const one = await heardTurn("laakso", call, { text: "what did we order last week", turn: 1 });
+    const two = await heardTurn("laakso", call, { text: "and what is our budget this week", turn: 2 });
+    expect(two.say).toBe("I'll finish the one before first, then this.");
+    const said: string[] = [];
+    const follow = async (id: string) => {
+      for (let i = 0; i < 20; i++) {
+        const s = await nextSpoken("laakso", call, id, 5_000);
+        if (s.state !== "working") return said.push(s.say);
+      }
+    };
+    await Promise.all([follow(one.agentTurnId!), follow(two.agentTurnId!)]);
+    expect(said.map((x) => (x.includes("First") ? 1 : x.includes("Second") ? 2 : 0))).toEqual([1, 2]);
+  }, 30_000);
 });

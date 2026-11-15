@@ -32,7 +32,7 @@ type Live = {
   told: string[];
   relayed: Wire[];
   /** Say this as the buyer: input transcription, then the relay call (as Gemini's turn detection does). */
-  buyer: (words: string) => void;
+  buyer: (words: string, opts?: { relayTwice?: boolean }) => void;
   /** Keep the agent "speaking" for `chunks` x 0.4 s on the next thing it says. */
   longNext: (chunks: number) => void;
   /** The provider's barge-in: the buyer started talking over the agent. */
@@ -56,9 +56,11 @@ async function fakeLive(page: Page, opts: { dropAfterConnect?: boolean } = {}): 
       send({ serverContent: { outputTranscription: { text } } });
       setTimeout(() => send({ serverContent: { turnComplete: true } }), 50);
     };
-    live.buyer = (words) => {
+    live.buyer = (words, o = {}) => {
       send({ serverContent: { inputTranscription: { text: words } } });
       setTimeout(() => send({ toolCall: { functionCalls: [{ id: `fc${++fc}`, name: "relay", args: { words } }] } }), 200);
+      // Seen live: the model calls relay a second time for the same utterance.
+      if (o.relayTwice) setTimeout(() => send({ toolCall: { functionCalls: [{ id: `fc${++fc}`, name: "relay", args: { words } }] } }), 900);
     };
     live.longNext = (c) => void (long = c);
     live.interrupt = () => send({ serverContent: { interrupted: true } });
@@ -195,4 +197,17 @@ test("the old call page leads to the same conversation's microphone", async ({ p
   await page.goto("/call");
   await page.waitForURL(`**/k/${slug}?talk=1`, { timeout: 20_000 });
   await expect(mic(page)).toBeVisible();
+});
+
+test("the model relays one utterance twice: it is sent once, and the buyer is never asked to say it again", async ({ page }, info) => {
+  const live = await fakeLive(page);
+  const slug = await ownKitchen(page, micFor(engine(info)));
+  await mic(page).click();
+  await expect.poll(() => statusOf(page), { timeout: 20_000 }).toBe("listening");
+  live.buyer("what can I try?", { relayTwice: true });
+  await expect.poll(() => live.relayed.length, { timeout: 20_000 }).toBe(2);
+  expect(live.relayed.map((r) => String(r.say))).not.toContain("Sorry, I didn't catch that. Could you say it again?");
+  const thread = await (await page.request.get(`/ui-api/kitchens/${slug}/thread`)).json();
+  expect(thread.thread.turns.filter((t: { role: string; text?: string }) => t.role === "buyer" && t.text === "what can I try?")).toHaveLength(1);
+  await bar(page).getByRole("button", { name: "End" }).click();
 });

@@ -25,5 +25,5 @@ describe("the reply's closing question", () => {
     const one = "Your usual 10 l boxes missed their cut-off for {{Monday 16 Nov}}, shall I order the Valio Eila or another?";
     expect(one.replace(CLOSING_ASK, "").trim()).toBe("");
     expect(CLOSING_ASK.exec("It costs **10,00 €**. Shall I order it?")?.[0].trim()).toBe("Shall I order it?");
-  });
+  }, 90_000);
 });

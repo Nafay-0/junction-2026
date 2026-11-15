@@ -197,9 +197,11 @@ function nextSunday(): string {
  * not fit is left out, never cut mid-phrase.
  */
 export function shortReason(t: string): string {
-  const x = t.replace(/^[^:—]*[:—]\s*/, "").split(/(?<=[.;])\s/)[0].replace(/[.;]$/, "");
+  // A parenthesis the cut would leave open ("uses dry goods (pearl barley") goes with what it opened.
+  const whole = (c: string) => (/\([^)]*$/.test(c) ? c.replace(/\s*\([^)]*$/, "") : c).trim();
+  const x = whole(t.replace(/^[^:—]*[:—]\s*/, "").split(/(?<=[.;])\s/)[0].replace(/[.;]$/, ""));
   if (x.split(/\s+/).length <= 6) return x;
-  const clause = x.split(/,\s|\s(?:and|with|for|ja|och)\s/)[0];
+  const clause = whole(x.split(/,\s|\s(?:and|with|for|ja|och)\s/)[0]);
   return clause.split(/\s+/).length <= 6 ? clause : "";
 }
 

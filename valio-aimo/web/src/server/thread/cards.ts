@@ -4,6 +4,7 @@ import type { OptionCard } from "@/core/options";
 import { takeBackUntil, type PublicOrder } from "@/core/orders";
 import { decidingRule } from "@/core/policy";
 import type { Quote } from "@/core/quote";
+import type { LineMarks } from "@/core/line-marks";
 import { marksFor, optionMarks } from "./marks";
 import type { AnomalyCard, GateCard, NoticeCard, OptionView, OptionsCard, OrderCard, PriceCard, QuestionCard, UnderstoodCard } from "./types";
 
@@ -63,6 +64,17 @@ export function questionCard(step: IntakeView): QuestionCard | undefined {
   };
 }
 
+/**
+ * An option's marks. Its footprint is the ranking's own figure (core/options.ts: the one the "Lowest carbon" label and
+ * the reasons are worked out from), so a card never shows equal figures beside that label; the lines' own estimate
+ * (a litre counted as a kilo) stands only when the ranking has none.
+ */
+function optionMarksOf(o: OptionCard): { marks?: LineMarks } {
+  const m = optionMarks(o.lines.map((l) => ({ productId: l.productId, quantity: l.packs }))).marks;
+  if (!m) return {};
+  return { marks: m.co2Kg !== undefined && o.co2.kg !== null && o.co2.kg > 0 ? { ...m, co2Kg: o.co2.kg } : m };
+}
+
 export function optionView(o: OptionCard): OptionView {
   return {
     optionId: o.optionId,
@@ -78,7 +90,7 @@ export function optionView(o: OptionCard): OptionView {
     delivered: { amount: o.delivered.amount, unit: o.delivered.unit },
     co2Kg: o.co2.kg,
     reliability: o.reliability,
-    ...optionMarks(o.lines.map((l) => ({ productId: l.productId, quantity: l.packs }))),
+    ...optionMarksOf(o),
     signOff: o.signOff,
     pros: o.pros,
     cons: o.cons,

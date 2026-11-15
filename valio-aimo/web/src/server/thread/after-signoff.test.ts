@@ -5,9 +5,9 @@ import type { PublicOrder } from "@/core/orders";
 describe("what is said after a phone OK", () => {
   it("is in the conversation's language, whatever the product's name contains", () => {
     const order = { status: "committed", approval: { approver: { name: "Kitchen manager" } }, lines: [{ name: "Valio Hyvä suomalainen Arki® Eila®", deliveryDate: "2026-11-16" }] } as unknown as PublicOrder;
-    expect(afterSignOff(order, "en")).toBe("Kitchen manager OK'd it: it arrives Monday 16 Nov.");
+    expect(afterSignOff(order, "en")).toBe("Kitchen manager OK'd it. It's placed at the fixed price for Monday 16 Nov and is now with the wholesaler's team to confirm for delivery; I'll tell you here when they confirm.");
     expect(afterSignOff(order, "fi")).toMatch(/hyväksyi tilauksen/);
-    expect(afterSignOff(order, "sv")).toBe("Kitchen manager godkände beställningen: den kommer måndag 16 nov.");
+    expect(afterSignOff(order, "sv")).toBe("Kitchen manager godkände beställningen. Den är registrerad till det fasta priset för måndag 16 nov och ligger nu hos grossistens team för bekräftelse; jag säger till här när de bekräftar.");
   });
 
   it("is in Swedish for a Swedish conversation, also when nothing is ordered", () => {
