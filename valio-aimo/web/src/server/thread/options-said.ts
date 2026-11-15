@@ -108,14 +108,18 @@ function tradeOff(o: OptionView, first: OptionView, lang: Lang, n0: string): str
 }
 
 /** "The Valio Eila is first at 1 010,00 €: the cheapest that can arrive Monday 16 Nov. The Valio UHT costs 550,00 € more." */
-export function optionsSaid(options: OptionView[], lang: Lang, opts: { standInSaid?: boolean } = {}): string | undefined {
+export function optionsSaid(options: OptionView[], lang: Lang, opts: { standInSaid?: boolean; usual?: boolean } = {}): string | undefined {
   const can = options.filter((o) => o.gate?.outcome !== "reject");
   if (can.length < 2) return undefined;
   const [first, ...rest] = can.slice(0, 3);
   const [n1, ...ns] = optionNames(can.slice(0, 3), lang);
   // The first one stands in for the usual product: said so in the same sentence, unless the reply says it already.
   const standIn = !opts.standInSaid && first.lines.some((l) => l.substituteFor);
-  const head = standIn
+  // "Your usual" only when what it stands in for is the kitchen's usual (the caller knows from the ranking's notes): a
+  // kitchen with no history, or a product the buyer named, is never told about a usual it does not have.
+  const head = standIn && opts.usual === false
+    ? { en: `As a stand-in, the ${n1} is first at **${eur(first.totalCents)}**: ${whyFirst(first, lang)}.`, fi: `Korvaavana ${n1} on ensimmäinen, **${eur(first.totalCents)}**: ${whyFirst(first, lang)}.`, sv: `Som ersättare är ${n1} först, **${eur(first.totalCents)}**: ${whyFirst(first, lang)}.` }[lang]
+    : standIn
     ? { en: `In place of your usual, the ${n1} is first at **${eur(first.totalCents)}**: ${whyFirst(first, lang)}.`, fi: `Tavallisen tilalle ${n1} on ensimmäinen, **${eur(first.totalCents)}**: ${whyFirst(first, lang)}.`, sv: `I stället för det vanliga är ${n1} först, **${eur(first.totalCents)}**: ${whyFirst(first, lang)}.` }[lang]
     : { en: `The ${n1} is first at **${eur(first.totalCents)}**: ${whyFirst(first, lang)}.`, fi: `${n1} on ensimmäinen, **${eur(first.totalCents)}**: ${whyFirst(first, lang)}.`, sv: `${n1} är först, **${eur(first.totalCents)}**: ${whyFirst(first, lang)}.` }[lang];
   const others = rest.map((o, i) => tradeOff(o, first, lang, ns[i]));
