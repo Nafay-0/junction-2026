@@ -28,5 +28,13 @@ export function maskAddress(address: string): string {
   return `${address[0]}•••${address.slice(at)}`;
 }
 
+/**
+ * Every email address inside a text, masked. A mail service's error can quote one ("You can only send testing emails to
+ * your own email address (name@example.com)"); what is kept and shown (the mail log, the ledger) never carries it whole.
+ */
+export function maskAddressesIn(text: string): string {
+  return text.replace(/[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, (a) => maskAddress(a));
+}
+
 /** Resend's own test inboxes: the only addresses tests send real mail to. */
 export const RESEND_TEST_ADDRESSES = ["delivered@resend.dev", "bounced@resend.dev", "complained@resend.dev"] as const;

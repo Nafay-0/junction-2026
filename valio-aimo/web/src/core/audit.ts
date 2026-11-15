@@ -98,10 +98,16 @@ export function wholesalerEntry(e: LedgerEntry): WholesalerAuditEntry {
   }
 }
 
+/** "n•••@example.com" for every email address in a text (the same shape the mail log shows). */
+function maskEmails(text: string): string {
+  return text.replace(/([A-Za-z0-9.!#$%&'*+/=?^_`{|}~-])[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]*(@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/g, "$1•••$2");
+}
+
 /** The ledger as one side reads it: plain-language lines and the entries behind them. */
 export function auditFor(view: AuditView, entries: readonly LedgerEntry[]): { view: AuditView; explanation: string[]; entries: (LedgerEntry | WholesalerAuditEntry)[] } {
   if (view === "buyer") return { view, explanation: explain(entries), entries: [...entries] };
-  const projected = entries.map(wholesalerEntry);
+  // An email address quoted inside a summary (a mail service's error text) is never shown whole.
+  const projected = entries.map(wholesalerEntry).map((e) => (/@/.test(e.summary) ? { ...e, summary: maskEmails(e.summary) } : e));
   const lines: string[] = [];
   let hidden = 0;
   const flush = () => {

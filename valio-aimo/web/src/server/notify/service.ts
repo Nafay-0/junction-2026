@@ -9,7 +9,7 @@ import { newId, sha256Hex } from "@/core/util";
 import { publicBaseUrl } from "../config";
 import type { RecordStore } from "../records";
 import type { Runtime } from "../runtime";
-import { maskAddress, normalizeAddress } from "./address";
+import { maskAddress, maskAddressesIn, normalizeAddress } from "./address";
 import { CONFIRM_HOURS, readLink, signLink } from "./links";
 import type { ChangeKind, ChangedModel, MailKind, MailKitchen, MailModel, ReceiptModel, SignOffModel } from "./model";
 import { renderMail } from "./render";
@@ -347,7 +347,8 @@ async function send(rt: Runtime, s: State, rec: MailRecord, c: Contact, transpor
     saveRecord(s, r);
     ledger(rt, { orderId: rec.orderId, summary: `${what(r)} to ${c.kitchenName}: not sent again: the mail service already sent one for this event.`, data: { step: "skipped", kind: r.kind, eventKey: r.eventKey, outcome: "skipped", reason: r.reason } });
   } else {
-    const reason = `${result.code}${result.status ? ` (${result.status})` : ""}: ${result.message}`;
+    // The service's own message can quote an address (its account's): masked before it is kept or written to the ledger.
+    const reason = maskAddressesIn(`${result.code}${result.status ? ` (${result.status})` : ""}: ${result.message}`);
     const r: MailRecord = { ...rec, outcome: "failed", reason, attempts: result.attempts };
     saveRecord(s, r);
     ledger(rt, { orderId: rec.orderId, summary: `${what(r)} to ${c.kitchenName} failed after ${result.attempts} ${result.attempts === 1 ? "try" : "tries"}: ${reason}. The order is not affected.`, data: { step: "failed", kind: r.kind, eventKey: r.eventKey, outcome: "failed", reason } });
@@ -642,7 +643,8 @@ export async function mailView(rt: Runtime, now = new Date()): Promise<MailView>
         const used = counts(s, c.orgId, now).kitchenHour;
         return { orgId: c.orgId, slug: c.slug, kitchenName: c.kitchenName, masked: c.masked, state: c.state, lang: c.lang, setAt: c.setAt, ...(c.confirmedAt ? { confirmedAt: c.confirmedAt } : {}), sentThisHour: used, leftThisHour: Math.max(0, caps.perKitchenHour - used) };
       }),
-    mails: all.slice(0, 200).map(({ model: _m, ...r }) => (void _m, r)),
+    // Reasons kept before the masking above are masked here, so no address is ever shown whole.
+    mails: all.slice(0, 200).map(({ model: _m, ...r }) => (void _m, r.reason ? { ...r, reason: maskAddressesIn(r.reason) } : r)),
     noAddressEvents: s.noAddress,
     stats: { sent: all.filter((r) => r.outcome === "sent").length, skipped: all.filter((r) => r.outcome === "skipped").length, failed: all.filter((r) => r.outcome === "failed").length, sending: all.filter((r) => r.outcome === "sending").length, bounced: all.filter((r) => r.delivery === "bounced" || r.delivery === "complained").length },
   };

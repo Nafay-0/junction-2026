@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { resolveKitchen } from "@/server/console-kitchens";
 import { resetMemoryService } from "@/server/memory/runtime";
 import { getRuntime, resetRuntime, type Runtime } from "@/server/runtime";
-import { addressIn, maskAddress, normalizeAddress } from "./address";
+import { addressIn, maskAddress, maskAddressesIn, normalizeAddress } from "./address";
 import { readLink, signLink } from "./links";
 import type { ReceiptModel } from "./model";
 import { renderMail } from "./render";
@@ -75,6 +75,9 @@ describe("the address", () => {
     expect(normalizeAddress("a@b")).toBeUndefined();
     expect(addressIn("email receipts to chef@example.com please.")).toBe("chef@example.com");
     expect(maskAddress("matti@example.com")).toBe("m•••@example.com");
+    // An address quoted inside a mail service's error text is masked too, wherever it stands.
+    expect(maskAddressesIn("validation_error (403): You can only send testing emails to your own email address (first.last@gmail.com). To send to others, verify a domain.")).toBe("validation_error (403): You can only send testing emails to your own email address (f•••@gmail.com). To send to others, verify a domain.");
+    expect(maskAddressesIn("no address here")).toBe("no address here");
     const t = signLink({ p: "confirm", o: "org-1", c: "mc_1" });
     expect(Buffer.from(t.split(".")[0], "base64url").toString()).not.toMatch(/@/);
     expect(readLink(t, "confirm")?.o).toBe("org-1");
