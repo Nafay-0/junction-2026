@@ -11,6 +11,6 @@ Also here:
 
 - [`research/`](research/): background research on the event and the challenges, shared by both projects.
 - [`CLAUDE.md`](CLAUDE.md): the rules the coding agents work under, and who owns which folder.
-- `.github/workflows/`: `ci`, `crash-gate`, `crash-models` and `demo-suite` belong to AimoPilot and run only when `valio-aimo/` changes; the `beryl-*` workflows belong to Beryl and run only when `exa/` changes.
+- `.github/workflows/`: `ci`, `crash-gate`, `crash-models` and `demo-suite` belong to AimoPilot. `ci` and `crash-gate` run when `valio-aimo/` changes on `main`; `crash-models` runs nightly and by hand; `demo-suite` is started by hand. The `beryl-*` workflows belong to Beryl and run only when `exa/` changes.
 
 [MIT](LICENSE).
