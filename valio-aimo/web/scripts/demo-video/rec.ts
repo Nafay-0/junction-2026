@@ -144,7 +144,7 @@ class Recorder {
   }
   async stop() {
     await this.cdp?.send("Page.stopScreencast").catch(() => undefined);
-    await this.cdp?.detach().catch(() => undefined);
+    this.cdp?.removeAllListeners("Page.screencastFrame");
   }
   /** A fresh frame now, so a still page still has its current look on record (the screencast only sends changes). */
   async still() {

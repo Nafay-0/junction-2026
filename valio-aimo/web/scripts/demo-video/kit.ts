@@ -55,8 +55,7 @@ export const buyerCount = (t: Thread) => t.turns.filter((x) => x.role === "buyer
 export function lastSaid(t: Thread): string {
   const a = lastAgent(t);
   if (!a) return "";
-  const texts = [...JSON.stringify(a).matchAll(/"(?:text|say|message|sentence)":"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1]);
-  return texts.join(" | ").slice(0, 500);
+  return `[${a.status}] ${a.line ?? "(no line)"} {${a.cards.map((c) => c.type).join(",")}}`.slice(0, 600);
 }
 
 export const composer = (page: Page, docked = false) => (docked ? page.locator("#assistant").getByRole("textbox").last() : page.getByRole("textbox").last());
