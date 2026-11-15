@@ -1,14 +1,14 @@
 {
  "c01-01-three-ways": {
-  "seconds": 16.467,
+  "seconds": 17.033,
   "size": "1920x1080@30/1",
   "chapter": "c01",
   "what": "/k: the three ways in: Start a fresh kitchen; three test kitchens with rules (Hotel Lumo, Metsola school, Kahvila Sointu); open your restaurant's account",
   "events": {
-   "/k: the kitchen's shop door": 1.51,
-   "way 1: Start a fresh kitchen (no rules, empty memory)": 4.65,
-   "way 2: the three sample test kitchens with rules (shared, reset regularly)": 8.91,
-   "way 3: open your restaurant's account": 14.27
+   "/k: the kitchen's shop door": 1.53,
+   "way 1: Start a fresh kitchen (no rules, empty memory)": 4.77,
+   "way 2: the three sample test kitchens with rules (shared, reset regularly)": 8.98,
+   "way 3: open your restaurant's account": 14.83
   }
  },
  "c01-02-signup": {
@@ -20,6 +20,23 @@
    "sign-up: the restaurant": 1.94,
    "business email (a test address)": 4.14,
    "welcome: a few questions, each with an answer already chosen; under two minutes, change anything later": 12.74
+  }
+ },
+ "c01-03-interview": {
+  "seconds": 49.967,
+  "size": "1920x1080@30/1",
+  "chapter": "c01",
+  "what": "The rules interview: diet 'Decide later', never Nuts and Peanuts, delivery days 'Decide later', usual order 300 €, limit 450 €, weekly budget 'None' (safe default), Head chef signs; then 'These are your rules'",
+  "events": {
+   "Q: must every product be one of these? (diet)": 2.53,
+   "answered 'Decide later': I suggest one when your orders show a pattern": 7.15,
+   "Q: anything your agent must never buy? Nuts and Peanuts chosen": 8.46,
+   "Q: delivery days: 'Decide later', learnt from your orders": 18.18,
+   "Q: a usual order: 300 € is right": 23.47,
+   "Q: the limit the agent may spend alone: 450 € (a usual order and a half)": 28,
+   "Q: weekly budget: 'None', the safe default": 31.71,
+   "Q: who OKs orders above the limit: Head chef": 37.14,
+   "These are your rules (defaults marked)": 43.03
   }
  },
  "c02-01-request": {

@@ -27,8 +27,13 @@ export const EDL: Record<string, () => ChapterEdit> = {
       shots: [
         clip(w, { at: start("c01"), label: "The door: three ways in", url: `${K}/k`, sync: has(w) ? [[ev(w, "/k"), cue("c01-1", "There are", -0.2)], [ev(w, "way 1"), cue("c01-1", "First", -0.1)], [ev(w, "way 2"), cue("c01-2", "Second", -0.1)], [ev(w, "way 3"), cue("c01-3", "Third", -0.1)]] : undefined, zoom: has(w) ? [{ at: cue("c01-2", "Hotel Lumo", -0.3), s: 1.1, x: 0.5, y: 0.6 }, { at: partAt("c01-2", 0, true), s: 1, x: 0.5, y: 0.6 }] : undefined }, "/k: the three ways in"),
         clip(u, { at: cue("c01-3", "The restaurant's", -0.3), label: "Opening an account", url: `${K}/k/signup`, sync: has(u) ? [[ev(u, "sign-up: the restaurant"), cue("c01-3", "The restaurant's", -0.1)], [ev(u, "business email"), cue("c01-3", "a business email", -0.1)], [ev(u, "welcome"), cue("c01-3", "a short interview", 0)]] : undefined }, "The sign-up form"),
-        clip(iv, { at: cue("c01-3", "The agent asks", -0.3), label: "Opening an account · the interview", url: `${K}/k/signup` }, "The interview: one question answered, one “None / decide later”"),
-        ph(partAt("c01-4", 3), "“These are your rules”; the Your rules page; a fresh kitchen's opening", "Your rules"),
+        clip(iv, { at: cue("c01-3", "The agent asks", -0.3), label: "Opening an account · the interview", url: `${K}/k/signup`, from: 2.4, rate: 1.5, until: 17.0 }, "The interview: one question answered, one “None / decide later”"),
+        ...(has(iv)
+          ? [
+              { clip: iv, at: partAt("c01-4", 0.2), label: "Opening an account · the interview", url: `${K}/k/signup`, from: 16.4, sync: [[ev(iv, "Q: delivery days"), cue("c01-4", "decide later", -0.1)]] as [number, number][], zoom: [{ at: cue("c01-4", "On every", 0), s: 1.1, x: 0.5, y: 0.55 }, { at: cue("c01-4", "You don't", -0.3), s: 1, x: 0.5, y: 0.55 }] },
+              { clip: iv, at: cue("c01-4", "You don't", -0.2), label: "Opening an account · your rules", url: `${K}/k/signup`, from: 30.6, rate: 1.5 },
+            ]
+          : []),
       ],
       callouts: [
         { at: cue("c01-2", "They're shared"), text: "Test kitchens: shared, reset every hour", pos: "br" },
@@ -117,7 +122,7 @@ export const EDL: Record<string, () => ChapterEdit> = {
 
   c08: () => ({
     shots: [
-      { clip: "film", at: start("c08"), full: true, from: 83.0, until: 89.0, sync: [[83.3, cue("c08-1", "On a", -0.2)], [85.6, cue("c08-1", "Textbook", 0.6)], [86.9, cue("c08-1", "AimoPilot reaches", -0.5)]] },
+      { clip: "film", at: start("c08"), full: true, from: 83.6, until: 89.0, sync: [[83.8, cue("c08-1", "On a", -0.2)], [85.6, cue("c08-1", "Textbook", 0.6)], [86.9, cue("c08-1", "AimoPilot reaches", -0.5)]] },
       { clip: "film", at: partAt("c08-2", -0.3), full: true, from: 75.8, until: 82.8, sync: [[76.4, cue("c08-2", "Embeddings", -0.2)], [78.4, cue("c08-2", "recall candidates")], [79.4, cue("c08-2", "The kitchen's rules", -0.2)], [81.2, cue("c08-2", "A decision model", -0.2)], [82.2, cue("c08-2", "code checks", -0.1)]] },
       ph(cue("c08-2", "Claude does", -0.4), "Hosted Platform tabs: The platform, Observe, The stream, Ask the platform", "Platform"),
       { clip: "film", at: partAt("c08-3", -0.2), full: true, sync: [[89.4, partAt("c08-3", 0)]], until: 108.5 },
