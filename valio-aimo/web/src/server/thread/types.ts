@@ -10,6 +10,9 @@
  * Plain types only: the browser imports this file too.
  */
 
+import type { LineMarks } from "@/core/line-marks";
+export type { LineMarks };
+
 /** Which door a buyer turn came through. `typed` is the store's composer; `voice` the call page or a microphone. */
 export type ThreadDoor = "typed" | "voice" | "photo";
 /** How the buyer's turn reached the door. `tap`: a button on a card (no words to interpret). */
@@ -243,10 +246,12 @@ export type OptionView = {
   orderBy?: string;
   stockConfirmed: boolean;
   /** `taxRatePct`: the VAT rate (prices are before VAT); `depositCents`: per pack, refunded on return, no VAT. */
-  lines: { productId: string; name: string; quantity: number; packSize?: number; unit?: string; unitPriceCents?: number; substituteFor?: string; substituteForName?: string; taxRatePct?: number; depositCents?: number }[];
+  lines: { productId: string; name: string; quantity: number; packSize?: number; unit?: string; unitPriceCents?: number; substituteFor?: string; substituteForName?: string; taxRatePct?: number; depositCents?: number; marks?: LineMarks }[];
   delivered: { amount: number; unit: string };
   co2Kg: number | null;
   reliability: number | null;
+  /** The quiet marks on the option's row (server/thread/marks.ts optionMarks): its weakest delivery record, its footprint. */
+  marks?: LineMarks;
   signOff: string[];
   pros: string[];
   cons: string[];
@@ -433,6 +438,7 @@ export type SheetCard = CardBase & {
     stockConfirmed: boolean;
     /** The kitchen's usual amounts of this product, in packs, from its records (one-tap picks beside the stepper). */
     usualPacks?: number[];
+    marks?: LineMarks;
   }[];
   totalCents: number;
   /** The gate's own preview of the sheet as it stands. */
@@ -516,7 +522,7 @@ export type MenuCard = CardBase & {
       /** What the covers need in total, in the product's unit. */
       need: { amount: number; unit: string };
       status: "resolving" | "ready" | "decide" | "have" | "left_out";
-      product?: { productId: string; name: string; packs: number; packSize: number; unit: string; totalCents: number; deliveryDate?: string };
+      product?: { productId: string; name: string; packs: number; packSize: number; unit: string; totalCents: number; deliveryDate?: string; marks?: LineMarks };
       /** Other products for this line (menu_line_swap), each with what it differs on. */
       options: { optionId: string; productId: string; name: string; totalCents: number; differs: { code: string; params: Record<string, string | number> }[] }[];
       /** Allergen, rule and mandate conflicts and the planner's doubts, on the line they concern. */
@@ -709,11 +715,13 @@ export type DishesCard = CardBase & {
    */
   groups?: {
     have: { name: string; need?: string; basis?: string }[];
-    order: { name: string; need?: string; instead?: string }[];
+    order: { name: string; need?: string; instead?: string; marks?: LineMarks }[];
     cannot: { name: string; need?: string; why: string }[];
     totalToOrderCents: number;
     complete: boolean;
   };
+  /** The marks of every product the plan buys (one per line), for the quiet line under the total. */
+  marks?: LineMarks[];
 };
 
 /** A backup in case a product with a poor delivery record does not come (server/reliability), said after the order. */
