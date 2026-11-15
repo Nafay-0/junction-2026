@@ -68,7 +68,7 @@ The next section describes Dock. Beryl is described in `exa/README.md`, and in d
 
 ## Team workflow (two people, one repo)
 
-- Remote: `https://github.com/Nafay-0/junction-2026` (private). Two people commit here, each with their own Claude Code session.
+- Remote: `https://github.com/Nafay-0/junction-2026` (public since Sunday 15 Nov; never commit a secret or the partner's data). Two people commit here, each with their own Claude Code session.
 - `main` must always run; it is the demo branch. Never push broken work to it.
 - Work on short branches named `<name>/<topic>`, merge back within a few hours. Run `git pull --rebase origin main` before starting and before merging.
 - Before editing, check `git status` and `git log origin/main -5` so you do not build on stale code or overwrite the other person's work. Do not force-push to `main`.

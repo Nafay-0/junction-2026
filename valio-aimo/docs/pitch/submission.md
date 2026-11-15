@@ -7,10 +7,9 @@ rule for everything public: accuracy figures yes, speed or latency figures no.
 
 ## Before you submit (team must decide or do)
 
-- [ ] **Repository access for judges.** The repository is private (`gh repo view`: `PRIVATE`). Judges who want to
-      run `pnpm demo:mcp` from `/try` need a copy. Decide: make it public (there is an MIT `LICENSE`; check first that
-      no secret or partner data file is in the history: partner files live only in `web/.data/`, which is
-      git-ignored), or add the judges, or say on the form that the live site is the demo.
+- [x] **Repository access for judges.** The repository is public since Sunday 15 Nov, about 06:25 (`gh repo view`:
+      `PUBLIC`, MIT `LICENSE`). Checked before: no partner data file, no env file and none of the values in
+      `.env.local` appears anywhere in the history.
 - [ ] **The film.** Upload it, check it plays logged out, paste the link below and into the landing page's film slot.
 - [ ] **Deck** exported to PDF (outline in `pitch-3min.md`).
 - [x] **The full two-sentence request.** Fixed and deployed: run on the hosted site on 15 Nov by two reviewers with two phones, both sign-offs went through (`table-demo.md`).
@@ -146,7 +145,6 @@ We built this with AI coding agents (Claude Code; Claude Fable 5.2 as the orches
 ## Links
 
 - Demo: `https://aimopilot.zeroanomaly.tech`
-- Source: `https://github.com/Nafay-0/junction-2026` (the project is in `valio-aimo/`; private until the team
-  decides, see the checklist)
+- Source: `https://github.com/Nafay-0/junction-2026` (public; the project is in `valio-aimo/`)
 - Video: (add after upload)
 - Deck PDF: (export from the outline in `pitch-3min.md`)

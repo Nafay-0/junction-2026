@@ -88,7 +88,7 @@ Files: R = `README.md`, T = `table-demo.md`, P = `pitch-3min.md`, Q = `qa-prep.m
 | 48 | Each run cost about 1 to 5 US cents in model fees ($0.0087 to $0.0471) | Q | `examples/runtimes/RESULTS.md` | D. **Corrected** from "1 to 10 cents" (an earlier run) |
 | 49 | Claude Code and Gemini CLI ordered through a URL-only connector; the Claude and ChatGPT apps were not tested | VJ | `web/docs/connect-an-agent.md` | D |
 | 50 | OAuth for consumer assistants is designed, not built | Q S VJ | `web/docs/connect-an-agent.md` | V |
-| 106 | The repository is private; `/try`'s one command needs a copy of it | S | `gh repo view` on 15 Nov: `PRIVATE`; `web/src/app/try/try.text.ts` ("From a copy of the repository") | V |
+| 106 | The repository is public (MIT), so `/try`'s one command works from a clone | S | `gh repo view` on 15 Nov, 06:25: `PUBLIC`; `web/src/app/try/try.text.ts` | V |
 
 ## Testing and the crash test
 
