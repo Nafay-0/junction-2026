@@ -26,7 +26,7 @@
       "And there's the exception. The usual boxes can't arrive by Monday: their cut-off has passed. So the agent says so, plainly, and offers stand-ins, ranked, the first with its reason: the cheapest that can arrive on Monday.",
       "We pick one. The agent asks the wholesaler for a signed, fixed-price quote. Then the gate checks the order. The gate is plain code, not the model. This order is over the kitchen's five hundred euro limit, so it stops, and a named person is asked.",
       "That's this pop-up. Tap Send to my phone. On the phone, the approver sees what, how much, and why it stopped. One passkey, Face ID or a fingerprint, approves exactly this order. Change one line, and that approval no longer fits.",
-      "Back on the big screen, the signed order appears by itself. A receipt can go out by email. And one link shows this same order the way the wholesaler sees it."
+      "Back on the big screen, the signed order appears by itself. One link shows it the way the wholesaler sees it."
     ]
   },
   {
@@ -43,7 +43,7 @@
     "id": "c04",
     "title": "The other agents",
     "parts": [
-      "The buying agent isn't alone in the kitchen. In the menu planner, you say what you serve, and for how many. The agent drafts the ingredients and amounts; plain code finds the products, checks the rules, and fixes the prices. The plan shows what you have, what it will order, and what it can't get. What you have is estimated from your order history.",
+      "The buying agent isn't alone in the kitchen. In the menu planner, you say what you serve, and for how many. The agent drafts the ingredients; plain code finds the products and checks the rules. The plan shows what you have, what it will order, and what it can't get.",
       "The watch keeps an eye on standing needs. Here's its opening note: Monday's milk can't come, so it proposes a switch. And when a product has a poor delivery record, like these rice pies, it warns you before you order, and lines up a backup if you say so. Nothing extra is bought.",
       "The selling agent speaks for the wholesaler. It brings signed offers, at most two a week per kitchen, and an offer is never a purchase.",
       "Memory is out in the open. Your rules shows what the agent remembers, who said it, and when. Change it, or forget it.",

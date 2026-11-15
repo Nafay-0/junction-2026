@@ -22,7 +22,7 @@ if (!key && !postOnly) throw new Error("ELEVENLABS_API_KEY is not set (web/.env.
 
 const cfg = JSON.parse(readFileSync(join(root, "src/demo/voice.json"), "utf8"));
 const VOICE = process.env.DEMO_VOICE ?? cfg.voice;
-const TEMPO = Number(cfg.tempo ?? 1);
+// The default tempo; voice.json "tempos" can set one part slower or faster (pitch kept), e.g. a take read too fast.
 const SETTINGS = { stability: cfg.stability, similarity_boost: cfg.similarity ?? 0.8, style: cfg.style, speed: 1, use_speaker_boost: true };
 const tryout = process.env.DEMO_OUT;
 const rawDir = tryout ? (isAbsolute(tryout) ? tryout : join(root, tryout)) : join(root, "public/demo-vo/raw");
@@ -67,6 +67,7 @@ function cuts(file) {
 }
 
 function finalize(id) {
+  const TEMPO = Number(cfg.tempos?.[id] ?? cfg.tempo ?? 1);
   const rawFile = join(rawDir, `${id}.mp3`);
   const raw = JSON.parse(readFileSync(join(rawDir, `${id}.json`), "utf8"));
   const removed = cuts(rawFile);
