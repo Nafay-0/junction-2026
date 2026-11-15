@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { verifyClaim } from "@/core/claims";
 import { importJWK, type CryptoKey } from "jose";
 import { resolveKitchen } from "@/server/console-kitchens";
@@ -6,6 +6,15 @@ import { resetMemoryService } from "@/server/memory/runtime";
 import { getRuntime, resetRuntime } from "@/server/runtime";
 import { answerFinding, liftStage, runWatch, setAutoRenew, stageDrift, stageStockOut, standingFor, watchForOrg, watchView } from "./service";
 import { answerWatchMoment, autoRenewIntentOf, markWatchSaid, watchAnswerOf, watchMomentForThread } from "./thread";
+
+// What can be ordered, renewed or needs a second look depends on today's date (order cut-offs, delivery days, how
+// recent the kitchen's history is), so these scenarios gave another result on some weekdays and times of day. A
+// fixed morning (Date only; timers stay real), the same one the menu, sample and conversation tests use; set at the
+// top of the file because some scenarios work out their dates when the file loads. A Tuesday here: on a Thursday or a
+// Friday the renewal of a Thursday standing order is six or seven days ahead and the gate refuses it as too early.
+vi.useFakeTimers({ toFake: ["Date"] });
+vi.setSystemTime(new Date("2026-11-10T09:00:00Z"));
+afterAll(() => vi.useRealTimers());
 
 /**
  * The kitchen agent's watch end to end, in process, on the seed catalogue: Kaari's usual 10 L milk box is staged out
