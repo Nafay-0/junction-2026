@@ -22,6 +22,8 @@ describe("an idea's reason", () => {
     expect(shortReason("Uses your usual cream and butter.")).toBe("Uses your usual cream and butter");
     expect(shortReason("Seasonal: root vegetables are cheap now, and they keep well.")).toBe("root vegetables are cheap now");
     expect(shortReason("Root vegetables are at their best in November, and cheap.")).toBe("");
+    expect(shortReason("Mushroom risotto: uses dry goods (pearl barley, rice) the kitchen keeps.")).toBe("uses dry goods");
+    expect(shortReason("Curry: built from dry goods (chickpeas, rice and coconut milk).")).toBe("built from dry goods");
     expect(shortReason("A warming dish that the whole school eats without complaint every single week.")).toBe("");
   });
 });

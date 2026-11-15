@@ -455,3 +455,28 @@ describe("a mistake check answered with the usual amount", () => {
     expect(r.line ?? "").not.toMatch(/1[\s ]?000/);
   });
 });
+
+describe("the reading started alongside the agent's first call", () => {
+  beforeEach(() => {
+    resetRuntime();
+    process.env.DOCK_MEMORY = "off";
+  });
+  afterEach(() => {
+    setAgentModelForTests(undefined);
+    setInterpretModelForTests(undefined);
+    delete process.env.DOCK_MEMORY;
+  });
+
+  it("is the one the order tool uses: the words are read once, not twice", async () => {
+    let calls = 0;
+    const r = reader(17);
+    const counted = { ...r, model: new MockLanguageModelV4({ provider: "scripted", modelId: "reader", doGenerate: async (o) => (calls++, (r.model as unknown as { doGenerate: (x: unknown) => Promise<never> }).doGenerate(o)) }) };
+    setInterpretModelForTests(counted as never);
+    setAgentModelForTests(agentScript([{ calls: [{ name: "order", args: { words: "17 litres of lactose-free milk for Monday please" } }] }, { text: "Options below." }]));
+    await turn("laakso", { door: "typed", via: "typed", text: "17 litres of lactose-free milk for Monday please" });
+    const rt = await getRuntime();
+    expect(rt.dock.ledger.entries().some((e) => e.type === "agent" && (e.data as { event?: string }).event === "read_ahead")).toBe(true);
+    // Once: the order tool reused the reading started ahead (without it, the same words were read again).
+    expect(calls).toBe(1);
+  });
+});
