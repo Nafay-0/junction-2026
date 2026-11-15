@@ -104,6 +104,8 @@ export function ThreadLine({ className = "", landing = false }: { className?: st
           turns.map((x) =>
             x.role === "agent" && x === opening && !onlyOpening && !x.cards.some((c) => (c.type === "today" && c.items.length > 0) || c.type === "offer" || c.type === "watch") ? null : x.role === "buyer" ? (
               <BuyerLine key={x.turnId} turn={x} />
+            ) : x.role === "agent" && x.boundary ? (
+              x.note ? <VisitorNote key={x.turnId} /> : null
             ) : queued.has(x.turnId) ? (
               <QueuedNode key={x.turnId} />
             ) : (
@@ -158,6 +160,20 @@ function WorkingNode({ label }: { label?: string }) {
 }
 
 /** A message sent while the agent still works on the one before: kept, and answered next, in order. */
+/** A shared test kitchen used by another visitor a moment ago: one quiet line, with the way to a kitchen of one's own. */
+function VisitorNote() {
+  const tx = useText(THREAD_LINE_TEXT);
+  return (
+    <li className="relative" data-visitor-note>
+      <p className="text-[0.86rem] text-ink-soft">
+        {tx.otherVisitor.before}
+        <a href="/k" className="text-petrol underline decoration-petrol/40 underline-offset-4">{tx.otherVisitor.link}</a>
+        {tx.otherVisitor.after}
+      </p>
+    </li>
+  );
+}
+
 function QueuedNode() {
   const tx = useText(THREAD_LINE_TEXT);
   return (

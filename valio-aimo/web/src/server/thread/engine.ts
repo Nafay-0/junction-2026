@@ -28,6 +28,7 @@ import { THREAD_WORDS } from "@/app/k/[kitchen]/thread-words.text";
 import { changeLines, groupNameL } from "@/app/k/[kitchen]/rules-change";
 import { signerL } from "@/app/_i18n/signer";
 import { RULES_STAND, rulesStand, talksRound } from "./talk-round";
+import { ownCards, visitorSwitch } from "./visitor";
 import { fixTypos } from "./pipeline";
 import { hasToday, helsinkiToday, postToday, todayCardId } from "./home";
 import { ensureTelemetry } from "./telemetry";
@@ -211,6 +212,19 @@ export async function openToday(k: Kitchen): Promise<string | undefined> {
 export async function resetThread(k: Kitchen) {
   const rt = await getRuntime();
   const { store } = await engine(rt);
+  // Start over also takes back what this conversation left waiting for an OK: the next visitor of a shared kitchen
+  // never hears "You already ordered 600 L …" about a stranger's order. Orders placed (committed) stay.
+  const old = store.peek(k.info.slug);
+  const waiting = [...new Set((old ? store.cards(old) : []).flatMap((x) => (x.card.type === "gate" && x.card.outcome === "waiting" && x.card.orderId ? [x.card.orderId] : [])))];
+  if (waiting.length) {
+    const r = await resolve(k, "typed").catch(() => undefined);
+    for (const orderId of waiting) {
+      if (!r) break;
+      const o = await rt.dock.getOrder(r.session, orderId).catch(() => undefined);
+      if (o?.status !== "pending_approval") continue;
+      await rt.dock.withdrawOrder(r.session, orderId, { reason: "the conversation was started over" }).catch((err) => console.error("[thread] start over: take back", orderId, err));
+    }
+  }
   return store.publicView(store.reset(k.info.slug, k.info.orgId));
 }
 
@@ -223,7 +237,7 @@ export async function threadEvents(k: Kitchen) {
 }
 
 /** POST /thread/turns: accept a turn, open the agent turn, and work on it in the background. */
-export async function submitTurn(kitchen: Kitchen | string, input: unknown): Promise<SubmitTurnReply> {
+export async function submitTurn(kitchen: Kitchen | string, input: unknown, opts: { visitor?: string } = {}): Promise<SubmitTurnReply> {
   const body = parse(SubmitTurnSchema, input) as SubmitTurn;
   const door = body.door;
   const r = await resolve(kitchen, door);
@@ -233,7 +247,18 @@ export async function submitTurn(kitchen: Kitchen | string, input: unknown): Pro
   if (body.clientTurnId && thread.seen[body.clientTurnId]) return { threadId: thread.threadId, ...thread.seen[body.clientTurnId], seq: thread.seq, duplicate: true };
 
   const now = new Date().toISOString();
-  const buyer: BuyerTurn = { turnId: newId("trn"), role: "buyer", at: now, door, via: body.via, ...(body.text ? { text: body.text } : {}), ...(body.action ? { action: body.action } : {}), ...(body.label ? { label: body.label } : {}), ...(body.clientTurnId ? { clientTurnId: body.clientTurnId } : {}) };
+  // A shared test kitchen taken over by another browser session: what the other one left open is theirs (never
+  // answered by these words, never said in this reply), and a new message is a new request (visitor.ts).
+  const { TEST_USERNAMES } = await import("@/server/accounts/test-accounts");
+  const sw = visitorSwitch(thread.turns, opts.visitor, TEST_USERNAMES.has(slug), Date.now());
+  if (sw) {
+    e.store.addTurn(thread, { turnId: newId("trn"), role: "agent", at: now, replyTo: "visitor", status: "done", steps: [], cards: [], boundary: "visitor", ...(sw.note ? { note: true } : {}) });
+    // The model starts without the other visitor's exchange, and the questions it left open in plain code are theirs.
+    thread.messages = [];
+    const open = thread as unknown as Record<string, unknown>;
+    for (const k of ["leaveOut", "anotherDay", "spokenReadBack", "ways", "dish", "askInstead"]) delete open[k];
+  }
+  const buyer: BuyerTurn = { turnId: newId("trn"), role: "buyer", at: now, ...(opts.visitor ? { visitor: opts.visitor } : {}), door, via: body.via, ...(body.text ? { text: body.text } : {}), ...(body.action ? { action: body.action } : {}), ...(body.label ? { label: body.label } : {}), ...(body.clientTurnId ? { clientTurnId: body.clientTurnId } : {}) };
   const agentTurn: AgentTurn = { turnId: newId("trn"), role: "agent", at: now, replyTo: buyer.turnId, status: "working", steps: [], cards: [] };
   e.store.addTurn(thread, buyer);
   e.store.addTurn(thread, agentTurn);
@@ -310,7 +335,7 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
   // the adapter (scenarioAnswerOf), the same as the tap. Its plan stays the subject after the first answer, so naming
   // another verified option still reaches it.
   if (!body.action && body.text) {
-    const sc = run.store.cards(thread).map((x) => x.card).filter((c) => c.type === "scenario").at(-1);
+    const sc = ownCards(thread.turns, run.store.cards(thread)).map((x) => x.card).filter((c) => c.type === "scenario").at(-1);
     const lastReply = [...thread.turns].reverse().find((x) => x.role === "agent" && x.turnId !== run.turnId && x.replyTo !== "");
     const recent = sc && lastReply?.role === "agent" && (lastReply.cards.some((c) => c.cardId === sc.cardId) || thread.turns.slice(thread.turns.findIndex((x) => x.role === "agent" && x.cards.some((c) => c.cardId === sc.cardId))).filter((x) => x.role === "buyer").length <= 3);
     if (sc?.type === "scenario" && recent) {
@@ -412,7 +437,7 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
     // The sheet open now (shown in an earlier reply and edited in place since), when nothing else is open after it.
     const { currentSheet } = await import("./sheet");
     const cur = currentSheet(run);
-    const sheet = cur ? run.store.cards(thread).map((x) => x.card).find((c) => c.type === "sheet" && c.sheetId === cur.sheetId && c.state === "editing") : undefined;
+    const sheet = cur ? ownCards(thread.turns, run.store.cards(thread)).map((x) => x.card).find((c) => c.type === "sheet" && c.sheetId === cur.sheetId && c.state === "editing") : undefined;
     const busy = last?.role === "agent" && last.cards.some((c) => (c.type === "anomaly" && !c.answered) || c.type === "question" || (c.type === "options" && !c.chosen && !c.adjusted) || (c.type === "menu" && !c.sheetId));
     if (sheet?.type === "sheet" && !busy && yesOrNo(body.text) === "yes") {
       const now = run.store.cards(thread).map((x) => x.card).find((c) => c.type === "sheet" && c.sheetId === sheet.sheetId);

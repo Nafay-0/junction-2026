@@ -110,6 +110,8 @@ export type BuyerTurn = {
   turnId: string;
   role: "buyer";
   at: string;
+  /** The browser session that sent it (a hash of its sign-in cookie), in a shared test kitchen. */
+  visitor?: string;
   door: ThreadDoor;
   via: TurnVia;
   /** The buyer's own words, exactly as typed or transcribed. Absent for a pure tap. */
@@ -141,6 +143,10 @@ export type AgentTurn = {
   turnId: string;
   role: "agent";
   at: string;
+  /** Not a reply: where a different browser session took over a shared test kitchen's conversation. What was open
+   * before it is that session's; `note`: show the quiet line that another visitor is using the kitchen. */
+  boundary?: "visitor";
+  note?: boolean;
   /** The buyer turn this answers. */
   replyTo: string;
   status: AgentTurnStatus;
