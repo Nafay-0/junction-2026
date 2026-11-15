@@ -103,9 +103,7 @@ export const EDL: Record<string, () => ChapterEdit> = {
       ...(has("c04-03-menu")
         ? ([
             { clip: "c04-03-menu", at: start("c04"), label: "Hotel Lumo kitchen · menu planner", url: `${K}/k`, from: 0.3, sync: [[ev("c04-03-menu", "the menu planner asks"), cue("c04-1", "asks what", -0.3)]] },
-            { clip: "c04-03-menu", at: cue("c04-1", "and offers", -0.4), label: "Hotel Lumo kitchen · menu planner", url: `${K}/k`, from: 17.0, sync: [[ev("c04-03-menu", "answered"), cue("c04-1", "offers three", 0)]] },
-            { clip: "c04-03-menu", at: cue("c04-1", "Pick one", -0.4), label: "Hotel Lumo kitchen · menu planner", url: `${K}/k`, from: 33.6, sync: [[ev("c04-03-menu", "typed: The first"), cue("c04-1", "Pick one", -0.1)]] },
-            { clip: "c04-03-menu", at: cue("c04-1", "and it sorts", -0.3), label: "Hotel Lumo kitchen · menu planner", url: `${K}/k`, from: 53.8, sync: [[ev("c04-03-menu", "You have"), cue("c04-1", "you have", -0.3)]], zoom: [{ at: cue("c04-1", "you have", 0.3), s: 1.1, x: 0.4, y: 0.55 }] },
+            { clip: "c04-03-menu", at: cue("c04-1", "and offers", -0.4), label: "Hotel Lumo kitchen · menu planner", url: `${K}/k`, from: 17.0, until: 24.0, sync: [[ev("c04-03-menu", "answered"), cue("c04-1", "offers three", 0)]], zoom: [{ at: cue("c04-1", "Pick one", 0), s: 1.1, x: 0.4, y: 0.42 }] },
           ] as Shot[])
         : [ph(start("c04"), "The menu planner: three dishes, then “You have / I'll order / Can't get”", "Menu planner")]),
       clip("c04-01-watch", { at: partAt("c04-2", -0.2), label: "Hotel Lumo kitchen · the watch", url: `${K}/k`, until: 4.6, sync: has("c04-01-watch") ? [[ev("c04-01-watch", "the watch's opening"), cue("c04-2", "Here's its", -0.3)]] : undefined, zoom: [{ at: cue("c04-2", "Here's its", 0.2), s: 1.12, x: 0.35, y: 0.3 }] }, "The watch's opening note"),
