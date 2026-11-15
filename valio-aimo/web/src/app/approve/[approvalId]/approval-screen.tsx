@@ -189,8 +189,8 @@ export function ApprovalScreen({ approvalId, token }: { approvalId: string; toke
   if (loadError && !view)
     return (
       <PhoneNotice
-        title={loadError.code === "approval_not_found" ? tx.noSuch : loadError.code === STORE_DOWN ? tx.storeDown : tx.didNotLoad}
-        body={loadError.code === STORE_DOWN ? tx.storeDownBody : loadError.message}
+        title={loadError.code === "approval_on_signer_phone" ? tx.scanAgain : loadError.code === "approval_not_found" ? tx.onApproverPhone : loadError.code === STORE_DOWN ? tx.storeDown : tx.didNotLoad}
+        body={loadError.code === "approval_on_signer_phone" ? tx.scanAgainBody : loadError.code === "approval_not_found" ? tx.onApproverPhoneBody : loadError.code === STORE_DOWN ? tx.storeDownBody : loadError.message}
         mark={
           <IconDisc tone="muted" size={56}>
             <CircleSlash size={26} />
