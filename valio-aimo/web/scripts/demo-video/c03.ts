@@ -58,6 +58,26 @@ async function main() {
     await k.ctx.close();
   }
 
+  if (only?.includes("alone")) {
+    const k = await new Kitchen(browser, base, "hotel-lumo").open();
+    const take = new Take("c02-06");
+    await take.record(k.page);
+    await sleep(800);
+    await k.say(take, "Order 420 litres of lactose-free milk for Tuesday.", { label: "typed: an order within the limit" });
+    take.event("options at fixed prices");
+    await sleep(3500);
+    const t = await k.say(take, "The first one.");
+    take.event("placed alone (under the 500 € limit): recorded at the fixed price, now with the wholesaler's team to confirm");
+    const team = k.page.getByText(/wholesaler's team/).last();
+    if (await team.count()) await reveal(team, { block: "center" }).catch(() => undefined);
+    console.log("  ON SCREEN:", (await k.page.locator("main").innerText().catch(() => "")).replace(/\s+/g, " ").slice(-900));
+    void t;
+    await sleep(5000);
+    await take.stop();
+    deliver(take, { id: "c02-06-placed-alone", chapter: "c02", what: "Hotel Lumo: 420 L within the 500 € limit is placed by the agent alone; the sentence that it is recorded at the fixed price and now with the wholesaler's team to confirm, and the state under the order" });
+    await k.ctx.close();
+  }
+
   if (on("refused")) {
     const k = await new Kitchen(browser, base, "kahvila-sointu").open();
     let take = new Take("c03-03");
