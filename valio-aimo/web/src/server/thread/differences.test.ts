@@ -56,7 +56,7 @@ describe("nothing is left out, swapped, reduced or moved silently", () => {
 
   it("a substitute the engine chose is said on the item it replaces", () => {
     const d = optionDifferences({ key: "r1", name: "Lactose-free milk 1 l" }, { substituteFor: "p1", title: "Valio Hyvä suomalainen Arki 1 l" });
-    expect(sayDifferences(d, ctx).said).toBe("Lactose-free milk 1 l: Valio Hyvä suomalainen Arki 1 l in its place.");
+    expect(sayDifferences(d, ctx).said).toBe("In place of the lactose-free milk 1 l I'd send the Valio Hyvä suomalainen Arki 1 l.");
   });
 
   it("a difference without a reason is said as such and returned as a defect, never skipped", () => {
@@ -69,5 +69,18 @@ describe("nothing is left out, swapped, reduced or moved silently", () => {
   it("an amount reduced below what was asked", () => {
     const d = differencesOf([{ key: "m", name: "Milk", need: { amount: 1000, unit: "L" } }], [{ key: "m", amount: { amount: 420, unit: "L" } }]);
     expect(sayDifferences(d, ctx).said).toBe("Milk: only 420 l of the 1000 l you asked for.");
+  });
+});
+
+describe("an ingredient the kitchen's allergen rule stops", () => {
+  it("is said with the gate's own reason, never an allergen the gate did not name", async () => {
+    const { allergenReason, sayDifferences } = await import("./differences");
+    expect(allergenReason("464001 contains forbidden allergen(s): milk, lactose.", ["milk"])).toEqual({ code: "allergen", allergens: ["milk", "lactose"] });
+    expect(allergenReason("464001 contains forbidden allergen(s) by its nature: fish.", ["fish"])).toEqual({ code: "allergen", allergens: ["fish"] });
+    const none = allergenReason("470123 has no allergen data from its maker, so nothing shows it is free of nuts, peanuts. Unknown is not safe: choose a product with declared allergens.", ["nuts", "peanuts"]);
+    expect(none).toEqual({ code: "allergen_unknown", allergens: ["nuts", "peanuts"] });
+    const said = sayDifferences([{ kind: "left_out", key: "potato", name: "Potatoes", reason: none }], { lang: "en", allowedGroups: [] }).said;
+    expect(said).toMatch(/^Potatoes: the maker of the product I found gives no allergen data, so nothing shows it is free of nuts and peanuts/);
+    expect(said).not.toMatch(/lactose/);
   });
 });

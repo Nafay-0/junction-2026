@@ -1,6 +1,6 @@
 import type { LanguageModelV4CallOptions, LanguageModelV4StreamPart } from "@ai-sdk/provider";
 import { MockLanguageModelV4 } from "ai/test";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { localNow } from "@/core/kitchen";
 import { setInterpretModelForTests } from "@/server/agent/interpret";
 import { getRuntime, resetRuntime } from "@/server/runtime";
@@ -9,6 +9,14 @@ import { submitTurn, threadStore } from "./engine";
 import { withFallback } from "./fallback";
 import { ThreadStore } from "./store";
 import type { Card, ThreadEvent } from "./types";
+
+// These scenarios ask for a weekday ("for Monday"): what can be ordered for it depends on today's date, so on a
+// Monday or a Tuesday the same words met the kitchen's lead window and the tests failed. A fixed morning (Date
+// only; timers stay real), the same one the menu, sample and order-source tests use. Set here, at the top of the
+// file and not in a beforeAll: some scenarios work out their weekday when the file loads.
+vi.useFakeTimers({ toFake: ["Date"] });
+vi.setSystemTime(new Date("2026-11-13T09:00:00Z"));
+afterAll(() => vi.useRealTimers());
 
 // ---------- scripted models ----------
 
@@ -381,6 +389,11 @@ describe("a second request after a sign-off", () => {
     const token = /[?&]token=([^&]+)/.exec(m.link)![1];
     await rt.dock.decideApproval(m.approvalId, { decision: "approve", proof: { kind: "link_token", token: decodeURIComponent(token) } });
     await new Promise((r) => setTimeout(r, 300));
+    // The OK is said once beneath the words said before it: the store's sentence, not the agent's again.
+    const store = await threadStore();
+    const after = store.agentTurn(store.peek("laakso")!, placed.events.find((e) => e.type === "status")?.turnId ?? "")?.line ?? "";
+    expect(after.match(/OK'd it/g) ?? []).toHaveLength(1);
+    expect(after).not.toMatch(/Signed and placed/);
     // The next request: the provider would refuse a history with an unanswered tool call.
     let sent = "";
     setInterpretModelForTests(reader(20));

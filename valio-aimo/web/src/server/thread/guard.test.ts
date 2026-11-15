@@ -60,3 +60,29 @@ describe("the mistake check, said", () => {
     expect(guardAnswerOf(packs, "5 x 0,4 kg")?.action).toMatchObject({ choice: "use_2_kg" });
   });
 });
+
+describe("the delivery-day check, answered in words", () => {
+  const day = card({ key: "delivery_not_delivery_day:2026-11-19", code: "delivery_not_delivery_day", message: "x", confirmable: false, corrections: [{ id: "deliver_2026-11-17", label: "The delivery day before: Tue 17 Nov" }, { id: "deliver_2026-11-20", label: "The next delivery day: Fri 20 Nov" }], evidence: { deliverBy: "2026-11-19" } });
+  it("a yes takes the day the question offered, never another one", () => {
+    expect(guardWords(day, "en")).toMatch(/Shall I make it Fri 20 Nov\?$/);
+    for (const w of ["yes", "yes, order it", "yes please", "kyllä", "ja tack"]) expect(guardAnswerOf(day, w)?.action, w).toMatchObject({ type: "concern", choice: "deliver_2026-11-20" });
+  });
+  it("a weekday named takes the day offered on it, in any of the three languages", () => {
+    expect(guardAnswerOf(day, "deliver it on Tuesday instead")?.action).toMatchObject({ choice: "deliver_2026-11-17" });
+    expect(guardAnswerOf(day, "Friday then")?.action).toMatchObject({ choice: "deliver_2026-11-20" });
+    expect(guardAnswerOf(day, "tiistaina")?.action).toMatchObject({ choice: "deliver_2026-11-17" });
+    expect(guardAnswerOf(day, "på fredag")?.action).toMatchObject({ choice: "deliver_2026-11-20" });
+  });
+  it("an amount, a no, or a day not offered is not an answer to it", () => {
+    expect(guardAnswerOf(day, "make it 15 litres")).toBeUndefined();
+    expect(guardAnswerOf(day, "no, keep Thursday")).toBeUndefined();
+    expect(guardAnswerOf(day, "go to the shop")).toBeUndefined();
+  });
+});
+
+describe("the pack-size check", () => {
+  it("names what comes in those sizes", () => {
+    const c = card({ key: "unit_unclear:40:pcs", code: "unit_unclear", message: "40 pcs of red wine: packs come in 0.22 L, 1 L, 1.5 L, so the amount is unclear.", confirmable: false, corrections: [{ id: "use_40_L", label: "40 L in total" }, { id: "use_8.8_L", label: "40 pcs of 0.22 L = 8.8 L" }, { id: "use_60_L", label: "40 pcs of 1.5 L = 60 L" }] });
+    expect(guardWords(c, "en")).toBe("Red wine comes in several pack sizes. Shall I take 40 pcs of 0,22 L (8,8 L), or 40 pcs of 1,5 L (60 L)?");
+  });
+});

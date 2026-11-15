@@ -1,6 +1,7 @@
 import type { ApprovalProof } from "@/core/approval";
 import { DockError } from "@/core/errors";
 import { canRead, principalOf } from "@/server/authz";
+import { accountOfOrg, phoneJoins } from "@/server/accounts/phone-join";
 import { resolveKitchen } from "@/server/console-kitchens";
 import { currentApprover, sessionTokenOf } from "@/server/approver-session";
 import type { RelyingParty } from "@/core/passkeys";
@@ -61,6 +62,8 @@ export async function findRulesChange(approvalId: string): Promise<Found> {
 /** May this caller see it? The kitchen's approver phone, its own account, operations; 404 for anyone else. */
 export async function requireRulesChangeReader(rt: Runtime, req: Request, f: Found): Promise<void> {
   if (canRead(await principalOf(req, rt), f.thread.orgId)) return;
+  // A shared test kitchen or a fresh kitchen: any phone joins from the kitchen's screen (accounts/phone-join.ts).
+  if (phoneJoins(await accountOfOrg(rt, f.thread.orgId))) throw new DockError(403, "approval_on_signer_phone", "Tap “Send to my phone” again on the other screen and scan the new code.", "data_access", { join: true });
   throw new DockError(404, "approval_not_found", "No such sign-off for you. Open it on the approver's phone.", "data_access");
 }
 

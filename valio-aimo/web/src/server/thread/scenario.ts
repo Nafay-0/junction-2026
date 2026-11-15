@@ -137,7 +137,8 @@ export async function sayScenario(run: TurnRun, kind: ScenarioKind, words: strin
   const stop = watchSteps(run, since, kind, lang);
   try {
     const by = byLine(run);
-    const base = kind === "event" ? await eventForThread(run.k.info.slug, words, by, lang) : await seasonalForThread(run.k.info.slug, words, by, lang);
+    const said = withCovers(run, words);
+    const base = kind === "event" ? await eventForThread(run.k.info.slug, said, by, lang) : await seasonalForThread(run.k.info.slug, said, by, lang);
     return await cardOf(run, base, lang);
   } finally {
     stop();
@@ -313,4 +314,18 @@ export async function answerScenarioIn(run: TurnRun, card: ScenarioCard, answer:
   } finally {
     stop();
   }
+}
+
+/**
+ * The covers (and the day) given earlier in this conversation carry into a plan asked for without them: "Plan a dish
+ * for 40 covers for Friday", then "Something warming with fish" is a plan for 40 on Friday, never one with every line
+ * left off for want of covers. Only from the buyer's last few messages, and never over a number the words give.
+ */
+export function withCovers(run: Pick<TurnRun, "thread" | "buyer">, words: string): string {
+  const covers = (w: string) => /(\d{1,4})\s*(people|persons|guests|covers|portions|pax|servings|kids|pupils|hengelle|henkeä|hengen|annosta|annokselle|ihmiselle|personer|portioner|gäster)\b/i.exec(w)?.[0];
+  const day = (w: string) => /\b(for|on|by)\s+(tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b|\b(huomiseksi|maanantaiksi|tiistaiksi|keskiviikoksi|torstaiksi|perjantaiksi|lauantaiksi|sunnuntaiksi)\b|\b(till|på)\s+(imorgon|måndag|tisdag|onsdag|torsdag|fredag|lördag|söndag)\b/i.exec(w)?.[0];
+  const earlier = run.thread.turns.filter((t) => t.role === "buyer" && t.turnId !== run.buyer.turnId && !!t.text).slice(-4).reverse().map((t) => (t.role === "buyer" ? t.text! : ""));
+  const c = covers(words) ? undefined : earlier.map(covers).find(Boolean);
+  const d = day(words) ? undefined : c ? earlier.map(day).find(Boolean) : undefined;
+  return [words.replace(/[.!?]\s*$/, ""), c ? `for ${c}` : "", d ?? ""].filter(Boolean).join(", ");
 }

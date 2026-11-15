@@ -338,7 +338,8 @@ export function checkQuantity(need: StructuredNeed, ctx: CheckContext): Concern[
         confirmable: false,
         corrections: [
           { id: `use_${q.amount}_${base}`, label: `${formatAmount(q.amount, base)} in total`, patch: { quantity: { amount: q.amount, unit: base } } },
-          ...sizes.map((s) => ({ id: `use_${round(q.amount * s)}_${base}`, label: `${asked} of ${formatAmount(s, base)} = ${formatAmount(round(q.amount * s), base)}`, patch: { quantity: { amount: round(q.amount * s), unit: base } } })),
+          // A reading that comes to the same amount as "in total" (40 pcs of 1 L = 40 L) is the same choice: once.
+          ...sizes.filter((s) => round(q.amount * s) !== q.amount).map((s) => ({ id: `use_${round(q.amount * s)}_${base}`, label: `${asked} of ${formatAmount(s, base)} = ${formatAmount(round(q.amount * s), base)}`, patch: { quantity: { amount: round(q.amount * s), unit: base } } })),
         ],
       },
     ];

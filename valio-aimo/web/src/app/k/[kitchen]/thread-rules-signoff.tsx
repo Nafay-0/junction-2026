@@ -60,10 +60,11 @@ export function RulesSignOffSlab({ card }: { card: RulesCard }) {
   async function toPhone() {
     if (phone) return setPhone(undefined);
     setProblem(undefined);
-    const r = await api<{ approvalId: string; mode: "passkey" | "no_device"; url: string; qrSvg: string }>("GET", base);
+    const r = await api<{ approvalId: string; mode: "passkey" | "no_device"; join?: boolean; url: string; qrSvg: string }>("GET", base);
     if (!r.ok) return setProblem(r.error.message);
-    // No signing device yet, from the kitchen's own account: the code adds the phone as the signer's device, then opens the change.
-    if (r.data.mode === "no_device" && own) {
+    // From the kitchen's own account with no signing device yet, or in a shared test kitchen or a fresh kitchen every
+    // time: the code adds the phone as one more device of the signer, then opens the change.
+    if ((r.data.mode === "no_device" || r.data.join) && own) {
       const l = await api<{ url: string; qrSvg: string }>("POST", "/ui-api/account/device/link", { next: `/approve/${r.data.approvalId}` });
       if (l.ok) return setPhone({ url: l.data.url, qrSvg: l.data.qrSvg, adds: true });
       return setProblem(l.error.message);
