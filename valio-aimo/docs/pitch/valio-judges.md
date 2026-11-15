@@ -120,8 +120,8 @@ Monday." (`table-demo.md`).
   tested; Claude Code and Gemini CLI were.
 - **Voice** heard 33 of 36 held-out recorded clips right (`web/docs/doors.md`). No test on a real phone in a real
   kitchen is recorded.
-- **Email** receipts and alerts are built; real delivery to any inbox needs a verified sending domain, which is not
-  set up (`web/docs/mail.md`).
+- **Email** receipts and alerts are built and sent from a verified domain since 15 November; the free plan sends
+  about 90 mails a day (`web/docs/mail.md`).
 - Some limits (per connector, operations sign-in) are held in one process's memory.
 
 ## Next development steps

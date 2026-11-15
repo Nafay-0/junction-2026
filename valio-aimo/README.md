@@ -10,6 +10,8 @@ Built at Junction 2026 (13 to 15 November, Espoo) for Valio Aimo's challenge, "T
 
 Live demo: <https://aimopilot.zeroanomaly.tech>
 
+Watch: the [2-minute film](https://youtu.be/9ckYi6chCec) and the [detailed 10-minute demo](https://youtu.be/JFcHMe_fxio).
+
 The site runs on Aiven Runtime (the app `dock-app`). The address above is a custom domain in front of the app's own Aiven host, `jolly-wondrous-bunny.eur-1.aiven.app`, which still answers. Use the custom domain: links, QR codes, mail and passkeys belong to it (`infra/aiven-deploy.mjs`, `DOCK_DEPLOY_CUSTOM_DOMAIN`).
 
 | Page | What it is |
@@ -89,7 +91,7 @@ pnpm dev           # http://localhost:3000
 pnpm e2e           # the phone sign-off in a browser with a virtual passkey
 ```
 
-Free-text requests, hands-free voice and photo reading need model keys; the names are in `web/.env.example`. Copy it to `web/.env.local` and fill in what you have. Mail needs a Resend key, and reaches inboxes other than the Resend account's own only from a verified sending domain ([web/docs/mail.md](web/docs/mail.md)). More in [web/README.md](web/README.md).
+Free-text requests, hands-free voice and photo reading need model keys; the names are in `web/.env.example`. Copy it to `web/.env.local` and fill in what you have. Mail needs a Resend key, and reaches inboxes other than the Resend account's own only from a verified sending domain ([web/docs/mail.md](web/docs/mail.md)); the hosted site sends from one since 15 November. More in [web/README.md](web/README.md).
 
 ### The audit time machine
 

@@ -143,6 +143,7 @@ Pick what they ask about. Each block is about 30 seconds.
   but the hosted site has no licences published to it.
 - Do not plan a dish with allergens for Kaari at the table: the stand-alone planner's own mandate for Kaari still
   lists no forbidden allergens (`claims.md`).
-- Do not say an email reached your inbox unless you have seen it: without a verified sending domain, mail reaches
-  only the Resend account's own address.
+- Email: the hosted site sends from a verified domain since Sunday morning (`orders@aimopilot.zeroanomaly.tech`), so a
+  reviewer who gives an address gets the confirmation mail and, once confirmed, receipts. Do not say a mail reached an
+  inbox unless you have seen it there; the free plan sends about 90 a day.
 - No speed or latency figures.

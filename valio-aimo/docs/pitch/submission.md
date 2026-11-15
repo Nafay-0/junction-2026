@@ -10,7 +10,8 @@ rule for everything public: accuracy figures yes, speed or latency figures no.
 - [x] **Repository access for judges.** The repository is public since Sunday 15 Nov, about 06:25 (`gh repo view`:
       `PUBLIC`, MIT `LICENSE`). Checked before: no partner data file, no env file and none of the values in
       `.env.local` appears anywhere in the history.
-- [ ] **The film.** Upload it, check it plays logged out, paste the link below and into the landing page's film slot.
+- [x] **The film.** Uploaded and public: https://youtu.be/9ckYi6chCec (2 minutes) and https://youtu.be/JFcHMe_fxio (the detailed 10-minute demo).
+      Both checked logged out on 15 Nov.
 - [ ] **Deck** exported to PDF (outline in `pitch-3min.md`).
 - [x] **The full two-sentence request.** Fixed and deployed: run on the hosted site on 15 Nov by two reviewers with two phones, both sign-offs went through (`table-demo.md`).
 - [ ] Recount the commit numbers for the AI statement on the morning you submit (commands at the end).
@@ -33,6 +34,8 @@ Any company's AI purchasing agent can order from the wholesaler under a mandate 
 **Let AI do the buying. Keep the last word.**
 
 Soon a kitchen's AI agent will place its food orders. The wholesaler then gets orders from machines: did a person mean 1,000 litres, who allowed this agent to spend that much, and who answers if it is wrong? Valio Aimo's challenge asks for a way for outside purchasing agents to order that both sides can trust. AimoPilot is that door.
+
+**Watch:** the [2-minute film](https://youtu.be/9ckYi6chCec) and the [detailed 10-minute demo](https://youtu.be/JFcHMe_fxio).
 
 ### How it works
 1. **A signed mandate.** The kitchen signs what its agent may buy: product groups, required claims such as lactose-free, forbidden allergens, a per-order limit, a weekly budget, how substitutes are handled, and who signs off above the limit.
@@ -64,10 +67,10 @@ A crash test for AI buyers: 13 hard purchasing situations, three runs each, scor
 Runtime (the app), PostgreSQL (orders, ledger, memory, telemetry, the Time machine's history), Kafka (every action and decision), Valkey (live-price cache, lookup budgets), OpenSearch (product search in Finnish, Swedish and English, the agent's recall, the audit trail), Grafana (dashboard and alert rules), Managed Agents (an outside buyer we do not run) and Aiven's MCP server (for the copilot).
 
 ### Known limits
-Demo on synthetic data with the partner's test API; no order reaches a real order system. Mail reaches real inboxes only once a sending domain is verified. The crash-test licence can be enforced by the gate but is not applied on the hosted site. Consumer assistants connect through a secret address; OAuth is designed, not built. Full list: valio-aimo/docs/pitch/valio-judges.md.
+Demo on synthetic data with the partner's test API; no order reaches a real order system. The crash-test licence can be enforced by the gate but is not applied on the hosted site. Consumer assistants connect through a secret address; OAuth is designed, not built. Full list: valio-aimo/docs/pitch/valio-judges.md.
 ```
 
-(4,724 characters as written. Check the count in the form before submitting.)
+(4,785 characters as written. Check the count in the form before submitting.)
 
 ## What is innovative (if the form or a juror asks; also the opening of the table demo)
 
@@ -146,5 +149,6 @@ We built this with AI coding agents (Claude Code; Claude Fable 5.2 as the orches
 
 - Demo: `https://aimopilot.zeroanomaly.tech`
 - Source: `https://github.com/Nafay-0/junction-2026` (public; the project is in `valio-aimo/`)
-- Video: (add after upload)
+- Video (the 2-minute film, for the form's video field): `https://youtu.be/9ckYi6chCec`
+- Detailed demo (10 minutes, with captions): `https://youtu.be/JFcHMe_fxio`
 - Deck PDF: (export from the outline in `pitch-3min.md`)

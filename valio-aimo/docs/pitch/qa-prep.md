@@ -28,7 +28,7 @@ answer in the first section.
 
 **4. "What would you do with the next 48 hours?"**
 > "First, close what our own testing found: the stand-alone menu planner's mandate does not yet carry a kitchen's
-> allergen rules, and real email needs a verified sending domain. Second, switch on the crash-test licence at the
+> allergen rules. Second, switch on the crash-test licence at the
 > live gate: the gate can already enforce it, but the hosted site has no licences published to it. Third, ask Valio
 > Aimo for a test account on the real webshop and try the sign-off and the voice on real phones in a real kitchen."
 
