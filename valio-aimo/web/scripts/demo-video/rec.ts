@@ -80,8 +80,8 @@ export type Kind = "desktop" | "phone";
 export const DESK = { viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1.5 };
 export const PHONE = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 1.5 };
 
-export async function launch(): Promise<Browser> {
-  return chromium.launch({ channel: process.env.PW_CHANNEL || "chromium", args: [`--force-device-scale-factor=${process.env.FORCE_DSF || "1.5"}`, "--hide-scrollbars", "--font-render-hinting=none", "--force-color-profile=srgb"] });
+export async function launch(extra: string[] = []): Promise<Browser> {
+  return chromium.launch({ channel: process.env.PW_CHANNEL || "chromium", args: [...extra, `--force-device-scale-factor=${process.env.FORCE_DSF || "1.5"}`, "--hide-scrollbars", "--font-render-hinting=none", "--force-color-profile=srgb"] });
 }
 
 export async function context(browser: Browser, base: string, kind: Kind = "desktop", extra: Record<string, unknown> = {}): Promise<BrowserContext> {
