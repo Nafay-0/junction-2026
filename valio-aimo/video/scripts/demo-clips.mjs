@@ -7,7 +7,9 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const dir = join(root, "public/demo-clips");
 const out = {};
-for (const f of existsSync(dir) ? readdirSync(dir).filter((x) => x.endsWith(".mp4")).sort() : []) {
+const files = (sub) => (existsSync(join(dir, sub)) ? readdirSync(join(dir, sub)).filter((x) => x.endsWith(".mp4")).sort().map((x) => (sub ? `${sub}/${x}` : x)) : []);
+// Earlier takes the capture session moved aside stay usable as "previous/<name>".
+for (const f of [...files(""), ...files("previous")]) {
   const name = f.replace(/\.mp4$/, "");
   const probe = spawnSync("ffprobe", ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height,r_frame_rate:format=duration", "-of", "json", join(dir, f)], { encoding: "utf8" });
   let seconds = 0, size = "";

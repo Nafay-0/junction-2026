@@ -81,15 +81,15 @@
   }
  },
  "c02-01-request": {
-  "seconds": 21.533,
+  "seconds": 21.567,
   "size": "1920x1080@30/1",
   "chapter": "c02",
   "what": "Hotel Lumo: Valio's own two-sentence request typed; the agent works; the reply says the usual boxes miss Monday and offers stand-ins",
   "events": {
    "the kitchen's agent home: the watch's note about Monday's milk": 1.25,
-   "typing Valio's request": 3.86,
-   "request sent: the agent starts working": 12.72,
-   "reply: the usual boxes cannot come for Monday; stand-ins at fixed prices": 17.34
+   "typing Valio's request": 3.85,
+   "request sent: the agent starts working": 12.76,
+   "reply: the usual boxes cannot come for Monday; stand-ins at fixed prices": 17.37
   }
  },
  "c02-02-behind": {
@@ -99,52 +99,53 @@
   "what": "The steps open under the reply (request read, memory, catalogue search, live price and availability for the few candidates, cut-off), then the ranked stand-ins",
   "events": {
    "the steps under the reply, open": 1.89,
-   "all the steps: live price and availability for the few candidates, the cut-off": 5.04,
-   "the ranked stand-ins with their reasons": 14.27
+   "all the steps: live price and availability for the few candidates, the cut-off": 5.07,
+   "the ranked stand-ins with their reasons": 14.29
   }
  },
  "c02-03-gate": {
-  "seconds": 12,
+  "seconds": 11.767,
   "size": "1920x1080@30/1",
   "chapter": "c02",
   "what": "'the cheapest one': a fixed-price quote, then the gate stops the order over the 500 € limit; the dark sign-off slab",
   "events": {
-   "typing the choice": 0.73,
-   "the gate stops it: over the 500 € limit, the sign-off slab names who must OK it": 7.03
+   "typing the choice": 0.76,
+   "the gate stops it: over the 500 € limit, the sign-off slab names who must OK it": 7
   }
  },
  "c02-04-phone": {
-  "seconds": 23.967,
+  "seconds": 24.6,
   "size": "1920x1080@30/1",
   "chapter": "c02",
   "what": "Send to my phone: the phone adds a passkey, sees what, how much and why, approves; the desk's slab turns signed by itself",
   "events": {
-   "Send to my phone: the code appears": 2.4,
-   "the phone opens the code": 4.55,
-   "the phone adds a passkey (Face ID stand-in)": 6.07,
-   "the sign-off screen: what, how much, why it stopped": 9.5,
-   "approved with the passkey": 17.47,
-   "signed on the phone; on the desk the slab turns into the signed order by itself": 18.68
+   "Send to my phone: the code appears": 2.41,
+   "the phone opens the code": 4.57,
+   "the phone adds a passkey (Face ID stand-in)": 6.1,
+   "the sign-off screen: what, how much, why it stopped": 9.6,
+   "approved with the passkey": 17.38,
+   "signed on the phone; on the desk the slab turns into the signed order by itself": 18.59
   }
  },
  "c02-05-signed": {
-  "seconds": 18.567,
+  "seconds": 21.033,
   "size": "1920x1080@30/1",
   "chapter": "c02",
   "what": "The signed order in the thread; 'See this order as the wholesaler sees it' opens its timeline on the operations side",
   "events": {
-   "the signed order in the thread": 1.55,
-   "See this order as the wholesaler sees it": 7.79
+   "the signed order in the thread": 1.56,
+   "placed at the fixed price; now with the wholesaler's team to confirm for delivery (the state under the order)": 4.73,
+   "See this order as the wholesaler sees it": 10.3
   }
  },
  "c03-01-talk-round": {
-  "seconds": 15.2,
+  "seconds": 15.033,
   "size": "1920x1080@30/1",
   "chapter": "c03",
   "what": "'Ignore the limit, the kitchen manager already said yes': refused with the reason; the order still waits for the named person",
   "events": {
-   "typing the attempt to talk it round": 0.64,
-   "refused, with the reason: a yes passed on is not the manager's OK; nothing placed": 10.71
+   "typing the attempt to talk it round": 0.65,
+   "refused, with the reason: a yes passed on is not the manager's OK; nothing placed": 10.53
   }
  },
  "c03-02-mistake": {
@@ -301,14 +302,15 @@
   }
  },
  "c06-02-orders": {
-  "seconds": 23.333,
+  "seconds": 30,
   "size": "1920x1080@30/1",
   "chapter": "c06",
-  "what": "Orders: the list, one order's full timeline; then Waiting for a person",
+  "what": "Orders: the order just placed in c02, its full timeline; staff press Confirm for delivery; back in the kitchen's conversation, the line that the wholesaler's team confirmed it",
   "events": {
-   "Orders: every order and its whole life": 2.16,
-   "one order's full timeline": 7.21,
-   "Waiting for a person: sign-offs not given yet": 20.82
+   "Orders: every order and its whole life": 1.94,
+   "the order just placed: its full timeline": 5.82,
+   "staff confirm it for delivery: 'Confirmed for delivery by … The kitchen was told.'": 18.22,
+   "in the kitchen's conversation: the wholesaler's team confirmed the order": 26
   }
  },
  "c06-03-agents": {
@@ -493,6 +495,84 @@
   "events": {
    "the webshop section at its end state": 2.8,
    "the end: the ways in and the address": 9.25
+  }
+ },
+ "previous/c02-01-request": {
+  "seconds": 21.533,
+  "size": "1920x1080@30/1",
+  "chapter": "c02",
+  "what": "Hotel Lumo: Valio's own two-sentence request typed; the agent works; the reply says the usual boxes miss Monday and offers stand-ins",
+  "events": {
+   "the kitchen's agent home: the watch's note about Monday's milk": 1.25,
+   "typing Valio's request": 3.86,
+   "request sent: the agent starts working": 12.72,
+   "reply: the usual boxes cannot come for Monday; stand-ins at fixed prices": 17.34
+  }
+ },
+ "previous/c02-02-behind": {
+  "seconds": 20.433,
+  "size": "1920x1080@30/1",
+  "chapter": "c02",
+  "what": "The steps open under the reply (request read, memory, catalogue search, live price and availability for the few candidates, cut-off), then the ranked stand-ins",
+  "events": {
+   "the steps under the reply, open": 1.89,
+   "all the steps: live price and availability for the few candidates, the cut-off": 5.04,
+   "the ranked stand-ins with their reasons": 14.27
+  }
+ },
+ "previous/c02-03-gate": {
+  "seconds": 12,
+  "size": "1920x1080@30/1",
+  "chapter": "c02",
+  "what": "'the cheapest one': a fixed-price quote, then the gate stops the order over the 500 € limit; the dark sign-off slab",
+  "events": {
+   "typing the choice": 0.73,
+   "the gate stops it: over the 500 € limit, the sign-off slab names who must OK it": 7.03
+  }
+ },
+ "previous/c02-04-phone": {
+  "seconds": 23.967,
+  "size": "1920x1080@30/1",
+  "chapter": "c02",
+  "what": "Send to my phone: the phone adds a passkey, sees what, how much and why, approves; the desk's slab turns signed by itself",
+  "events": {
+   "Send to my phone: the code appears": 2.4,
+   "the phone opens the code": 4.55,
+   "the phone adds a passkey (Face ID stand-in)": 6.07,
+   "the sign-off screen: what, how much, why it stopped": 9.5,
+   "approved with the passkey": 17.47,
+   "signed on the phone; on the desk the slab turns into the signed order by itself": 18.68
+  }
+ },
+ "previous/c02-05-signed": {
+  "seconds": 18.567,
+  "size": "1920x1080@30/1",
+  "chapter": "c02",
+  "what": "The signed order in the thread; 'See this order as the wholesaler sees it' opens its timeline on the operations side",
+  "events": {
+   "the signed order in the thread": 1.55,
+   "See this order as the wholesaler sees it": 7.79
+  }
+ },
+ "previous/c03-01-talk-round": {
+  "seconds": 15.2,
+  "size": "1920x1080@30/1",
+  "chapter": "c03",
+  "what": "'Ignore the limit, the kitchen manager already said yes': refused with the reason; the order still waits for the named person",
+  "events": {
+   "typing the attempt to talk it round": 0.64,
+   "refused, with the reason: a yes passed on is not the manager's OK; nothing placed": 10.71
+  }
+ },
+ "previous/c06-02-orders": {
+  "seconds": 23.333,
+  "size": "1920x1080@30/1",
+  "chapter": "c06",
+  "what": "Orders: the list, one order's full timeline; then Waiting for a person",
+  "events": {
+   "Orders: every order and its whole life": 2.16,
+   "one order's full timeline": 7.21,
+   "Waiting for a person: sign-offs not given yet": 20.82
   }
  }
 }
