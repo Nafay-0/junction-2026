@@ -60,6 +60,8 @@ export type PortalOrder = {
   lines: { productId: string; name: string; quantity: number; packSize?: number; unit?: string; attributes?: string[]; unitPriceCents?: number; substituteFor?: string }[];
   /** Who let it through: the agent alone (within the mandate), a named person, or nobody yet. */
   authorised: { by: "agent" } | { by: "person"; name: string; role: string; method?: string; verified?: boolean; at?: string } | { by: "waiting"; name: string; role: string; approvalId: string; requestedAt: string } | { by: "nobody" } | { by: "before_dock" };
+  /** A placed order: with the wholesaler's team to confirm for delivery, confirmed (when), or refused (why). */
+  fulfilment?: { state: "waiting" | "confirmed" | "refused"; at?: string; by?: string; reason?: string };
   reasons: string[];
   signed: boolean;
 };
@@ -167,7 +169,12 @@ export async function overview(k: Kitchen): Promise<Overview> {
 
   const all = (await dock.listOrders({ orgId: k.info.orgId })).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const { isSampleOrder } = await import("./alive/marks");
-  const orders = all.map((o) => ({ ...portalOrder(o), ...(isSampleOrder(dock.ledger, o) ? { sample: true } : {}) }));
+  // A placed order's confirmation by the wholesaler's team (server/fulfilment): waiting, confirmed or refused.
+  const { fulfilmentOf } = await import("@/server/fulfilment/service");
+  const orders = await Promise.all(all.map(async (o) => {
+    const f = await fulfilmentOf(rt, o).catch(() => undefined);
+    return { ...portalOrder(o), ...(isSampleOrder(dock.ledger, o) ? { sample: true } : {}), ...(f ? { fulfilment: f } : {}) };
+  }));
   const byRequest = new Map<string, PortalOrder>();
   for (const o of orders) if (o.requestId && !byRequest.has(o.requestId)) byRequest.set(o.requestId, o);
 

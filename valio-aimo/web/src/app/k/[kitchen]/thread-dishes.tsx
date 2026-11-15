@@ -5,6 +5,12 @@ import { useText } from "../../_i18n/provider";
 import { money } from "../../_ui/plain";
 import type { DishesCard } from "@/server/thread/types";
 import { THREAD_DISHES_TEXT } from "./thread-dishes.text";
+import { Leaf } from "lucide-react";
+import { marksSummary } from "@/core/line-marks";
+import { BASKET_TEXT } from "./basket.text";
+import { Pips } from "./thread-marks";
+import { THREAD_MARKS_TEXT } from "./thread-marks.text";
+import { dishCo2, recordSummary } from "./thread-marks.words";
 
 type Lang = "en" | "fi" | "sv";
 
@@ -56,6 +62,23 @@ export function Dishes({
   said?: string;
 }) {
   const tx = useText(THREAD_DISHES_TEXT);
+  const mt = useText(THREAD_MARKS_TEXT);
+  const bt = useText(BASKET_TEXT);
+  // One quiet line under the total: the footprint of what is bought (and a portion's), and the delivery summary.
+  const ms = card.marks?.length ? marksSummary(card.marks) : undefined;
+  const msCo2 = ms && dishCo2(ms, mt, card.covers, card.dishes.length > 1 && !card.groups);
+  const msRec = ms && recordSummary(ms, mt);
+  const marksLine = (msCo2 || msRec) && (
+    <p data-marks-summary className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[0.8rem] leading-snug text-ink-soft">
+      {msCo2 && (
+        <span title={bt.carbonNote} className="inline-flex items-center gap-1 tabular">
+          <Leaf aria-hidden size={11} strokeWidth={2} className="shrink-0" />
+          {msCo2}
+        </span>
+      )}
+      {msRec && <span className={ms?.poor ? "text-notice" : ""}>{msRec}</span>}
+    </p>
+  );
   const noteOf = (
     n: NonNullable<DishesCard["dishes"][number]["items"][number]["note"]>,
   ): string => {
@@ -83,7 +106,7 @@ export function Dishes({
   // One dish: its ingredients in three groups, each a short run of text; the reason beside what cannot be had.
   const g = card.groups;
   if (g && card.dishes.length === 1) {
-    const row = (label: string, items: { name: string; need?: string; extra?: string }[], tone = "") =>
+    const row = (label: string, items: { name: string; need?: string; extra?: string; poor?: { share: number; n: number; of: number } }[], tone = "") =>
       items.length > 0 && (
         <p className="text-[0.88rem] leading-[1.55] text-ink-soft [text-wrap:pretty]">
           <span className="font-medium text-ink">{label}: </span>
@@ -93,6 +116,12 @@ export function Dishes({
               {nameOf(i.name, false)}
               {i.need && <span className="tabular whitespace-nowrap"> {i.need.replace(".", ",")}</span>}
               {i.extra && <span className={`italic ${tone}`}> ({i.extra})</span>}
+              {i.poor && (
+                <span data-mark="delivery" className="text-notice">
+                  {" "}
+                  <Pips share={i.poor.share} className="align-middle" /> ({mt.dishPoor(i.poor.n, i.poor.of)})
+                </span>
+              )}
             </Fragment>
           ))}
         </p>
@@ -101,9 +130,10 @@ export function Dishes({
       <section aria-label={tx.label} className="mt-3 max-w-[40ch] space-y-1">
         <h3 className="display text-[1.02rem] leading-snug text-ink">{card.dishes[0].name[lang]}</h3>
         {row(tx.gHave, g.have.map((i) => ({ name: i.name, ...(i.basis ? { extra: i.basis.replace(/\.$/, "").replace(/^./, (c) => c.toLowerCase()) } : {}) })))}
-        {row(tx.gOrder, g.order.map((i) => ({ name: i.name, ...(i.need ? { need: i.need } : {}), ...(i.instead ? { extra: tx.swap(i.instead) } : {}) })))}
+        {row(tx.gOrder, g.order.map((i) => ({ name: i.name, ...(i.need ? { need: i.need } : {}), ...(i.instead ? { extra: tx.swap(i.instead) } : {}), ...(i.marks?.delivery?.poor ? { poor: i.marks.delivery } : {}) })))}
         {row(tx.gCannot, g.cannot.map((i) => ({ name: i.name, ...(i.need ? { need: i.need } : {}), extra: i.why.replace(/\.$/, "").replace(/^./, (c) => c.toLowerCase()) })), "text-notice")}
         {g.totalToOrderCents > 0 && !flat(said).includes(flat(money(g.totalToOrderCents))) && <p className="pt-1 text-[0.88rem] tabular text-ink">{g.complete ? tx.total(money(card.totalCents), card.costPerCoverCents ? money(card.costPerCoverCents) : undefined) : tx.forThese(money(g.totalToOrderCents))}</p>}
+        {marksLine}
       </section>
     );
   }
@@ -185,6 +215,7 @@ export function Dishes({
             )}
           </p>
         )}
+      {marksLine}
     </section>
   );
 }

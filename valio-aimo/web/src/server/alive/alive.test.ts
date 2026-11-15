@@ -76,6 +76,27 @@ describe("the sample activity", () => {
     expect(rt.dock.ledger.verifyFull().ok).toBe(true);
   });
 
+  it("has the wholesaler's team confirm most of its placed orders for delivery, as sample staff, and leaves one or two waiting", async () => {
+    const { orders } = await views();
+    const placed = orders.rows.filter((r) => r.status === "committed");
+    const confirmed = placed.filter((r) => r.fulfilment === "confirmed");
+    const waiting = placed.filter((r) => r.fulfilment === "waiting");
+    expect(confirmed.length).toBeGreaterThan(waiting.length);
+    expect(waiting.length).toBeGreaterThanOrEqual(1);
+    expect(waiting.length).toBeLessThanOrEqual(2);
+    expect(orders.facets.statuses.find((s) => s.id === "to_confirm")?.n).toBe(waiting.length);
+    const entries = rt.dock.ledger.unfiltered().filter((e) => e.type === "order" && (e.data as { step?: string }).step === "fulfilment");
+    expect(entries.length).toBe(confirmed.length);
+    for (const e of entries) {
+      expect(e.actor).toBe("staff:Operations (sample)");
+      expect(setOfEntry(rt.dock.ledger, e)).toBe(report.setId);
+      // Confirmed after it was placed, never in the future.
+      const placedAt = rt.dock.ledger.unfiltered().find((x) => x.orderId === e.orderId && x.type === "order")!.at;
+      expect(e.at >= placedAt).toBe(true);
+      expect(Date.parse(e.at)).toBeLessThanOrEqual(Date.now());
+    }
+  });
+
   it("puts orders from every source, decided and ended every way, on the Orders page", async () => {
     const { orders } = await views();
     const sources = new Set(orders.facets.sources.map((s) => s.id));

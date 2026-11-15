@@ -109,7 +109,8 @@ export function orderForModel(o: PublicOrder): ForModel {
   const delivery = spokenDate(o.lines.map((l) => l.deliveryDate).sort().at(-1)!);
   switch (o.status) {
     case "committed":
-      return { ok: true, state: "committed", say: `The order is placed: ${total}, delivered ${delivery}.`, total, delivery };
+      // Recorded at the fixed price; a person at the wholesaler confirms it for delivery (server/fulfilment).
+      return { ok: true, state: "committed", say: `The order is placed: ${total}, delivered ${delivery}. It is recorded at the fixed price and is now with the wholesaler's team to confirm for delivery; the kitchen hears when they confirm.`, total, delivery };
     case "pending_approval": {
       const who = o.approval?.approver ?? (o.decision.outcome === "needs_human_approval" ? o.decision.approver : undefined);
       return {

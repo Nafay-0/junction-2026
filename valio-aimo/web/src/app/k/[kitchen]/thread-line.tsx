@@ -5,9 +5,10 @@ import { Check, ChevronDown, Mic, ScanFace, Sparkles } from "lucide-react";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useFormat, useText } from "../../_i18n/provider";
 import { clock, money } from "../../_ui/plain";
-import type { AgentTurn, BuyerTurn, GateCard as GateCardT, RulesCard as RulesCardT, OfferCard, ScenarioCard, WatchCard, OptionView, OrderCard, Thread, ThreadAction, ThreadStep, TodayCard } from "@/server/thread/types";
+import type { AgentTurn, BuyerTurn, GateCard as GateCardT, LineMarks, RulesCard as RulesCardT, OfferCard, ScenarioCard, WatchCard, OptionView, OrderCard, Thread, ThreadAction, ThreadStep, TodayCard } from "@/server/thread/types";
 import { usePortal } from "./portal";
 import { Dishes } from "./thread-dishes";
+import { CompactMarks, LineMarksLine, MarksSummaryLine } from "./thread-marks";
 import { RulesSignOffSlab } from "./thread-rules-signoff";
 import { groupNameL } from "./rules-change";
 import { buyerSteps, plainStep, stepLeaks } from "./buyer-steps";
@@ -15,6 +16,7 @@ import { familyL } from "./family.text";
 import { THREAD_RULES_TEXT } from "./thread-rules.text";
 import { attrL } from "../../_i18n/format";
 import { THREAD_LINE_TEXT } from "./thread-line.text";
+import { FulfilmentNote } from "./thread-fulfilment";
 import { FRESH_TEXT } from "./fresh.text";
 import { useSignOff } from "./thread-signoff";
 import { THREAD_WORDS } from "./thread-words.text";
@@ -241,6 +243,7 @@ function AgentNode({ turn, thread, tap, busy, latest }: { turn: AgentTurn; threa
       <Lists turn={turn} thread={thread} latest={latest} />
       <Memory turn={turn} />
       {cards.map((c) => (c.type === "gate" && c.outcome === "waiting" && c.approvalId ? <SignOffSlab key={c.cardId} card={c} thread={thread} tap={tap} /> : c.type === "gate" && c.outcome === "approved" && c.orderId ? <SignedSlab key={c.cardId} card={c} thread={thread} /> : null))}
+      {cards.map((c) => (c.type === "order" && c.status === "committed" ? <FulfilmentNote key={`f-${c.cardId}`} card={c} /> : null))}
       {today && <WaitingSlabs today={today} thread={thread} tap={tap} />}
       {/* A change to the rules that waits for the approver: its slab under the reply that said so (the card itself may
           have been first shown a turn earlier), always in view, never inside a disclosure. */}
@@ -292,14 +295,14 @@ function Choices({ turn, thread, tap, busy }: { turn: AgentTurn; thread: Thread;
   const w = useText(THREAD_WORDS);
   const f = useThreadFormat();
   const wf = fmtFor(f.lang);
-  const rows: { key: string; title: string; price?: string; differs?: string; action: ThreadAction }[] = [];
+  const rows: { key: string; title: string; price?: string; differs?: string; marks?: LineMarks; action: ThreadAction }[] = [];
   for (const c of turn.cards) {
     if (rows.length) break;
     if (c.type === "options" && !c.chosen && !c.adjusted && !answeredAfter(thread, turn)) {
       const lead = leadOption(c);
       const usable = c.options.filter((o) => o.gate?.outcome !== "reject");
       const ordered = [lead, ...usable.filter((o) => o.optionId !== lead.optionId)].slice(0, 3);
-      if (ordered.length > 1) for (const o of ordered) rows.push({ key: o.optionId, title: titleOf(o, w), price: money(o.totalCents), differs: [perUnitOf(o, f), o.optionId === lead.optionId ? "" : oneThing(o, lead, w, wf)].filter(Boolean).join(" · "), action: { type: "choose", requestId: c.requestId, optionId: o.optionId } });
+      if (ordered.length > 1) for (const o of ordered) rows.push({ key: o.optionId, title: titleOf(o, w), price: money(o.totalCents), differs: [perUnitOf(o, f), o.optionId === lead.optionId ? "" : oneThing(o, lead, w, wf)].filter(Boolean).join(" · "), ...(o.marks ? { marks: o.marks } : {}), action: { type: "choose", requestId: c.requestId, optionId: o.optionId } });
     } else if (c.type === "menu" && c.stage === "choose" && !c.sheetId) {
       for (const p of c.proposals.slice(0, 3)) rows.push({ key: p.proposalId, title: p.title, ...(p.costPerCoverCents ? { price: `${money(p.costPerCoverCents)}` } : {}), differs: p.dishes.join(", "), action: { type: "menu_choose", planId: c.planId, proposalId: p.proposalId } });
     } else if (c.type === "question") {
@@ -325,7 +328,12 @@ function Choices({ turn, thread, tap, busy }: { turn: AgentTurn; thread: Thread;
           <button key={r.key} type="button" aria-label={r.price ? `${r.title}, ${r.price}` : r.title} disabled={busy} onClick={() => tap(r.action, r.title)} className="group flex items-baseline gap-3 rounded-xl bg-paper/70 px-3 py-2 text-left transition-colors hover:bg-paper disabled:opacity-60">
             <span className="min-w-0 flex-1">
               <span className="block text-[0.95rem] font-medium leading-snug [overflow-wrap:anywhere]">{r.title}</span>
-              {r.differs && <span className="block text-[0.8rem] leading-snug text-ink-soft">{r.differs}</span>}
+              {(r.differs || r.marks) && (
+                <span className="block text-[0.8rem] leading-snug text-ink-soft">
+                  {r.differs}
+                  {r.marks && <>{r.differs ? " · " : ""}<CompactMarks marks={r.marks} /></>}
+                </span>
+              )}
             </span>
             {r.price && <span className="shrink-0 text-[0.86rem] tabular">{r.price}</span>}
           </button>
@@ -364,13 +372,13 @@ function Lists({ turn, thread, latest }: { turn: AgentTurn; thread: Thread; late
   const tx = useText(THREAD_LINE_TEXT);
   const rx = useText(THREAD_RULES_TEXT);
   const f = useThreadFormat();
-  const lists: { key: string; rows: { item: string; amount?: string; total?: string }[]; total?: string }[] = [];
+  const lists: { key: string; rows: { item: string; amount?: string; total?: string; marks?: LineMarks }[]; total?: string }[] = [];
   // A menu's products: each with its packs and pack size, and its price.
-  const menuRows = (c: Extract<AgentTurn["cards"][number], { type: "menu" }>) => c.dishes.flatMap((d) => d.lines.filter((l) => l.product).map((l) => ({ item: l.product!.name, amount: `${f.num(l.product!.packs)} × ${f.measure(l.product!.packSize, l.product!.unit)}`, total: money(l.product!.totalCents) })));
+  const menuRows = (c: Extract<AgentTurn["cards"][number], { type: "menu" }>) => c.dishes.flatMap((d) => d.lines.filter((l) => l.product).map((l) => ({ item: l.product!.name, amount: `${f.num(l.product!.packs)} × ${f.measure(l.product!.packSize, l.product!.unit)}`, total: money(l.product!.totalCents), marks: l.product!.marks })));
   const fromSheet = new Set(thread.turns.flatMap((x) => (x.role === "agent" ? x.cards.flatMap((c) => (c.type === "sheet" && c.orderId ? [c.orderId] : [])) : [])));
   for (const c of turn.cards) {
-    if (c.type === "sheet") lists.push({ key: c.cardId, rows: c.lines.map((l) => ({ item: l.name, amount: `${f.num(l.packs)} × ${f.measure(l.packSize, l.unit)}`, total: money(l.lineTotalCents) })), total: money(c.totalCents) });
-    else if (c.type === "order" && !fromSheet.has(c.orderId) && c.lines.length > 1) lists.push({ key: c.cardId, rows: c.lines.map((l) => ({ item: l.name, amount: f.num(l.quantity), ...(l.unitPriceCents !== undefined ? { total: money(l.unitPriceCents * l.quantity) } : {}) })), total: money(c.totalCents) });
+    if (c.type === "sheet") lists.push({ key: c.cardId, rows: c.lines.map((l) => ({ item: l.name, amount: `${f.num(l.packs)} × ${f.measure(l.packSize, l.unit)}`, total: money(l.lineTotalCents), marks: l.marks })), total: money(c.totalCents) });
+    else if (c.type === "order" && !fromSheet.has(c.orderId) && c.lines.length > 1) lists.push({ key: c.cardId, rows: c.lines.map((l) => ({ item: l.name, amount: f.num(l.quantity), ...(l.unitPriceCents !== undefined ? { total: money(l.unitPriceCents * l.quantity) } : {}), marks: l.marks })), total: money(c.totalCents) });
     else if (c.type === "menu" && (c.stage === "ready" || c.stage === "ordered")) lists.push({ key: c.cardId, rows: menuRows(c), total: money(c.totalCents) });
     else if (c.type === "records") lists.push({ key: c.cardId, rows: c.rows.map((r) => ({ item: r.label, ...(r.date ? { amount: f.day(r.date) } : {}), ...(r.totalCents !== undefined ? { total: money(r.totalCents) } : {}) })) });
     else if (c.type === "products") lists.push({ key: c.cardId, rows: c.products.map((p) => ({ item: p.name, amount: f.measure(p.packSize, p.unit) })) });
@@ -386,7 +394,7 @@ function Lists({ turn, thread, latest }: { turn: AgentTurn; thread: Thread; late
   if (latest && !lists.length && /\d,\d\d\s?€/.test(turn.line ?? "")) {
     const c = thread.turns.flatMap((x) => (x.role === "agent" ? x.cards : [])).filter((x) => (x.type === "menu" && (x.stage === "ready" || x.stage === "ordered")) || (x.type === "sheet" && x.state === "editing")).at(-1);
     if (c?.type === "menu") lists.push({ key: `${c.cardId}:here`, rows: menuRows(c), total: money(c.totalCents) });
-    else if (c?.type === "sheet") lists.push({ key: `${c.cardId}:here`, rows: c.lines.map((l) => ({ item: l.name, amount: `${f.num(l.packs)} × ${f.measure(l.packSize, l.unit)}`, total: money(l.lineTotalCents) })), total: money(c.totalCents) });
+    else if (c?.type === "sheet") lists.push({ key: `${c.cardId}:here`, rows: c.lines.map((l) => ({ item: l.name, amount: `${f.num(l.packs)} × ${f.measure(l.packSize, l.unit)}`, total: money(l.lineTotalCents), marks: l.marks })), total: money(c.totalCents) });
   }
   return (
     <>
@@ -397,7 +405,7 @@ function Lists({ turn, thread, latest }: { turn: AgentTurn; thread: Thread; late
   );
 }
 
-function ShortList({ rows, total, tx }: { rows: { item: string; amount?: string; total?: string }[]; total?: string; tx: Tx }) {
+function ShortList({ rows, total, tx }: { rows: { item: string; amount?: string; total?: string; marks?: LineMarks }[]; total?: string; tx: Tx }) {
   // Open from the start: the products, amounts and prices are what the buyer reads; "Hide the list" folds it.
   const [open, setOpen] = useState(true);
   return (
@@ -411,7 +419,10 @@ function ShortList({ rows, total, tx }: { rows: { item: string; amount?: string;
           <tbody>
             {rows.map((r, i) => (
               <tr key={i} className="border-b border-line">
-                <td className="py-1.5 pr-2 leading-snug [overflow-wrap:anywhere]">{r.item}</td>
+                <td className="py-1.5 pr-2 leading-snug [overflow-wrap:anywhere]">
+                  {r.item}
+                  <LineMarksLine marks={r.marks} />
+                </td>
                 <td className="py-1.5 pr-3 text-right tabular opacity-70">{r.amount}</td>
                 <td className="py-1.5 text-right tabular">{r.total}</td>
               </tr>
@@ -422,6 +433,13 @@ function ShortList({ rows, total, tx }: { rows: { item: string; amount?: string;
                   {tx.total}
                 </td>
                 <td className="pt-2 text-right font-semibold tabular">{total}</td>
+              </tr>
+            )}
+            {rows.some((r) => r.marks) && (
+              <tr>
+                <td className="pt-1" colSpan={3}>
+                  <MarksSummaryLine marks={rows.map((r) => r.marks)} />
+                </td>
               </tr>
             )}
           </tbody>

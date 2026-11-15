@@ -3,6 +3,9 @@ import { defineText } from "@/app/_i18n/lang";
 /** What the kitchen's own agent says about email, in the conversation: one short clause or sentence, the kitchen's words. */
 export const MAIL_SAY_TEXT = defineText({
   en: {
+    withTeamHere: "It's recorded at the fixed price and is now with the wholesaler's team to confirm for delivery; I'll tell you here when they confirm.",
+    withTeamMail: "It's recorded at the fixed price and is now with the wholesaler's team to confirm for delivery; you'll get an email when they confirm.",
+    withTeamEmailed: (to: string) => `It's recorded at the fixed price and is now with the wholesaler's team to confirm for delivery: I've emailed the receipt to ${to}, and you'll get an email there when they confirm.`,
     emailed: (to: string) => `I've emailed the receipt to ${to} and will email you if anything changes.`,
     waitingEmailed: (to: string) => `I've emailed ${to} that it waits for an OK, and will send the receipt there once it is placed.`,
     pendingConfirm: (to: string) => `Once you confirm ${to} from the email I sent, receipts go there.`,
@@ -21,6 +24,9 @@ export const MAIL_SAY_TEXT = defineText({
     notConfigured: "Email is not switched on in this store yet, so I cannot send receipts by email.",
   },
   fi: {
+    withTeamHere: "Se on kirjattu kiinteään hintaan, ja tukkurin tiimi vahvistaa sen nyt toimitukseen; kerron täällä, kun he vahvistavat.",
+    withTeamMail: "Se on kirjattu kiinteään hintaan, ja tukkurin tiimi vahvistaa sen nyt toimitukseen; saat sähköpostin, kun he vahvistavat.",
+    withTeamEmailed: (to: string) => `Se on kirjattu kiinteään hintaan, ja tukkurin tiimi vahvistaa sen nyt toimitukseen: lähetin kuitin osoitteeseen ${to}, ja saat sinne viestin, kun he vahvistavat.`,
     emailed: (to: string) => `Lähetin kuitin osoitteeseen ${to}, ja kerron sähköpostilla, jos jokin muuttuu.`,
     waitingEmailed: (to: string) => `Kerroin osoitteeseen ${to}, että tilaus odottaa hyväksyntää, ja lähetän kuitin sinne, kun se on tehty.`,
     pendingConfirm: (to: string) => `Kun vahvistat osoitteen ${to} lähettämästäni viestistä, kuitit menevät sinne.`,
@@ -39,6 +45,9 @@ export const MAIL_SAY_TEXT = defineText({
     notConfigured: "Sähköposti ei ole vielä käytössä tässä verkkokaupassa, joten en voi lähettää kuitteja sähköpostiin.",
   },
   sv: {
+    withTeamHere: "Den är registrerad till det fasta priset och ligger nu hos grossistens team för bekräftelse; jag säger till här när de bekräftar.",
+    withTeamMail: "Den är registrerad till det fasta priset och ligger nu hos grossistens team för bekräftelse; du får ett mejl när de bekräftar.",
+    withTeamEmailed: (to: string) => `Den är registrerad till det fasta priset och ligger nu hos grossistens team för bekräftelse: jag har mejlat kvittot till ${to}, och du får ett mejl dit när de bekräftar.`,
     emailed: (to: string) => `Jag har mejlat kvittot till ${to} och mejlar dig om något ändras.`,
     waitingEmailed: (to: string) => `Jag har mejlat ${to} att den väntar på godkännande, och skickar kvittot dit när den är lagd.`,
     pendingConfirm: (to: string) => `När du bekräftar ${to} från mejlet jag skickade går kvittona dit.`,

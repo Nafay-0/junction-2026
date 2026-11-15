@@ -106,6 +106,9 @@ export function useThreadState(slug: string): ThreadApi {
   const reconnect = useRef<() => void>(() => undefined);
   /** Set once the first snapshot is in: until then the stream is not opened (it opens from the snapshot's seq). */
   const loaded = useRef(false);
+  /** When the last event or snapshot arrived, and whether a turn is being worked on: for the safety net below. */
+  const lastNews = useRef(0);
+  const busy = useRef(false);
 
   const load = useCallback(async () => {
     const r = await api<{ thread: Thread }>("GET", base);
@@ -115,6 +118,7 @@ export function useThreadState(slug: string): ThreadApi {
     }
     seq.current = r.data.thread.seq;
     threadId.current = r.data.thread.threadId;
+    lastNews.current = Date.now();
     setThread(r.data.thread);
     // A turn sent before this snapshot arrived is in it already: its optimistic copy goes.
     const sent = new Set(r.data.thread.turns.flatMap((t) => (t.role === "buyer" && t.clientTurnId ? [t.clientTurnId] : [])));
@@ -146,6 +150,7 @@ export function useThreadState(slug: string): ThreadApi {
       }
       if (e.seq <= seq.current) return;
       seq.current = e.seq;
+      lastNews.current = Date.now();
       if (e.type === "turn" && e.turn.role === "buyer" && e.turn.clientTurnId) {
         const id = e.turn.clientTurnId;
         setPending((p) => p.filter((x) => x.clientTurnId !== id));
@@ -172,6 +177,25 @@ export function useThreadState(slug: string): ThreadApi {
   useEffect(() => {
     reconnect.current = connect;
   }, [connect]);
+
+  useEffect(() => {
+    busy.current = pending.length > 0 || !!thread?.activeTurnId || !!thread?.turns.some((t) => t.role === "agent" && t.status === "working");
+  }, [pending, thread]);
+
+  // Safety net. A reply normally arrives over the stream. If nothing has arrived for a few seconds while a turn is being
+  // worked on (the stream held up by a proxy, or the server unable to open it for a moment, as on 15 Nov when the
+  // database timed out), read the conversation itself, so a finished reply always shows without a reload.
+  useEffect(() => {
+    const t = setInterval(() => {
+      if (!alive.current || !loaded.current || !busy.current) return;
+      if (Date.now() - lastNews.current < 4000) return;
+      lastNews.current = Date.now();
+      void load().then((ok) => {
+        if (ok && (!es.current || es.current.readyState === EventSource.CLOSED)) reconnect.current();
+      });
+    }, 2000);
+    return () => clearInterval(t);
+  }, [load]);
 
   useEffect(() => {
     alive.current = true;
