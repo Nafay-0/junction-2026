@@ -64,10 +64,10 @@ A crash test for AI buyers: 13 hard purchasing situations, three runs each, scor
 Runtime (the app), PostgreSQL (orders, ledger, memory, telemetry, the Time machine's history), Kafka (every action and decision), Valkey (live-price cache, lookup budgets), OpenSearch (product search in Finnish, Swedish and English, the agent's recall, the audit trail), Grafana (dashboard and alert rules), Managed Agents (an outside buyer we do not run) and Aiven's MCP server (for the copilot).
 
 ### Known limits
-Demo on synthetic data with the partner's test API; no order reaches a real order system. Mail reaches real inboxes only once a sending domain is verified. The crash-test licence can be enforced by the gate but is not applied on the hosted site. Consumer assistants connect through a secret address; OAuth is designed, not built. Full list: docs/pitch/valio-judges.md.
+Demo on synthetic data with the partner's test API; no order reaches a real order system. Mail reaches real inboxes only once a sending domain is verified. The crash-test licence can be enforced by the gate but is not applied on the hosted site. Consumer assistants connect through a secret address; OAuth is designed, not built. Full list: valio-aimo/docs/pitch/valio-judges.md.
 ```
 
-(4,713 characters as written. Check the count in the form before submitting.)
+(4,724 characters as written. Check the count in the form before submitting.)
 
 ## What is innovative (if the form or a juror asks; also the opening of the table demo)
 
