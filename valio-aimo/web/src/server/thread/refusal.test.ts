@@ -91,6 +91,13 @@ describe("englishDays", () => {
     expect(englishDays("on Tue 17.11., then")).toBe("on Tue 17 Nov, then");
     expect(englishDays("cancel until {{Sunday 15.11.}} {{17.00}}.")).toBe("cancel until {{Sunday 15 Nov}} {{17.00}}.");
   });
+
+  it("ends a whole clause at its date before \"I\", but keeps \"For Fri 20.11. I can get\" one sentence", async () => {
+    const { englishDays } = await import("./refusal");
+    expect(englishDays("The rye rice pies must be ordered by 17:00 today for delivery on Monday 16.11. I don't have a Friday cut-off yet.")).toBe("The rye rice pies must be ordered by 17:00 today for delivery on Monday 16 Nov. I don't have a Friday cut-off yet.");
+    expect(englishDays("I only have the cut-off for Mon 16.11. I don't have the Friday one.")).toBe("I only have the cut-off for Mon 16 Nov. I don't have the Friday one.");
+    expect(englishDays("For Fri 20.11. I can get 20 l.")).toBe("For Fri 20 Nov I can get 20 l.");
+  });
 });
 
 describe("nutritionDetail", () => {

@@ -8,6 +8,7 @@ import type { PlanEdit, PlanProgress, PlanRecord } from "@/server/agent/menu/ser
 import { cardId } from "./cards";
 import { byLine, record, step, type TurnRun } from "./pipeline";
 import { createSheet, gateOf } from "./sheet";
+import { allergenReason } from "./differences";
 import { readable as rd } from "./refusal";
 import { shortName as sn } from "./watch";
 import type { MenuCard, NoticeCard } from "./types";
@@ -721,8 +722,10 @@ export async function dishesCard(run: TurnRun, planId: string, before?: Dishes, 
       const { attrL } = await import("@/app/_i18n/format");
       const stopWhy = (ingredient: string) => {
         const l = stoppedLines.find((x) => foldN(x.name) === foldN(ingredient));
-        const a = /allergen\(s\): ([a-z_ ,]+)/i.exec((l && stopped.get(l.lineId)) ?? "")?.[1]?.split(/,\s*/)[0] ?? "lactose";
-        return { en: `contains ${attrL(a, "en").toLowerCase()}, which your rules rule out`, fi: `sisältää: ${attrL(a, "fi").toLowerCase()}, jonka sääntönne kieltävät`, sv: `innehåller ${attrL(a, "sv").toLowerCase()}, som era regler utesluter` }[lang];
+        const r = allergenReason((l && stopped.get(l.lineId)) ?? "", run.session.mandate.forbiddenAllergens);
+        const a = r.code === "allergen" || r.code === "allergen_unknown" ? r.allergens.map((x) => attrL(x, lang).toLowerCase()).join(", ") : "";
+        if (r.code !== "allergen") return { en: `its maker gives no allergen data, so nothing shows it is free of ${a}`, fi: `valmistaja ei kerro allergeeneja, joten mikään ei osoita, ettei siinä ole: ${a}`, sv: `tillverkaren anger inga allergener, så inget visar att den är fri från ${a}` }[lang];
+        return { en: `contains ${a}, which your rules rule out`, fi: `sisältää: ${a}, jonka sääntönne kieltävät`, sv: `innehåller ${a}, som era regler utesluter` }[lang];
       };
       groups = {
         have: g.onHand.map((x) => ({ name: x.ingredient, ...(grams(x.need) ? { need: grams(x.need) } : {}), ...(x.status === "staple" ? (x === staples.at(-1) ? { basis: keep } : {}) : x.basis ? { basis: basisWords(x.basis, lang) } : {}) })),
@@ -784,7 +787,7 @@ export async function planDifferences(run: TurnRun, planId: string, lang: "en" |
       const categories = [...new Set(l.excluded.flatMap((e) => /^category (\S+) is not in the mandate/.exec(e.reason)?.[1] ?? []))];
       const ruleText = /the rule "([^"]+)"(?:, ([^)]+))?/.exec(hard?.text ?? "");
       const reason: import("./differences").Reason = stop
-        ? { code: "allergen", allergens: (/allergen\(s\): ([a-z_ ,]+)/i.exec(stop)?.[1] ?? "lactose").split(/,\s*/).map((x) => x.trim()) }
+        ? allergenReason(stop, run.session.mandate.forbiddenAllergens)
         : hard?.kind === "cannot_arrive" || (l.status === "struck" && l.doubts.some((d) => d.kind === "cannot_arrive"))
           ? { code: "cannot_arrive", ...(deliverBy ? { day: deliverBy } : {}) }
           : hard?.kind === "no_safe_product" || hard?.kind === "rule_conflict"

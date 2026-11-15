@@ -63,6 +63,8 @@ export type TurnRun = {
   offerAsked?: string;
   /** The buyer's language as the store sent it (en when not said). */
   lang?: "en" | "fi" | "sv";
+  /** A question still open after this turn answered another one (the receipt after the offer): asked again. */
+  askAgain?: string;
   t0: number;
   /** Everything the agent turn's cards were built from: the facts the model's line is checked against. */
   facts: unknown[];
@@ -623,6 +625,9 @@ export async function openNeed(run: TurnRun, need: NeedInput, words: string, opt
     // A stock-out the watch found (staged or real) is seen by the intake itself (main 568a579): the request is answered
     // from its options, at the amount asked, never replaced by the watch's own question about the usual order.
     let step0 = res.step;
+    // "Make it 15 litres" while the earlier request's check is still open: the new request replaces it, so that check
+    // is closed (history) and the next answer ("Friday then", "yes") goes to the request as it is now.
+    if (opts.basedOn) supersedeCheck(run, opts.basedOn.requestId);
     if (opts.basedOn && (await noteReplacement(run, res.step.requestId, opts.basedOn.requestId))) {
       // "Make it 200" is a repeat of the order it replaces by design: the repeat check's only question is answered by
       // the buyer's own words (recorded as theirs, or as relayed), and that order goes back once the new one is placed.
@@ -921,6 +926,16 @@ const replacesOf = (run: TurnRun): Record<string, string> => ((run.thread as unk
  * new order, once placed (alone or by the buyer's tap), takes the old one back: one order stands, never both.
  * Only an order that can still go back: waiting for an OK, or placed and before its cut-off with a signed-in person.
  */
+/** An earlier request's open check (mistake check or question) closed: a later request made from it replaces it. */
+export function supersedeCheck(run: TurnRun, earlierRequestId: string): void {
+  for (const type of ["anomaly", "question"] as const) {
+    const prev = run.store.cards(run.thread).find((x) => x.card.cardId === cardId(type, earlierRequestId));
+    if (prev?.card.type === "anomaly" && !prev.card.answered) run.store.card(run.thread, prev.turnId, { ...prev.card, answered: { choice: "replaced", by: byLine(run), verified: false } });
+    if (prev?.card.type === "question" && !Object.keys(prev.card.answered ?? {}).length) run.store.card(run.thread, prev.turnId, { ...prev.card, answered: Object.fromEntries(prev.card.questions.map((q) => [q.id, "replaced"])) });
+  }
+  record(run, "check_replaced", `The open check of ${earlierRequestId} was closed: a later request replaces it.`, {}, earlierRequestId);
+}
+
 async function noteReplacement(run: TurnRun, requestId: string, earlierRequestId: string): Promise<boolean> {
   const { takeBackUntil } = await import("@/core/orders");
   const old = (await run.rt.dock.listOrders()).find((o) => o.requestId === earlierRequestId && o.orgId === run.session.mandate.issuer.orgId && (o.status === "pending_approval" || (o.status === "committed" && !!run.person && !!takeBackUntil(o))));

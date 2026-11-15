@@ -9,7 +9,7 @@ export const MENU_SAY_TEXT = defineText({
   en: {
     season: (what: string, examples: string) => `${what} are in season now; the range has ${examples}.`,
     noSeason: "I found nothing in season in the range for this, so the menu follows your words.",
-    dishes: (n: number, covers: string, day: string, names: string) => `For ${covers}${day ? ` on ${day}` : ""}, ${n === 1 ? "one dish" : `${n} dishes`}: ${names}.`,
+    dishes: (n: number, covers: string, day: string, names: string) => `${covers ? `For ${covers}${day ? ` on ${day}` : ""}, ` : day ? `On ${day}, ` : ""}${n === 1 ? "one dish" : `${n} dishes`}: ${names}.`,
     onHand: (items: string) => `You have ${items}, so I left ${items.includes(" and ") || items.includes(",") ? "them" : "it"} off.`,
     estimate: (items: string) => `By your last orders you should still have ${items}: I left that off (an estimate).`,
     buy: (lines: number, total: string) => `That leaves ${lines} ${lines === 1 ? "line" : "lines"} to buy, ${total}.`,
@@ -84,7 +84,7 @@ export const MENU_SAY_TEXT = defineText({
   fi: {
     season: (what: string, examples: string) => `Nyt on ${what}-sesonki; valikoimassa on ${examples}.`,
     noSeason: "Valikoimasta ei löytynyt tähän sesonkituotetta, joten menu noudattaa toivettasi.",
-    dishes: (n: number, covers: string, day: string, names: string) => `${covers}${day ? ` ${day}` : ""}: ${n === 1 ? "yksi ruoka" : `${n} ruokaa`}, ${names}.`,
+    dishes: (n: number, covers: string, day: string, names: string) => `${[covers, day].filter(Boolean).join(" ")}${covers || day ? ": " : ""}${n === 1 ? "yksi ruoka" : `${n} ruokaa`}, ${names}.`,
     onHand: (items: string) => `Teillä on jo ${items}, joten jätin ne pois.`,
     estimate: (items: string) => `Edellisten tilaustenne perusteella teillä pitäisi olla vielä ${items}: jätin sen pois (arvio).`,
     buy: (lines: number, total: string) => `Tilattavaksi jää ${lines} ${lines === 1 ? "rivi" : "riviä"}, ${total}.`,
@@ -157,7 +157,7 @@ export const MENU_SAY_TEXT = defineText({
   sv: {
     season: (what: string, examples: string) => `Det är säsong för ${what} nu; sortimentet har ${examples}.`,
     noSeason: "Jag hittade inget i säsong i sortimentet för detta, så menyn följer dina ord.",
-    dishes: (n: number, covers: string, day: string, names: string) => `För ${covers}${day ? ` på ${day}` : ""}: ${n === 1 ? "en rätt" : `${n} rätter`}, ${names}.`,
+    dishes: (n: number, covers: string, day: string, names: string) => `${covers ? `För ${covers}${day ? ` på ${day}` : ""}: ` : day ? `På ${day}: ` : ""}${n === 1 ? "en rätt" : `${n} rätter`}, ${names}.`,
     onHand: (items: string) => `Ni har redan ${items}, så jag lämnade bort det.`,
     estimate: (items: string) => `Enligt era senaste beställningar borde ni ha ${items} kvar: jag lämnade bort det (en uppskattning).`,
     buy: (lines: number, total: string) => `Kvar att köpa: ${lines} ${lines === 1 ? "rad" : "rader"}, ${total}.`,

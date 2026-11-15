@@ -9,3 +9,12 @@ describe("a day said as its own fragment joins the sentence after it", () => {
     expect(join("For {{Friday 20 Nov}}. Valio Eila is 20,20 €.")).toBe("For {{Friday 20 Nov}}, Valio Eila is 20,20 €.");
   });
 });
+
+describe("a clause cut at its connective and a day", () => {
+  it("ends where the whole clause ends", async () => {
+    const { dropDanglingDay } = await import("./refusal");
+    expect(dropDanglingDay("Your usual 20 l whipping cream missed its cut-off, so for {{Monday 16 Nov}}. Shall I?")).toBe("Your usual 20 l whipping cream missed its cut-off. Shall I?");
+    expect(dropDanglingDay("It missed the cut-off, so for Monday 16 Nov.")).toBe("It missed the cut-off.");
+    expect(dropDanglingDay("It comes on Monday, so you have it for lunch.")).toBe("It comes on Monday, so you have it for lunch.");
+  });
+});

@@ -21,3 +21,27 @@ describe("ranked options said in words", () => {
     expect(optionsSaid([opt("A", 100, ["cheapest"])], "en")).toBeUndefined();
   });
 });
+
+describe("options named so the buyer can tell them apart", () => {
+  it("never a bare brand, never one name twice: the words that differ are added", async () => {
+    const { optionNames } = await import("./options-said");
+    const one = (name: string) => ({ title: name, lines: [{ name }] }) as never;
+    expect(optionNames([one("Duni napkin 33x33cm 3-ply yellow 125 pcs"), one("Duni napkin 33x33cm 3-ply dark blue 125 pcs"), one("Duni napkin 33x33cm 3-ply granite grey 125 pcs")], "en")).toEqual(["Duni napkin yellow", "Duni napkin dark blue", "Duni napkin granite grey"]);
+    const milk = optionNames([one("Valio Hyvä suomalainen Arki® Eila® semi skimmed milk drink 1 l lactose free"), one("Valio Hyvä suomalainen Arki® Eila® skimmed milk drink 1 l lactose free"), one("Valio semi skimmed milk 1 l lactose free UHT")], "en");
+    expect(new Set(milk.map((x) => x.toLowerCase())).size).toBe(3);
+    for (const n of milk) expect(n.split(/\s+/).length, n).toBeGreaterThanOrEqual(2);
+    expect(milk[0]).toBe("Valio Arki Eila semi");
+    expect(milk[1]).toMatch(/^Valio Arki Eila skimmed/);
+    expect(optionNames([one("Valio whipping cream 38% 1 l lactose free"), one("Valio whipping cream 38% 2 l lactose free")], "en")).toEqual(["Valio whipping cream 1 l", "Valio whipping cream 2 l"]);
+  });
+  it("in Finnish: the kind words in Finnish, and no double stop after the day", () => {
+    const said = optionsSaid([opt("Valio Hyvä suomalainen Arki® Eila® semi skimmed milk drink 1 l lactose free", 2020, ["cheapest"]), opt("Valio Hyvä suomalainen Arki® Eila® skimmed milk drink 1 l lactose free", 3120, [])].map((o) => ({ ...o, deliveryDate: "2026-11-20" })), "fi")!;
+    expect(said).not.toMatch(/\.\./);
+    expect(said).not.toMatch(/\b(semi|skimmed)\b/);
+    expect(said).toMatch(/^Valio Arki Eila kevyt on ensimmäinen, \*\*20,20 €\*\*: edullisin, joka ehtii pe 20\.11\. Valio Arki Eila rasvaton maksaa 11,00 € enemmän\.$/);
+  });
+  it("the closing question names the first as the sentence does", async () => {
+    const { orderAsk } = await import("./options-said");
+    expect(orderAsk("Valio Arki Eila semi", "en")).toBe("Shall I order the Valio Arki Eila semi, or another one?");
+  });
+});
