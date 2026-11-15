@@ -38,6 +38,7 @@ cannot send it again; a repeat Resend refuses is recorded as "already sent", not
 | Declined by the approver | event `approval_declined` | `declined:<orderId>` | Order ord_… declined |
 | Expired before anyone signed | event `approval_expired` | `expired:<orderId>` | Order ord_… expired before anyone signed |
 | Taken back | events `approval_withdrawn`, `order_withdrawn` | `withdrawn:<orderId>` | Order ord_… taken back |
+| The wholesaler's team confirmed a placed order for delivery, or could not (with its reason) | `server/fulfilment` `decideFulfilment` (staff on `/ops/orders/<id>`) | `confirmed:<orderId>`, `not_confirmed:<orderId>` | Your order is confirmed for delivery Mon 16 Nov / Order ord_… could not be confirmed |
 
 The receipt: order number, kitchen, when placed, delivery day, each line (name, packs × pack size at the unit price,
 the line total, the deposit, "Substitute for …"), goods, deposits (no VAT), VAT by rate, the total before and with VAT

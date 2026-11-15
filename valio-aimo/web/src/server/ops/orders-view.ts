@@ -35,6 +35,8 @@ export type OrderRow = {
   waitingSinceAt?: string;
   /** Set on the way out (server/alive marks.ts) when the order was played by the sample activity. */
   sample?: boolean;
+  /** A placed order: with the wholesaler's team to confirm ("waiting"), confirmed or refused. */
+  fulfilment?: "waiting" | "confirmed" | "refused";
 };
 
 export type OrdersFilter = { kitchen?: string; agent?: string; source?: string; status?: string; day?: string; q?: string; page?: number; size?: number };
@@ -47,6 +49,7 @@ export type OrdersPage = {
   size: number;
   rows: OrderRow[];
   facets: { kitchens: { id: string; label: string; n: number }[]; agents: { id: string; label: string; n: number }[]; sources: { id: string; label: string; n: number }[]; statuses: { id: string; label: string; n: number }[] };
+  /** Placed orders the wholesaler's team has not confirmed yet. */
   search?: { path: string; answer: string };
 };
 
@@ -129,8 +132,12 @@ const count = <T extends string>(rows: OrderRow[], key: (r: OrderRow) => T, labe
 export async function ordersPage(rt: Runtime, f: OrdersFilter = {}): Promise<OrdersPage> {
   const ctx = await opsContext(rt);
   const ix = indexOf(ctx.entries);
+  const { fulfilments } = await import("@/server/fulfilment/service");
+  const decided = await fulfilments(rt);
+  // A placed order is with the wholesaler's team to confirm until they decide.
+  const withFulfilment = (r: OrderRow): OrderRow => (r.status === "committed" ? { ...r, fulfilment: decided.get(r.orderId)?.state ?? "waiting", statusWords: decided.get(r.orderId)?.state === "confirmed" ? "Placed, confirmed for delivery" : decided.get(r.orderId)?.state === "refused" ? "Placed, could not be confirmed" : "Placed, waiting for the wholesaler's confirmation" } : r);
   const all = ctx.orders
-    .map((o) => rowOf(o, ix, ctx.agents.get(o.agentId)?.label ?? o.agentId))
+    .map((o) => withFulfilment(rowOf(o, ix, ctx.agents.get(o.agentId)?.label ?? o.agentId)))
     .sort((a, b) => b.at.localeCompare(a.at) || b.orderId.localeCompare(a.orderId));
   let rows = all;
   let search: OrdersPage["search"];
@@ -157,7 +164,8 @@ export async function ordersPage(rt: Runtime, f: OrdersFilter = {}): Promise<Ord
   if (f.kitchen) rows = rows.filter((r) => r.orgId === f.kitchen);
   if (f.agent) rows = rows.filter((r) => r.agentId === f.agent);
   if (f.source) rows = rows.filter((r) => r.source === f.source);
-  if (f.status) rows = rows.filter((r) => r.status === f.status);
+  if (f.status === "to_confirm") rows = rows.filter((r) => r.fulfilment === "waiting");
+  else if (f.status) rows = rows.filter((r) => r.status === f.status);
   if (f.day) rows = rows.filter((r) => r.at.slice(0, 10) === f.day || r.deliveryDate === f.day);
   const size = Math.max(10, Math.min(f.size ?? 50, 200));
   const pages = Math.max(1, Math.ceil(rows.length / size));
@@ -173,7 +181,10 @@ export async function ordersPage(rt: Runtime, f: OrdersFilter = {}): Promise<Ord
       kitchens: count(all, (r) => r.orgId, (_, r) => r.orgName),
       agents: count(all, (r) => r.agentId, (_, r) => r.agentLabel),
       sources: count(all, (r) => r.source, (id) => SOURCE_TEXT[id]),
-      statuses: count(all, (r) => r.status, (id) => STATUS_LABEL[id]),
+      statuses: [...count(all, (r) => r.status, (id) => STATUS_LABEL[id]), ...(() => {
+        const n = all.filter((r) => r.fulfilment === "waiting").length;
+        return n ? [{ id: "to_confirm" as OrderRow["status"], label: "Waiting for the wholesaler's confirmation", n }] : [];
+      })()],
     },
     ...(search ? { search } : {}),
   };
@@ -183,6 +194,8 @@ export type Receipt = { present: boolean; ok?: boolean; kid?: string; problem?: 
 
 export type OrderTimelineView = OrderTimeline & {
   receipt: Receipt;
+  /** The wholesaler's team's confirmation for delivery (server/fulfilment): waiting, confirmed or refused; absent unless placed. */
+  fulfilment?: { state: "waiting" | "confirmed" | "refused"; at?: string; by?: string; reason?: string };
   links: { trace: string; audit: string; conversation?: string; kafka: boolean };
 };
 
@@ -200,11 +213,15 @@ export async function opsOrderTimeline(rt: Runtime, orderId: string): Promise<Or
   if (!order) throw new DockError(404, "order_not_found", `No order ${orderId} on this server.`);
   const t = buildOrderTimeline({ order, ledger: ctx.entries, viewer: "ops", names: ctx.names, catalogueSize: ctx.catalogueSize, agentLabel: (id) => ctx.agents.get(id)?.label });
   const conversation = (ctx.entries.find((e) => e.type === "agent" && e.requestId === order.requestId && (e.data.thread as { threadId?: string } | undefined)?.threadId)?.data.thread as { threadId?: string } | undefined)?.threadId;
-  return { ...t, receipt: await receiptOf(rt, order), links: { trace: `/ops/trace/${order.requestId}`, audit: `/ops/audit/${order.orderId}`, ...(conversation ? { conversation: `/ops/conversation/${conversation}` } : {}), kafka: streamConfigured() } };
+  const { fulfilmentOf } = await import("@/server/fulfilment/service");
+  const fulfilment = await fulfilmentOf(rt, order);
+  return { ...t, receipt: await receiptOf(rt, order), ...(fulfilment ? { fulfilment } : {}), links: { trace: `/ops/trace/${order.requestId}`, audit: `/ops/audit/${order.orderId}`, ...(conversation ? { conversation: `/ops/conversation/${conversation}` } : {}), kafka: streamConfigured() } };
 }
 
 /** The same timeline for the order's own organisation (the kitchen, or an agent acting for it). */
-export async function ownOrderTimeline(rt: Runtime, order: PublicOrder, viewer: Exclude<Viewer, "ops">): Promise<OrderTimeline & { receipt: Receipt }> {
+export async function ownOrderTimeline(rt: Runtime, order: PublicOrder, viewer: Exclude<Viewer, "ops">): Promise<OrderTimeline & { receipt: Receipt; fulfilment?: OrderTimelineView["fulfilment"] }> {
   const t = buildOrderTimeline({ order, ledger: rt.dock.ledger.readonly(), viewer });
-  return { ...t, receipt: await receiptOf(rt, order) };
+  const { fulfilmentOf } = await import("@/server/fulfilment/service");
+  const fulfilment = await fulfilmentOf(rt, order);
+  return { ...t, receipt: await receiptOf(rt, order), ...(fulfilment ? { fulfilment } : {}) };
 }

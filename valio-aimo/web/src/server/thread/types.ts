@@ -333,6 +333,8 @@ export type OrderCard = CardBase & {
   takeBackUntil?: string;
   /** What the agent passed over when it chose alone, so the buyer sees the trade-off without asking. */
   passedOver: { title: string; totalCents: number; why: string }[];
+  /** The wholesaler's team's side of a placed order (server/fulfilment): absent until they decide. */
+  fulfilment?: { state: "confirmed" | "refused"; at: string; reason?: string };
 };
 
 export type MemoryCard = CardBase & {

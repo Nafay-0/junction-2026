@@ -398,16 +398,16 @@ describe("the conversation's adapter", () => {
     const fake = new FakeTransport();
     setMailTransport(rt, fake);
     const o = await order(rt, session);
-    expect(await mailFactAfterOrder(rt, k, o, { lang: "en", threadId: "th_1" })).toBe("Shall I email the receipt? I'd need an address.");
-    expect(await mailFactAfterOrder(rt, k, o, { lang: "en", threadId: "th_1" })).toBeUndefined(); // once
-    expect(await mailFactAfterOrder(rt, k, o, { lang: "fi", threadId: "th_2" })).toBe("Lähetänkö kuitin sähköpostiin? Tarvitsisin osoitteen.");
+    expect(await mailFactAfterOrder(rt, k, o, { lang: "en", threadId: "th_1" })).toBe(`It's recorded at the fixed price and is now with the wholesaler's team to confirm for delivery; I'll tell you here when they confirm. Shall I email the receipt? I'd need an address.`);
+    expect(await mailFactAfterOrder(rt, k, o, { lang: "en", threadId: "th_1" })).toBe(`It's recorded at the fixed price and is now with the wholesaler's team to confirm for delivery; I'll tell you here when they confirm.`); // the offer once
+    expect(await mailFactAfterOrder(rt, k, o, { lang: "fi", threadId: "th_2" })).toBe(`Se on kirjattu kiinteään hintaan, ja tukkurin tiimi vahvistaa sen nyt toimitukseen; kerron täällä, kun he vahvistavat. Lähetänkö kuitin sähköpostiin? Tarvitsisin osoitteen.`);
 
     const intent = mailWordsOf(`email receipts to ${ADDRESS}`)!;
     expect((await answerMailWords(rt, k, intent, { person: undefined, via: "thread" })).reply).toMatch(/Only the kitchen's signed-in person/);
     expect((await answerMailWords(rt, k, intent, { person: { name: "Kaari (kaari)", callOnly: true }, via: "call" })).changed).toBe(false);
     const set = await answerMailWords(rt, k, intent, { person: { name: "Kaari (kaari)" }, via: "thread", lang: "en" });
     expect(set).toEqual({ reply: `I've sent a confirmation to ${MASKED}. Once you click the link in it, receipts and alerts go there, and nothing is sent before that.`, changed: true });
-    expect(await mailFactAfterOrder(rt, k, o, { lang: "en", threadId: "th_3" })).toBe(`Once you confirm ${MASKED} from the email I sent, receipts go there.`);
+    expect(await mailFactAfterOrder(rt, k, o, { lang: "en", threadId: "th_3" })).toBe(`It's recorded at the fixed price and is now with the wholesaler's team to confirm for delivery; I'll tell you here when they confirm. Once you confirm ${MASKED} from the email I sent, receipts go there.`);
     expect((await answerMailWords(rt, k, { kind: "which" }, { person: { name: "Kaari (kaari)" }, via: "thread" })).reply).toContain(ADDRESS); // the kitchen itself
     expect((await answerMailWords(rt, k, { kind: "which" }, { person: undefined, via: "thread" })).reply).toContain(MASKED);
 
@@ -415,8 +415,8 @@ describe("the conversation's adapter", () => {
     const link = /\/mail\/confirm\?t=([\w.-]+)/.exec(fake.sent[0].html)![1];
     await confirmAddress(rt, link);
     const o2 = await order(rt, session);
-    expect(await mailFactAfterOrder(rt, k, o2, { lang: "en", threadId: "th_1" })).toBe(`I've emailed the receipt to ${MASKED} and will email you if anything changes.`);
+    expect(await mailFactAfterOrder(rt, k, o2, { lang: "en", threadId: "th_1" })).toBe(`It's recorded at the fixed price and is now with the wholesaler's team to confirm for delivery: I've emailed the receipt to ${MASKED}, and you'll get an email there when they confirm.`);
     expect((await answerMailWords(rt, k, { kind: "stop" }, { person: { name: "Kaari (kaari)" }, via: "thread", lang: "sv" })).reply).toBe(`Klart: inga fler mejl till ${MASKED}. Kvittona finns kvar i webbutiken.`);
-    expect(await mailFactAfterOrder(rt, k, o2, { lang: "en", threadId: "th_9" })).toBe("Shall I email the receipt? I'd need an address.");
+    expect(await mailFactAfterOrder(rt, k, o2, { lang: "en", threadId: "th_9" })).toBe(`It's recorded at the fixed price and is now with the wholesaler's team to confirm for delivery; I'll tell you here when they confirm. Shall I email the receipt? I'd need an address.`);
   });
 });
