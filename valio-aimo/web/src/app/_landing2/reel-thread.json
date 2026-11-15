@@ -1,6 +1,6 @@
 {
   "note": "Written by scripts/landing-shots.ts (stage reel) from GET /ui-api/kitchens/hotel-lumo/thread, the product's own words, unedited. Ids, signatures and approval ids removed.",
-  "capturedAt": "2026-11-14T18:43:51.051Z",
+  "capturedAt": "2026-11-15T04:45:06.187Z",
   "kitchen": "hotel-lumo",
   "turns": [
     {
@@ -10,7 +10,7 @@
         {
           "kind": "today",
           "label": "What needs you today",
-          "detail": "0",
+          "detail": "1",
           "status": "done"
         },
         {
@@ -37,7 +37,7 @@
     {
       "role": "agent",
       "status": "waiting_buyer",
-      "line": "I can't get your usual **10 l boxes** by {{Monday 16 Nov}}: the order deadline has passed. Instead it can come as **1 000 one-litre cartons**: Valio Eila **1 010,00 €**, Valio UHT **1 560,00 €**, or part Arla, part Valio Eila **1 574,48 €** (before 13.5 % VAT). Lactose-free milk: Valio Hyvä suomalainen Arki® Eila® semi skimmed milk drink 1 l lactose free in its place. Which one?",
+      "line": "Your usual Valio Eila 10 l boxes can't make {{Monday 16 Nov}} because their order cut-off has passed. The Valio Arki Eila is first at **1 010,00 €**: the cheapest that can arrive Monday 16 Nov. The Valio semi skimmed milk costs 550,00 € more; part Arla Semi, part Valio Arki costs 564,48 € more but has the lowest carbon. Shall I order the Valio Arki Eila, or another one?",
       "steps": [
         {
           "kind": "read",
@@ -73,6 +73,7 @@
               ],
               "cons": [
                 "0.77 kg CO2e more than the lowest-carbon option (product-group average).",
+                "Order by Sun 15 Nov 17:00: the cut-off for Mon 16 Nov is close.",
                 "Instead of your usual Valio Eila® semi skimmed milk drink 10 l novobox lactose free.",
                 "Against Valio Eila® semi skimmed milk drink 10 l novobox lactose free: 0.3 g less protein, same salt, same sugar per 100 g or ml.",
                 "Over the €500.00 the agent may spend alone: a person must sign off."
@@ -99,6 +100,7 @@
               "cons": [
                 "€550.00 (54.5 %) more than the cheapest option.",
                 "6.77 kg CO2e more than the lowest-carbon option (product-group average).",
+                "Order by Sun 15 Nov 17:00: the cut-off for Mon 16 Nov is close.",
                 "Instead of your usual Valio Eila® semi skimmed milk drink 10 l novobox lactose free.",
                 "Against Valio Eila® semi skimmed milk drink 10 l novobox lactose free: 0.1 g less protein, same salt, 1.7 g more sugar, fibre not declared per 100 g or ml.",
                 "Over the €500.00 the agent may spend alone: a person must sign off."
@@ -127,6 +129,7 @@
                 "€564.48 (55.9 %) more than the cheapest option.",
                 "No delivery-reliability data for this product.",
                 "Partial stock: only 384 L of Arla Semi skimmed milkdrink 1 L UHT lactose free Suomesta available, so 616 L comes from Valio Hyvä suomalainen Arki® Eila® semi skimmed milk drink 1 l lactose free as a substitute.",
+                "Order by Sun 15 Nov 17:00: the cut-off for Mon 16 Nov is close.",
                 "Against Arla Semi skimmed milkdrink 1 L UHT lactose free Suomesta: 0.2 g less protein, same salt, 0.1 g more sugar per 100 g or ml.",
                 "Over the €500.00 the agent may spend alone: a person must sign off."
               ],
@@ -186,7 +189,7 @@
     {
       "role": "agent",
       "status": "done",
-      "line": "1000 × Valio Hyvä suomalainen Arki for **1 010,00 €** is over the **500,00 €** I may spend alone, so it needs the kitchen manager's OK.\nThe Kitchen manager OK'd it, and the order is placed: **1 000 one-litre cartons** of Valio Eila lactose-free milk for **1 010,00 €**, arriving {{Monday 16 Nov}}. You can still cancel it until {{17.00}} on {{Sunday 15 Nov}}.",
+      "line": "1 000 × Valio Arki Eila semi for **1 010,00 €** is over the **500,00 €** I may spend alone, so it needs the kitchen manager's OK.\nKitchen manager OK'd it. It's placed at the fixed price for Monday 16 Nov and is now with the wholesaler's team to confirm for delivery; I'll tell you here when they confirm.",
       "steps": [
         {
           "kind": "read",
@@ -336,67 +339,62 @@
   ],
   "stepsAsTheyAppeared": [
     {
-      "at": 4,
+      "at": 5,
       "label": "What needs you today",
-      "detail": "0",
+      "detail": "1",
       "status": "done"
     },
     {
-      "at": 4,
+      "at": 5,
       "label": "Checked the week's key products",
       "detail": "stock out",
       "status": "done"
     },
     {
-      "at": 260,
+      "at": 262,
       "label": "Reading your request",
       "status": "running"
     },
     {
-      "at": 2573,
+      "at": 2891,
       "label": "Reading your request",
       "detail": "anthropic:claude-opus-5-5",
       "status": "done"
     },
     {
-      "at": 2573,
-      "label": "Checking against your history and the assortment",
-      "status": "running"
-    },
-    {
-      "at": 2827,
+      "at": 2891,
       "label": "Checking against your history and the assortment",
       "detail": "options_ready",
       "status": "done"
     },
     {
-      "at": 13227,
+      "at": 13315,
       "label": "On it",
       "status": "running"
     },
     {
-      "at": 14501,
+      "at": 14630,
       "label": "Fixing the price with the wholesaler",
       "status": "done"
     },
     {
-      "at": 14501,
+      "at": 14630,
       "label": "Checking the order against your rules",
       "detail": "pending_approval",
       "status": "done"
     },
     {
-      "at": 15378,
+      "at": 15438,
       "label": "On it",
       "status": "done"
     },
     {
-      "at": 15378,
+      "at": 15438,
       "label": "Noting what to remember",
       "status": "running"
     },
     {
-      "at": 17991,
+      "at": 18296,
       "label": "Noting what to remember",
       "detail": "0",
       "status": "done"
@@ -406,19 +404,16 @@
     {
       "after": "I need 1,000 litres of lactose-free milk by Monday",
       "steps": [
-        "Read your request. 1 000 L, lactose-free milk, Mon 16 Nov",
-        "Looked at your history. Always lactose-free: many breakfast guests ask for it, as always (Kitchen manager, Tue 27.10.) Semi-skimmed 1.5 %, as usual",
-        "Searched the assortment. Valio Hyvä suomalainen Arki® Eila® semi skimmed milk drink 1 l lactose free · Valio semi skimmed milk 1 l lactose free UHT · Arla Semi skimmed milkdrink + Valio Arki Eila semi",
-        "Checked live price and delivery for 3. All can arrive Mon 16 Nov. The cheapest is 1 010,00 €.",
-        "Left out 17 products. The order cut-off for that day has passed (6); a different kind of product (coffee) than asked (4); a different kind of product (sour or fermented milk) than asked (4); other reasons (3)"
+        "Checked the week's key products. Valio Eila semi skimmed, Mon 16 Nov: the order cut-off has passed. Compared 3 stand-ins; the closest is Valio Arki Eila semi."
       ]
     },
     {
       "after": "the first one",
       "steps": [
-        "Price held until 21.13. Signed by the wholesaler: anyone can check it against their published key.",
-        "Checked your rules. 1 010,00 € is over the 500,00 € the agent may spend alone.",
-        "Sent the order. Mon 16 Nov"
+        "Read your request. 1 000 L, lactose-free milk, Mon 16 Nov",
+        "Looked at your history. Always lactose-free: many breakfast guests ask for it, as always (Kitchen manager, Wed 28.10.) Semi-skimmed 1.5 %, as usual",
+        "Searched the assortment. Valio Hyvä suomalainen Arki® Eila® semi skimmed milk drink 1 l lactose free · Valio semi skimmed milk 1 l lactose free UHT · Arla Semi skimmed milkdrink + Valio Arki Eila semi",
+        "2 more"
       ]
     }
   ]
