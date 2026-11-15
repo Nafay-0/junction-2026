@@ -110,6 +110,10 @@ export function useCall(kitchen: string) {
   /** The voice model is in the middle of a turn of its own (speaking, or about to): nothing is given to it then. */
   const modelTurnOpen = useRef(false);
   const modelTurnAt = useRef(0);
+  /** When words were last sent for an utterance: a relay right after with no new words is the same utterance. */
+  const lastRelayAt = useRef(0);
+  /** When the buyer last talked over the agent (the provider's barge-in). */
+  const interruptedAt = useRef(0);
   const queue = useRef<string[]>([]);
   const tokens = useRef({ prompt: 0, response: 0, usd: 0 });
   const grounding = useRef({ checked: 0, dropped: 0 });
@@ -241,8 +245,11 @@ export function useCall(kitchen: string) {
       // The buyer's last words may still be arriving as transcript: wait for the final transcript when the provider
       // sends one, otherwise until it has been quiet for 150 ms (at most 2 s): the provider's turn detection has already waited for the pause.
       const s0 = sock.current;
-      for (let i = 0; i < 40; i++) {
-        const settled = s0?.finalTranscripts ? heardFinal.current !== undefined && Date.now() - lastHeardAt.current > 100 : Date.now() - lastHeardAt.current > 150;
+      // Right after the buyer talked over the agent, the words keep arriving for a moment (the interruption cut the
+      // turn early): wait for 700 ms of quiet then, so "The first one" is not relayed as "The".
+      const quiet = Date.now() - interruptedAt.current < 3_000 ? 700 : 150;
+      for (let i = 0; i < 60; i++) {
+        const settled = s0?.finalTranscripts ? heardFinal.current !== undefined && Date.now() - lastHeardAt.current > Math.max(100, quiet - 50) : Date.now() - lastHeardAt.current > quiet;
         if (settled) break;
         await new Promise((r) => setTimeout(r, 50));
       }
@@ -258,15 +265,20 @@ export function useCall(kitchen: string) {
       timing(t, { toolCall: Date.now() - lastHeardAt.current });
       set({ heard: "" });
       const responses: { id: string; name: string; response: unknown }[] = [];
+      let sentWords = false;
       for (const fc of fcs) {
         if (fc.name !== "relay") {
           responses.push({ id: fc.id, name: fc.name, response: { say: "", note: "There is no such tool. Only relay exists." } });
           continue;
         }
-        if (!words) {
-          responses.push({ id: fc.id, name: fc.name, response: { say: tx().notCaught } });
+        // A second relay for words already sent (the model sometimes calls twice for one utterance): nothing to say.
+        // Only a relay with no words at all, and none just sent, is a "say it again".
+        if (!words || (sentWords && fc !== fcs[0])) {
+          responses.push({ id: fc.id, name: fc.name, response: { say: Date.now() - lastRelayAt.current < 3_000 || sentWords ? "" : tx().notCaught } });
           continue;
         }
+        sentWords = true;
+        lastRelayAt.current = Date.now();
         set({ working: true });
         const r = await post<Spoken>(`${base}/call/${callId.current}`, { op: "heard", text: words, turn: t, modelWords: typeof fc.args?.words === "string" ? fc.args.words.slice(0, 2000) : undefined, overlap: wasOverlap, duringAgent: wasDuring, lang: langRef.current });
         if (!r.ok) {
@@ -388,6 +400,7 @@ export function useCall(kitchen: string) {
       },
       onInterrupted: () => {
         // Barge-in: the buyer started talking; the agent stops at once.
+        interruptedAt.current = Date.now();
         a.stopPlayback();
         modelTurnOpen.current = false;
         set({ agentSpeaking: false });

@@ -64,7 +64,7 @@ const SCREEN_ONLY = /^(tap|click|press|see|scroll|open|use the button|napauta|kl
  * The written line as it is spoken: no marks, no codes or addresses, money and days as said, units in words,
  * thousands without spaces. `max` words, whole sentences only; what is cut is said as what it is.
  */
-export function speakable(text: string, lang: Lang, max = 45): string {
+export function speakable(text: string, lang: Lang, max = 45, rest = true): string {
   let t = text.replace(/\*\*|\{\{|\}\}|__|`/g, "");
   t = t.replace(/https?:\/\/\S+/g, "").replace(/\b(req|ord|apr|trn|sht|pln|card|call|sbx|qt|quo|q)_[A-Za-z0-9_-]{4,}\b/g, "");
   // Money: "1 010,00 €", "€1,010.00", "11,40 €", "101 €" -> euros as said.
@@ -84,24 +84,101 @@ export function speakable(text: string, lang: Lang, max = 45): string {
   // Counts: "1 000" -> "1000"; "12 × " -> "12 "; units in words after a number.
   t = t.replace(/(\d)[\s  ](?=\d{3}\b)/g, "$1");
   t = t.replace(/(\d)\s?[×x]\s/g, "$1 ");
-  t = t.replace(/(\d+(?:[.,]\d+)?)\s?(L|l|kg|g)(?![\p{L}\d])/gu, (_, n: string, u: string) => sayAmount(Number(n.replace(",", ".")), u, lang));
+  // "10 l boxes" is "10-litre boxes" in English; otherwise an amount and its unit in words.
+  if (lang === "en") t = t.replace(/(\d+(?:[.,]\d+)?)\s?(L|l)\s+(box|boxes|carton|cartons|bag|bags|pack|packs|bag-in-box)\b/g, (_, n: string, _u: string, w: string) => `${n.replace(",", ".")}-litre ${w}`);
+  t = t.replace(/(\d+(?:[.,]\d+)?)\s?(L|l|kg|g)(?![\p{L}\d-])/gu, (_, n: string, u: string) => sayAmount(Number(n.replace(",", ".")), u, lang));
   t = t.replace(/\s\+\s/g, { en: " and ", fi: " ja ", sv: " och " }[lang]);
   t = t.replace(/[•·▪]\s*/g, "").replace(/\s*\n+\s*/g, ". ").replace(/\.\s*\./g, ".").replace(/\s{2,}/g, " ").replace(/\s+([.,;:!?])/g, "$1").trim();
   const sentences = t.split(/(?<=[.!?])\s+(?=[\p{Lu}\d"“(])/u).map((x) => x.trim()).filter((x) => x && !SCREEN_ONLY.test(x));
+  // Over the limit: the first sentences, and the written reply's own closing question if it has one (the buyer has to
+  // hear what is asked); the note about the rest only when no question closes it and nothing else follows (`rest`).
+  const last = sentences.at(-1);
+  const closing = last && /\?\s*$/.test(last) ? last : undefined;
+  const body = closing ? sentences.slice(0, -1) : sentences;
+  const budget = max - (closing ? closing.split(/\s+/).length : 0);
   const out: string[] = [];
   let words = 0;
-  for (const s of sentences) {
+  for (const s of body) {
     const n = s.split(/\s+/).length;
-    if (out.length && words + n > max) break;
+    if (out.length && words + n > budget) break;
     out.push(s);
     words += n;
   }
-  const rest = sentences.length - out.length;
-  if (rest > 0) out.push({ en: "The rest is written on your screen.", fi: "Loput on kirjoitettuna näytölläsi.", sv: "Resten står på din skärm." }[lang]);
+  const cut = out.length < body.length;
+  if (closing) out.push(closing);
+  else if (cut && rest) out.push({ en: "The rest is written on your screen.", fi: "Loput on kirjoitettuna näytölläsi.", sv: "Resten står på din skärm." }[lang]);
   return out.join(" ");
 }
 
-const shortName = (name: string) => name.replace(/[®™]/g, "").replace(/\s+\d.*$/, "").split(/\s+/).slice(0, 4).join(" ");
+/** Catalogue words a person would not say about a product. */
+const NAME_NOISE = /\b(food ?service|ammattilaisille|professional|hyvä suomalainen|suomalainen|arki|bag-in-box|semi[- ]?skimmed|skimmed|milk drink|drink|lactose[- ]free|laktoositon|uht|organic|luomu|\d[\d.,]*\s?(%|l|kg|g|ml|dl|kpl|pcs)\b|box|carton|cartons)/gi;
+const KINDS = ["oat drink", "whipping cream", "cooking cream", "sour cream", "cream cheese", "cream", "milk", "yoghurt", "yogurt", "butter", "quark", "cheese", "eggs", "juice", "maito", "kerma", "jogurtti", "voi", "rahka", "juusto", "mjölk", "grädde"];
+
+/**
+ * A catalogue name as a person says it: the brand and its line, then what it is ("Valio Hyvä suomalainen Arki® Eila®
+ * semi skimmed milk drink 1 l lactose free" is "Valio Eila milk"). Marks, pack sizes and labels go.
+ */
+const KIND_IN: Record<"fi" | "sv", Record<string, string>> = {
+  fi: { "oat drink": "kaurajuoma", "whipping cream": "kuohukerma", "cooking cream": "ruokakerma", "sour cream": "kermaviili", "cream cheese": "tuorejuusto", cream: "kerma", milk: "maito", yoghurt: "jogurtti", yogurt: "jogurtti", butter: "voi", quark: "rahka", cheese: "juusto", eggs: "kananmunat", juice: "mehu" },
+  sv: { "oat drink": "havredryck", "whipping cream": "vispgrädde", "cooking cream": "matlagningsgrädde", "sour cream": "gräddfil", "cream cheese": "färskost", cream: "grädde", milk: "mjölk", yoghurt: "yoghurt", yogurt: "yoghurt", butter: "smör", quark: "kvarg", cheese: "ost", eggs: "ägg", juice: "juice" },
+};
+
+export function spokenName(name: string, lang: Lang = "en"): string {
+  const plain = name.replace(/[®™]/g, "").replace(/\s+/g, " ").trim();
+  const found = KINDS.find((k) => new RegExp(`\\b${k}\\b`, "i").test(plain));
+  const kind = found && lang !== "en" ? (KIND_IN[lang][found] ?? found) : found;
+  const words = plain.replace(NAME_NOISE, " ").replace(/\s+/g, " ").trim().split(" ").map((w) => w.replace(/[,;:]+$/, "")).filter((w) => /\p{L}/u.test(w));
+  const head = words.slice(0, 2).filter((w) => !found || !found.split(" ").includes(w.toLowerCase()));
+  return [...head, kind ?? words[2] ?? ""].filter(Boolean).join(" ").trim() || plain.split(" ").slice(0, 3).join(" ");
+}
+const shortName = spokenName;
+
+/** Every product name the turn's cards carry, longest first: what a written line may spell out in full. */
+function productNames(turn: AgentTurn): string[] {
+  const names = new Set<string>();
+  for (const c of turn.cards) {
+    if (c.type === "options") for (const o of c.options) {
+      names.add(o.title);
+      for (const l of o.lines) names.add(l.name);
+    }
+    if (c.type === "order" || c.type === "price") for (const l of c.lines) names.add(l.name);
+  }
+  return [...names].filter((n) => n.length > 12).sort((a, b) => b.length - a.length);
+}
+
+/**
+ * A written reply made fit to hear, whatever the engine wrote: long catalogue names as people say them; a label with
+ * a colon ("Lactose-free milk: X in its place.") as a sentence ("X comes in its place."); a clause left hanging
+ * (", so for Thursday 19 Nov.") cut; a sentence listing three or more prices dropped when the options are asked
+ * about anyway (`listed`), since the question names the first and the cheapest.
+ */
+export function spokenSentences(text: string, turn: AgentTurn | undefined, opts: { optionsAsked?: boolean } = {}): string {
+  let t = text.replace(/[®™]/g, "");
+  if (turn) for (const n of productNames(turn)) {
+    const plain = n.replace(/[®™]/g, "");
+    for (const v of [plain, plain.replace(/\s+\d.*$/, "")]) if (v.length > 12 && t.includes(v)) t = t.split(v).join(spokenName(n));
+  }
+  // The catalogue's line words a person would not say ("Valio Arki Eila semi").
+  t = t.replace(/\bfood ?service\s+/gi, "").replace(/\b(Hyvä suomalainen|Arki)\s+(?=\p{Lu})/gu, "").replace(/\b(Eila|Arla|Valio) semi\b(?![- ]skimmed)/g, "$1 semi-skimmed");
+  const sentences = t.split(/(?<=[.!?])\s+(?=[\p{Lu}\d"“(*{])/u).map((x) => x.trim()).filter(Boolean);
+  const out: string[] = [];
+  for (let x of sentences) {
+    // "Label: rest" with no verb in the label: the rest is the sentence.
+    const label = /^([^:.!?]{2,40}):\s+(.+)$/.exec(x);
+    if (label && label[1].split(/\s+/).length <= 4 && !/\b(is|are|can|can't|cannot|not|will|was|has|have|had|on|ei|eivät|saa|voi|ole|ovat|olen|är|har|inte|kan)\b/i.test(label[1]) && !/n't\b/i.test(label[1]) && !/\d$/.test(label[1])) x = label[2].charAt(0).toUpperCase() + label[2].slice(1);
+    // "X in its place." has no verb: it says what comes instead.
+    x = x.replace(/^(.{3,80}?) in its place([.!]?)$/i, "$1 comes in its place$2").replace(/^(.{3,80}?) (tilalle|i stället)([.!]?)$/i, "$1 tulee $2$3");
+    // A sentence that is only a day ("Torstaiksi 19. marraskuuta.", "For Thursday 19 Nov."): it says nothing alone.
+    if (/^(for |by |on |till |på )?(mon|tue|wed|thu|fri|sat|sun|maanantai|tiistai|keskiviikko|torstai|perjantai|lauantai|sunnuntai|måndag|tisdag|onsdag|torsdag|fredag|lördag|söndag)[\p{L}]*\s*[\d. ]*[\p{L}]*[.!]?$/iu.test(x.replace(/\{\{|\}\}|\*\*/g, "")) && x.split(/\s+/).length <= 5) continue;
+    // A clause left hanging after "so": cut.
+    x = x.replace(/,?\s+so\s+(for|on|by)\s+[^,.!?]+(?=[.!]?$)/i, "");
+    // Prices listed one after another, when the question that follows names the first and the cheapest.
+    if (opts.optionsAsked && ((x.match(/€/g) ?? []).length >= 2 || /\b(is first at|costs .{0,30} (more|less)|the cheapest that|halvin|billigast)\b/i.test(x))) continue;
+    if (opts.optionsAsked && /\?\s*$/.test(x)) continue;
+    out.push(x);
+  }
+  return out.join(" ");
+}
 
 /** The read-back of an order the voice door held (pipeline.ts spokenHold): what, how much, which day, the total. */
 export function readBackOf(turn: AgentTurn, hold: SpokenReadBack, lang: Lang): string | undefined {
@@ -120,12 +197,12 @@ export function readBackOf(turn: AgentTurn, hold: SpokenReadBack, lang: Lang): s
   } else return undefined;
   const main = [...lines].sort((a, b) => b.quantity * (b.packSize ?? 1) - a.quantity * (a.packSize ?? 1))[0];
   if (!main) return undefined;
-  const what = `${main.quantity} ${shortName(main.name)}`;
   const amount = delivered && delivered.unit !== "pcs" ? sayAmount(delivered.amount, delivered.unit, lang) : undefined;
+  const what = amount ? `${amount} ${{ en: "of", fi: "", sv: "" }[lang]} ${spokenName(main.name, lang)}`.replace(/\s+/g, " ") : `${main.quantity} ${spokenName(main.name, lang)}`;
   const more = lines.length > 1 ? { en: ` and ${lines.length - 1} more`, fi: ` ja ${lines.length - 1} muuta`, sv: ` och ${lines.length - 1} till` }[lang] : "";
-  if (lang === "fi") return `${what}${more}${amount ? `, yhteensä ${amount}` : ""}, ${sayDay(day, "fi")}: ${sayEuros(total, "fi")}. Tilaanko sen?`;
-  if (lang === "sv") return `${what}${more}${amount ? `, totalt ${amount}` : ""}, ${sayDay(day, "sv")}: ${sayEuros(total, "sv")}. Ska jag beställa det?`;
-  return `${what}${more}${amount ? `, that's ${amount}` : ""}, for ${sayDay(day, "en")}: ${sayEuros(total, "en")}. Shall I order it?`;
+  if (lang === "fi") return `${what}${more} ${sayDay(day, "fi")}, ${sayEuros(total, "fi")}. Tilaanko sen?`;
+  if (lang === "sv") return `${what}${more} på ${sayDay(day, "sv")}, för ${sayEuros(total, "sv")}. Ska jag beställa det?`;
+  return `${what}${more} for ${sayDay(day, "en")}, ${sayEuros(total, "en")}. Shall I order it?`;
 }
 
 /** Card facts the written line may leave to the screen, said when the line does not say them already. */
@@ -154,7 +231,7 @@ function fromCards(turn: AgentTurn, said: string, lang: Lang): string[] {
  * with its total and day, and the cheapest when that is another. The yes orders exactly that option (`hold`: the
  * engine's read-back answer, engine.ts); any other words ("the cheapest one", "the second") go to the agent as words.
  */
-function optionsAsk(turn: AgentTurn, lang: Lang): { say: string; hold: SpokenReadBack } | undefined {
+function optionsAsk(turn: AgentTurn, lang: Lang, line = ""): { say: string; hold: SpokenReadBack } | undefined {
   if (turn.status !== "waiting_buyer") return undefined;
   if (turn.cards.some((c) => (c.type === "anomaly" && !c.answered) || c.type === "question" || (c.type === "menu" && (c.stage === "choose" || c.stage === "ready")) || c.type === "sheet")) return undefined;
   const opts = [...turn.cards].reverse().find((c) => c.type === "options" && !c.chosen);
@@ -165,16 +242,21 @@ function optionsAsk(turn: AgentTurn, lang: Lang): { say: string; hold: SpokenRea
   const cheapest = [...ok].sort((a, b) => a.totalCents - b.totalCents)[0];
   const other = cheapest && cheapest.optionId !== lead.optionId ? cheapest : undefined;
   const n = ok.length;
-  const what = (o: OptionView, l: Lang) => `${shortName(o.title)}, ${sayEuros(o.totalCents, l)}, ${l === "en" ? `for ${sayDay(o.deliveryDate, l)}` : sayDay(o.deliveryDate, l)}`;
+  const name = spokenName(lead.title, lang);
+  const named = (o: OptionView) => spokenName(o.title, lang);
+  const at = (o: OptionView, l: Lang) => `${sayEuros(o.totalCents, l)}, ${l === "en" ? `for ${sayDay(o.deliveryDate, l)}` : sayDay(o.deliveryDate, l)}`;
   const say =
     n === 1
-      ? { en: `One option: ${what(lead, "en")}. Shall I order it?`, fi: `Yksi vaihtoehto: ${what(lead, "fi")}. Tilaanko sen?`, sv: `Ett alternativ: ${what(lead, "sv")}. Ska jag beställa det?` }[lang]
+      ? { en: `I can get ${name} for ${at(lead, "en")}. Shall I order it?`, fi: `Saan ${name}, ${at(lead, "fi")}. Tilaanko sen?`, sv: `Jag kan få ${name} för ${at(lead, "sv")}. Ska jag beställa det?` }[lang]
       : {
-          en: `${n} options. The first: ${what(lead, "en")}${other ? `; the cheapest is ${shortName(other.title)} at ${sayEuros(other.totalCents, "en")}` : ""}. Shall I order the first one?`,
-          fi: `${n} vaihtoehtoa. Ensimmäinen: ${what(lead, "fi")}${other ? `; halvin on ${shortName(other.title)}, ${sayEuros(other.totalCents, "fi")}` : ""}. Tilaanko ensimmäisen?`,
-          sv: `${n} alternativ. Det första: ${what(lead, "sv")}${other ? `; billigast är ${shortName(other.title)} för ${sayEuros(other.totalCents, "sv")}` : ""}. Ska jag beställa det första?`,
+          en: `There are ${n} options. The first is ${name} at ${at(lead, "en")}.${other ? ` The cheapest is ${named(other)} at ${sayEuros(other.totalCents, "en")}.` : ""} Shall I order the ${name}?`,
+          fi: `Vaihtoehtoja on ${n}. Ensimmäinen on ${name}, ${at(lead, "fi")}.${other ? ` Halvin on ${named(other)}, ${sayEuros(other.totalCents, "fi")}.` : ""} Tilaanko ensimmäisen?`,
+          sv: `Det finns ${n} alternativ. Det första är ${name} för ${at(lead, "sv")}.${other ? ` Billigast är ${named(other)} för ${sayEuros(other.totalCents, "sv")}.` : ""} Ska jag beställa det första?`,
         }[lang];
-  return { say, hold: { requestId: opts.requestId, optionId: lead.optionId, turnId: turn.turnId } };
+  // The written reply already said how many options there are: not said twice.
+  const counted = /\b(\d+|two|three|four|kaksi|kolme|neljä|två|tre|fyra) (options|alternatives|vaihtoehto\w*|alternativ)\b/i.test(line);
+  const spoken = counted ? say.replace(/^(There are \d+ options|Vaihtoehtoja on \d+|Det finns \d+ alternativ)\. /, "") : say;
+  return { say: spoken, hold: { requestId: opts.requestId, optionId: lead.optionId, turnId: turn.turnId } };
 }
 
 export type SpokenReply = { say: string; /** The order the spoken question asks about: the buyer's yes orders it. */ hold?: SpokenReadBack };
@@ -185,12 +267,11 @@ export function spokenReply(turn: AgentTurn, lang: Lang, hold?: SpokenReadBack):
     const rb = readBackOf(turn, hold, lang);
     if (rb) return { say: rb, hold };
   }
-  const ask = optionsAsk(turn, lang);
-  // Spoken is shorter than written: about thirty words, whole sentences. With the options' question, the written
-  // reply's first statement only, and its own question gives way (one question at a time).
-  let line = speakable(turn.line ?? "", lang, ask ? 18 : 32);
-  // With options to ask about, the question says it all (what, how much, the day): the written reply is not repeated.
-  if (ask) line = "";
+  const ask = optionsAsk(turn, lang, turn.line ?? "");
+  // Spoken is shorter than written: about thirty words, whole sentences, made fit to hear. With the options' question,
+  // only what the question does not say (an exception: the usual cannot come, a stand-in) stays before it, and the
+  // written reply's own question gives way (one question at a time).
+  const line = speakable(spokenSentences(turn.line ?? "", turn, { optionsAsked: !!ask }), lang, ask ? 22 : 40, !ask);
   const extra = fromCards(turn, line, lang);
   const said = [line, ...extra, ask?.say ?? ""].filter(Boolean).join(" ").trim();
   if (said) return { say: said, ...(ask ? { hold: ask.hold } : {}) };
@@ -241,6 +322,27 @@ export function milestoneOf(turn: AgentTurn, said: Set<string>, lang: Lang): { k
   const s = currentStep(turn);
   if (s && s.status === "running" && DOING[s.kind] && !said.has(`step:${s.kind}`)) return { key: `step:${s.kind}`, say: DOING[s.kind][lang] };
   return undefined;
+}
+
+/** The same work, still going: said once per kind of step, when the work has run long since the last words. */
+const STILL: Record<string, Record<Lang, string>> = {
+  read: { en: "Still reading your request.", fi: "Luen yhä pyyntöäsi.", sv: "Jag läser fortfarande din beställning." },
+  intake: { en: "Still checking your history.", fi: "Tarkistan yhä historiaanne.", sv: "Jag kollar fortfarande er historik." },
+  lookup: { en: "Still waiting for the wholesaler's live prices.", fi: "Odotan yhä tukun hintoja.", sv: "Jag väntar fortfarande på grossistens priser." },
+  quote: { en: "The wholesaler is still fixing the price.", fi: "Tukku lukitsee yhä hintaa.", sv: "Grossisten låser fortfarande priset." },
+  gate: { en: "Still checking it against your rules.", fi: "Tarkistan yhä sääntöjänne vasten.", sv: "Jag kollar fortfarande mot era regler." },
+  plan: { en: "Still planning: a menu takes about half a minute.", fi: "Suunnittelen yhä: menu vie noin puoli minuuttia.", sv: "Jag planerar fortfarande: en meny tar ungefär en halv minut." },
+  records: { en: "Still going through your orders.", fi: "Käyn yhä läpi tilauksianne.", sv: "Jag går fortfarande igenom era beställningar." },
+  products: { en: "Still looking through the assortment.", fi: "Käyn yhä valikoimaa läpi.", sv: "Jag går fortfarande igenom sortimentet." },
+  model: { en: "Still working on it.", fi: "Työ on yhä kesken.", sv: "Jag arbetar fortfarande på det." },
+};
+
+/** A true line for work that has gone on long with nothing new to say: what it is still doing, once per kind. */
+export function stillOf(turn: AgentTurn, said: Set<string>, lang: Lang): { key: string; say: string } | undefined {
+  const s = currentStep(turn);
+  const kind = s && STILL[s.kind] ? s.kind : "model";
+  if (said.has(`still:${kind}`)) return undefined;
+  return { key: `still:${kind}`, say: STILL[kind][lang] };
 }
 
 /** A turn the buyer still waits on: working, or nothing to say yet. */
