@@ -3,3 +3,6 @@ dist
 out
 .DS_Store
 .env
+public/demo-clips
+public/demo-film.mp4
+public/demo-music/bed-600.mp3
