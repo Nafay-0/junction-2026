@@ -61,6 +61,15 @@ describe("TryCaps", () => {
     expect(c.room("copilot", "a", T0).dayLeft).toBe(400);
   });
 
+  it("a try taken yesterday, given back today, does not lower today's count", () => {
+    const c = new TryCaps();
+    const yesterday = c.take("copilot", "a", T0);
+    const nextDay = T0 + 24 * 3600_000;
+    c.take("copilot", "b", nextDay);
+    yesterday.giveBack();
+    expect(c.room("copilot", "b", nextDay).dayLeft).toBe(399);
+  });
+
   it("closes every door with DOCK_TRY=off", () => {
     process.env.DOCK_TRY = "off";
     expect(() => new TryCaps().take("copilot", "a", T0)).toThrow(/staff with the passcode can/);
