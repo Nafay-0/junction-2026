@@ -23,6 +23,8 @@ export const EDL: Record<string, () => ChapterEdit> = {
     const w = "c01-01-three-ways";
     const u = "c01-02-signup";
     const iv = "c01-03-interview";
+    const cf = "c01-04-confirm";
+    const yr = "c01-05-your-rules";
     return {
       shots: [
         clip(w, { at: start("c01"), label: "The door: three ways in", url: `${K}/k`, sync: has(w) ? [[ev(w, "/k"), cue("c01-1", "There are", -0.2)], [ev(w, "way 1"), cue("c01-1", "First", -0.1)], [ev(w, "way 2"), cue("c01-2", "Second", -0.1)], [ev(w, "way 3"), cue("c01-3", "Third", -0.1)]] : undefined, zoom: has(w) ? [{ at: cue("c01-2", "Hotel Lumo", -0.3), s: 1.1, x: 0.5, y: 0.6 }, { at: partAt("c01-2", 0, true), s: 1, x: 0.5, y: 0.6 }] : undefined }, "/k: the three ways in"),
@@ -31,9 +33,12 @@ export const EDL: Record<string, () => ChapterEdit> = {
         ...(has(iv)
           ? [
               { clip: iv, at: partAt("c01-4", 0.2), label: "Opening an account · the interview", url: `${K}/k/signup`, from: 16.4, sync: [[ev(iv, "Q: delivery days"), cue("c01-4", "decide later", -0.1)]] as [number, number][], zoom: [{ at: cue("c01-4", "On every", 0), s: 1.1, x: 0.5, y: 0.55 }, { at: cue("c01-4", "You don't", -0.3), s: 1, x: 0.5, y: 0.55 }] },
-              { clip: iv, at: cue("c01-4", "You don't", -0.2), label: "Opening an account · your rules", url: `${K}/k/signup`, from: 30.6, rate: 1.5 },
+              { clip: iv, at: cue("c01-4", "You don't", -0.2), label: "Opening an account · the interview", url: `${K}/k/signup`, from: 30.6, sync: [[ev(iv, "Q: weekly budget"), cue("c01-4", "You don't", 0.3)], [ev(iv, "These are your rules"), cue("c01-5", "At the end", 0.2)]] as [number, number][] },
+              { clip: iv, at: cue("c01-5", "At the end", 0.1), label: "Opening an account · these are your rules", url: `${K}/k/signup`, sync: [[ev(iv, "These are your rules"), cue("c01-5", "At the end", 0.2)]] as [number, number][] },
             ]
           : []),
+        clip(cf, { at: cue("c01-5", "Confirm", -0.3), label: "Opening an account · confirm", url: `${K}/k/signup`, sync: has(cf) ? [[ev(cf, "Confirm"), cue("c01-5", "This device's", -0.2)], [ev(cf, "Start empty"), cue("c01-5", "The agent starts", -0.3)], [ev(cf, "the new kitchen"), cue("c01-5", "an empty memory", -0.2)]] : undefined }, "Confirming the rules; the new kitchen's agent, empty memory"),
+        clip(yr, { at: cue("c01-5", "and Your rules", -0.2), label: "Your rules", url: `${K}/k`, sync: has(yr) ? [[ev(yr, "Your rules"), cue("c01-5", "Your rules shows", 0)]] : undefined }, "The Your rules page"),
       ],
       callouts: [
         { at: cue("c01-2", "They're shared"), text: "Test kitchens: shared, reset every hour", pos: "br" },

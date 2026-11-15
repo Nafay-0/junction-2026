@@ -1,42 +1,63 @@
 {
  "c01-01-three-ways": {
-  "seconds": 16.333,
+  "seconds": 16.5,
   "size": "1920x1080@30/1",
   "chapter": "c01",
   "what": "/k: the three ways in: Start a fresh kitchen; three test kitchens with rules (Hotel Lumo, Metsola school, Kahvila Sointu); open your restaurant's account",
   "events": {
-   "/k: the kitchen's shop door": 1.52,
-   "way 1: Start a fresh kitchen (no rules, empty memory)": 4.6,
-   "way 2: the three sample test kitchens with rules (shared, reset regularly)": 8.78,
-   "way 3: open your restaurant's account": 14.11
+   "/k: the kitchen's shop door": 1.53,
+   "way 1: Start a fresh kitchen (no rules, empty memory)": 4.61,
+   "way 2: the three sample test kitchens with rules (shared, reset regularly)": 8.79,
+   "way 3: open your restaurant's account": 14.29
   }
  },
  "c01-02-signup": {
-  "seconds": 15.433,
+  "seconds": 15.933,
   "size": "1920x1080@30/1",
   "chapter": "c01",
   "what": "Sign-up: a made-up restaurant (Ravintola Kuusi), the business email delivered@resend.dev, username and password; the agent's welcome and the three things it will ask",
   "events": {
-   "sign-up: the restaurant": 1.92,
-   "business email (a test address)": 3.91,
-   "welcome: a few questions, each with an answer already chosen; under two minutes, change anything later": 11.73
+   "sign-up: the restaurant": 1.94,
+   "business email (a test address)": 3.93,
+   "welcome: a few questions, each with an answer already chosen; under two minutes, change anything later": 12.08
   }
  },
  "c01-03-interview": {
-  "seconds": 47.167,
+  "seconds": 47.9,
   "size": "1920x1080@30/1",
   "chapter": "c01",
   "what": "The rules interview: diet 'Decide later', never Nuts and Peanuts, delivery days 'Decide later', usual order 300 €, limit 450 €, weekly budget 'None' (safe default), Head chef signs; then 'These are your rules'",
   "events": {
    "Q: must every product be one of these? (diet)": 2.58,
    "answered 'Decide later': I suggest one when your orders show a pattern": 6.75,
-   "Q: anything your agent must never buy? Nuts and Peanuts chosen": 7.97,
-   "Q: delivery days: 'Decide later', learnt from your orders": 16.78,
-   "Q: a usual order: 300 € is right": 21.84,
-   "Q: the limit the agent may spend alone: 450 € (a usual order and a half)": 26.01,
-   "Q: weekly budget: 'None', the safe default": 29.67,
-   "Q: who OKs orders above the limit: Head chef": 34.73,
-   "These are your rules (defaults marked)": 40.31
+   "Q: anything your agent must never buy? Nuts and Peanuts chosen": 7.96,
+   "Q: delivery days: 'Decide later', learnt from your orders": 16.91,
+   "Q: a usual order: 300 € is right": 22.03,
+   "Q: the limit the agent may spend alone: 450 € (a usual order and a half)": 26.26,
+   "Q: weekly budget: 'None', the safe default": 30.15,
+   "Q: who OKs orders above the limit: Head chef": 35.33,
+   "These are your rules (defaults marked)": 41.02
+  }
+ },
+ "c01-04-confirm": {
+  "seconds": 15.033,
+  "size": "1920x1080@30/1",
+  "chapter": "c01",
+  "what": "Confirm the rules: the browser's passkey becomes the signing device; 'Done. Your agent is ready.'; start empty; the new kitchen's agent opens",
+  "events": {
+   "Confirm: this device's passkey is added to OK orders": 2.8,
+   "Done: up to 450 € alone; a confirmation mail to the business address; change rules any time in words": 3.68,
+   "Start empty: the agent learns from the orders": 10.03,
+   "the new kitchen's agent, empty memory": 11.54
+  }
+ },
+ "c01-05-your-rules": {
+  "seconds": 15.233,
+  "size": "1920x1080@30/1",
+  "chapter": "c01",
+  "what": "Your rules page for the new kitchen: limit, weekly budget, never-buy list, signer, defaults marked, changeable any time",
+  "events": {
+   "Your rules: what the agent may do, who signs, what it remembers": 2.24
   }
  },
  "c02-01-request": {
@@ -127,13 +148,15 @@
   }
  },
  "c03-04-rule-change": {
-  "seconds": 12.933,
+  "seconds": 25,
   "size": "1920x1080@30/1",
   "chapter": "c03",
   "what": "Widening the rules in words: the change is drafted and waits for the owner's passkey (rule-change sign-off slab)",
   "events": {
-   "typed: yes, widen the rules": 0.67,
-   "widening the rules waits for the approver's passkey: the rule-change sign-off": 8.43
+   "typed: yes, widen the rules": 0.63,
+   "the change drafted: meat and fish added; needs the owner's passkey": 7.37,
+   "typed: yes, send it to the owner": 10.88,
+   "widening the rules waits for the approver's passkey: the rule-change sign-off": 20.5
   }
  }
 }
