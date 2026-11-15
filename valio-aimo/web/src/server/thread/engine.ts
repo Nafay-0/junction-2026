@@ -17,7 +17,7 @@ import { withTurn } from "./context";
 import { byLine, checkOpen, read, record, REPEAT_SCALED, runAction, splitItems, step, type ItemOutcome, type TurnRun } from "./pipeline";
 import { earlierFor } from "./earlier";
 import { ThreadStore, type StoredThread } from "./store";
-import { isShort, subjectOf } from "./subject";
+import { ADDITION, isShort, subjectOf } from "./subject";
 import { localName, optionNames, optionsSaid, orderAsk } from "./options-said";
 import { runWidget } from "./widgets";
 import { speakFacts } from "./speak";
@@ -1367,11 +1367,18 @@ function sayRulesStand(run: TurnRun): void {
  */
 export function readAhead(run: TurnRun, words: string): boolean {
   if (run.buyer.action || !worthReading(words) || /\?\s*$/.test(words.trim())) return false;
-  if (subjectOf(run) && isShort(words)) return false;
   if (splitItems(words).length > 1 || REPEAT_SCALED.test(words)) return false;
-  // The same key the tool's reading will have: its words trimmed (agent.ts), typos fixed (pipeline.ts orderFromWords).
+  // The same key the tool's reading will have: its words trimmed (agent.ts), typos fixed (pipeline.ts orderFromWords),
+  // and the tool's own rule for a short message while a request is on the table (agent.ts order): a change of it reads
+  // with that request as the earlier one; one that completes it or adds to it is read in other words, so not ahead.
   const said = words.trim();
-  void earlierFor(run, said, {})
+  const subj = subjectOf(run);
+  let followUp = false;
+  if (subj && isShort(said)) {
+    if (subj.kind === "incomplete" || (subj.kind === "need" && ADDITION.test(said))) return false;
+    if (subj.kind === "need") followUp = true;
+  }
+  void earlierFor(run, said, { followUp })
     .then((earlier) => read(run, fixTypos(said), earlier))
     .catch(() => undefined);
   record(run, "read_ahead", "The request's reading started alongside the agent's first call.", {});
