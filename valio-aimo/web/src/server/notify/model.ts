@@ -6,7 +6,7 @@
 
 export type MailKind = "confirm" | "receipt" | "sign_off" | "changed";
 
-export type ChangeKind = "cannot_come" | "substituted" | "renewal_held" | "refused" | "declined" | "expired" | "withdrawn";
+export type ChangeKind = "cannot_come" | "substituted" | "renewal_held" | "refused" | "declined" | "expired" | "withdrawn" | "confirmed" | "not_confirmed";
 
 export type MailKitchen = { orgId: string; slug: string; name: string };
 

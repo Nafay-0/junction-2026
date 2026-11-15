@@ -88,6 +88,18 @@ export function OrdersScreen() {
         </div>
       </form>
       <LoadError message={live.error} />
+      {(() => {
+        const n = d?.facets.statuses.find((x) => x.id === "to_confirm")?.n ?? 0;
+        if (!n || status === "to_confirm") return null;
+        return (
+          <p data-to-confirm={n} className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-line bg-paper px-3 py-2 text-[0.9rem]">
+            <span>{OPS_ORDERS_TEXT.en.toConfirm(n)}</span>
+            <Button size="sm" onClick={() => reset(setStatus)("to_confirm")}>
+              {OPS_ORDERS_TEXT.en.showThem}
+            </Button>
+          </p>
+        );
+      })()}
       {d?.search && (
         <p className="mb-2 text-[0.88rem] text-ink-soft">
           {fi(d.search.answer)}
@@ -145,6 +157,11 @@ export function OrdersScreen() {
                       <div>
                         <Badge tone={statusTone(r.status)}>{STATUS_WORD[r.status] ?? fi(r.statusWords)}</Badge>
                       </div>
+                      {r.fulfilment && (
+                        <span data-fulfilment={r.fulfilment} className={`mt-1 block text-[0.8rem] font-medium leading-snug ${r.fulfilment === "confirmed" ? "text-good" : r.fulfilment === "refused" ? "text-notice" : "text-ink"}`}>
+                          {OPS_ORDERS_TEXT.en.fulfilment[r.fulfilment]}
+                        </span>
+                      )}
                       <span className="mt-1 block text-[0.8rem] leading-snug text-ink-soft">
                         {how.head}
                         {r.waitingSinceAt && now !== undefined ? `, ${since(r.waitingSinceAt, now)}` : ""}

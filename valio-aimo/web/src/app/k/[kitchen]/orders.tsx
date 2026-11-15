@@ -130,6 +130,18 @@ export function OrdersList() {
   );
 }
 
+/** Where a placed order stands with the wholesaler's team, in words. */
+export function FulfilmentWords({ f }: { f: NonNullable<PortalOrder["fulfilment"]> }) {
+  const tx = useText(ORDERS_TEXT);
+  const text = f.state === "confirmed" ? tx.fulfilment.confirmed(f.at ? clock(f.at) : "") : f.state === "refused" ? tx.fulfilment.refused(f.reason) : tx.fulfilment.waiting;
+  const tone = f.state === "confirmed" ? "text-good" : f.state === "refused" ? "text-notice" : "text-ink-soft";
+  return (
+    <span data-fulfilment={f.state} className={`font-medium ${tone}`}>
+      {text}
+    </span>
+  );
+}
+
 /** One order as a row: the day it was placed, what, who let it through, the total and its status; repeat when it can be. */
 function OrderRow({ x, asked, request }: { x: PortalOrder; asked?: string | null; request?: PortalRequest }) {
   const { base, agent } = usePortal();
@@ -169,6 +181,7 @@ function OrderRow({ x, asked, request }: { x: PortalOrder; asked?: string | null
         <p className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[0.88rem] leading-snug text-ink-soft">
           <Badge tone={tone}>{tx.status[x.status] ?? x.status}</Badge>
           {(x.sample || x.orderId.startsWith("ord_sample_")) && <SamplePill lang={f.lang} />}
+          {x.status === "committed" && x.fulfilment && <FulfilmentWords f={x.fulfilment} />}
           <span>
             {tx.head.delivery} <span className="font-medium text-ink">{f.day(x.deliveryDate)}</span>
             {x.status !== "history" && (

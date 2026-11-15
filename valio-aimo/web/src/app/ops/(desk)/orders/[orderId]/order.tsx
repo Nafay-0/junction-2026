@@ -9,8 +9,10 @@ import { Badge } from "../../../../_ui/kit";
 import { clockSeconds, dayEn as day, timelineFact } from "../../../../_ui/plain";
 import { lookupsTitle, shownSteps } from "../../../../_ui/timeline-steps";
 import { STATUS_WORD, decidedWords, fi, money, since, statusTone, whenSeconds } from "../../../_ui/format";
-import { Details, KV, LiveMark, LoadError, Loading, PageHead, Panel, useNow, useOps } from "../../../_ui/kit";
+import { Button, Details, KV, LiveMark, LoadError, Loading, PageHead, Panel, useNow, useOps } from "../../../_ui/kit";
 import { SamplePill, isSample } from "../../../../_ui/sample";
+import { api } from "../../../../_client/api";
+import { useViewer } from "../../../_ui/role";
 
 const link = "font-medium text-petrol underline decoration-petrol/30 underline-offset-4 hover:decoration-petrol";
 const ACTOR_TONE: Record<TimelineStep["actor"]["kind"], "agent" | "info" | "neutral" | "good"> = { agent: "agent", person: "info", system: "neutral", wholesaler: "good" };
@@ -86,6 +88,7 @@ export function OrderScreen({ orderId }: { orderId: string }) {
               </span>
             </Fact>
           </Panel>
+          {t.fulfilment && <Fulfilment orderId={t.orderId} f={t.fulfilment} onDone={live.refresh} />}
           {t.asked && (
             <p className="mt-4 text-[1.02rem]">
               Asked: <span className="font-semibold">&ldquo;{t.asked}&rdquo;</span>
@@ -228,5 +231,67 @@ function Step({ s, t }: { s: TimelineStep; t: OrderTimelineView }) {
         </div>
       </div>
     </li>
+  );
+}
+
+/**
+ * The wholesaler's team's side of a placed order (server/fulfilment): confirm it for delivery, or say it cannot be
+ * delivered with a short reason. Staff act; a viewer reads what the buttons do, never a bare disabled button.
+ */
+function Fulfilment({ orderId, f, onDone }: { orderId: string; f: NonNullable<OrderTimelineView["fulfilment"]>; onDone?: () => void }) {
+  const viewer = useViewer();
+  const [refusing, setRefusing] = useState(false);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string>();
+  async function decide(decision: "confirm" | "refuse") {
+    setBusy(true);
+    setProblem(undefined);
+    const r = await api<unknown>("POST", `/ops-api/orders/${encodeURIComponent(orderId)}`, { decision, ...(decision === "refuse" ? { reason } : {}) });
+    setBusy(false);
+    if (!r.ok) return setProblem(r.error.message);
+    setRefusing(false);
+    onDone?.();
+  }
+  return (
+    <Panel className="mt-4 p-5" >
+      <h2 className="text-[0.95rem] font-semibold">Confirmation for delivery</h2>
+      {f.state === "confirmed" ? (
+        <p className="mt-1.5" data-fulfilment="confirmed">
+          Confirmed for delivery by {f.by} at {f.at ? clockSeconds(f.at).slice(0, 5) : ""}. The kitchen was told.
+        </p>
+      ) : f.state === "refused" ? (
+        <p className="mt-1.5" data-fulfilment="refused">
+          {f.by} could not confirm it: “{f.reason}”. The kitchen was told.
+        </p>
+      ) : viewer ? (
+        <p className="mt-1.5 text-ink-soft" data-fulfilment="waiting">
+          Waiting for the wholesaler&apos;s team to confirm it for delivery. Staff confirm orders here, or say they cannot be delivered; sign in as staff to act.
+        </p>
+      ) : (
+        <div className="mt-2" data-fulfilment="waiting">
+          <p className="text-ink-soft">The order is placed at its fixed price and waits for your team to confirm it for delivery. The kitchen is told either way.</p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button kind="go" staff disabled={busy} onClick={() => void decide("confirm")}>
+              Confirm for delivery
+            </Button>
+            {!refusing && (
+              <Button kind="plain" staff disabled={busy} onClick={() => setRefusing(true)}>
+                Cannot deliver
+              </Button>
+            )}
+          </div>
+          {refusing && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <input aria-label="Why it cannot be delivered" className="min-h-10 min-w-0 flex-1 rounded-lg border border-line px-3" placeholder="Why, in a few words" value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} />
+              <Button kind="stop" staff disabled={busy || !reason.trim()} onClick={() => void decide("refuse")}>
+                Tell the kitchen
+              </Button>
+            </div>
+          )}
+          {problem && <p className="mt-2 text-[0.9rem] text-bad">{problem}</p>}
+        </div>
+      )}
+    </Panel>
   );
 }

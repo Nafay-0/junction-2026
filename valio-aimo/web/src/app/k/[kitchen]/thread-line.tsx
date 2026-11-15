@@ -15,6 +15,7 @@ import { familyL } from "./family.text";
 import { THREAD_RULES_TEXT } from "./thread-rules.text";
 import { attrL } from "../../_i18n/format";
 import { THREAD_LINE_TEXT } from "./thread-line.text";
+import { FulfilmentNote } from "./thread-fulfilment";
 import { FRESH_TEXT } from "./fresh.text";
 import { useSignOff } from "./thread-signoff";
 import { THREAD_WORDS } from "./thread-words.text";
@@ -241,6 +242,7 @@ function AgentNode({ turn, thread, tap, busy, latest }: { turn: AgentTurn; threa
       <Lists turn={turn} thread={thread} latest={latest} />
       <Memory turn={turn} />
       {cards.map((c) => (c.type === "gate" && c.outcome === "waiting" && c.approvalId ? <SignOffSlab key={c.cardId} card={c} thread={thread} tap={tap} /> : c.type === "gate" && c.outcome === "approved" && c.orderId ? <SignedSlab key={c.cardId} card={c} thread={thread} /> : null))}
+      {cards.map((c) => (c.type === "order" && c.status === "committed" ? <FulfilmentNote key={`f-${c.cardId}`} card={c} /> : null))}
       {today && <WaitingSlabs today={today} thread={thread} tap={tap} />}
       {/* A change to the rules that waits for the approver: its slab under the reply that said so (the card itself may
           have been first shown a turn earlier), always in view, never inside a disclosure. */}
