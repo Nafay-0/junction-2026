@@ -5,7 +5,7 @@
  *   npx tsx scripts/demo-video/c04.ts --url http://localhost:5142 [--only watch,backup,menu,memory,tabs,offer]
  */
 import type { Page } from "@playwright/test";
-import { lastAgent } from "./kit";
+import { lastAgent, resetThread } from "./kit";
 import { click, context, deliver, hover, launch, opt, passkey, pointerAt, quiet, reveal, scrollBy, sleep, Take, type } from "./rec";
 import { Kitchen } from "./talk";
 
@@ -105,6 +105,10 @@ async function main() {
   }
 
   if (k && on("tabs")) {
+    await resetThread(k.ctx, base, "hotel-lumo");
+    await k.page.reload();
+    await quiet(k.page);
+    await k.settle();
     // Orders
     let take = new Take("c04-05");
     await take.record(k.page);
@@ -112,7 +116,7 @@ async function main() {
     await tab(k.page, /^Orders$/, `/k/hotel-lumo/orders`);
     take.event("the Orders tab");
     await sleep(2500);
-    const first = k.page.locator("main a[href*='/order']").first();
+    const first = k.page.locator("main a[href*='/orders/']").first();
     if (await first.count()) {
       await click(first);
       await take.wait(() => quiet(k.page));
@@ -122,9 +126,20 @@ async function main() {
       await sleep(2500);
       await scrollBy(k.page, 350, { at: { x: 500, y: 400 } });
       await sleep(2000);
+    } else {
+      const earlier = k.page.getByText(/^Earlier history/).first();
+      if (await earlier.count()) {
+        await click(earlier);
+        take.event("earlier history: every order the kitchen placed, by its agent, the basket or an outside agent");
+        await sleep(1500);
+      }
+      await scrollBy(k.page, 300, { at: { x: 400, y: 450 } });
+      await sleep(2000);
+      await scrollBy(k.page, 300, { at: { x: 400, y: 450 } });
+      await sleep(2000);
     }
     await take.stop();
-    deliver(take, { id: "c04-05-orders", chapter: "c04", what: "Hotel Lumo: the Orders tab and one order opened (its timeline, steps and signed receipt)" });
+    deliver(take, { id: "c04-05-orders", chapter: "c04", what: "Hotel Lumo: the Orders tab (every order placed or tried, by the agent, the basket or an outside agent; Repeat / With a change)" });
 
     // Catalogue with the agent as a pop-up
     take = new Take("c04-06");
