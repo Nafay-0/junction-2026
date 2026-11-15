@@ -1,5 +1,6 @@
 import { Audio } from "@remotion/media";
 import { AbsoluteFill, Sequence, staticFile } from "remotion";
+import { BAND, CaptionBand } from "./CaptionBand";
 import { EDL } from "./edl";
 import { CalloutView, ChapterCard, Corner, EndCard, Ground, Label, OVER, ShotView } from "./parts";
 import { CHAPTERS, END_CARD, PARTS, SPEECH, TOTAL } from "./timeline";
@@ -23,7 +24,10 @@ const BED: number[] = (() => {
 
 const CARD = 46;
 
-const ChapterView = ({ id }: { id: string }) => {
+/** With captions, the picture above the band is scaled from the top so the window ends just above the band. */
+const PICTURE_SCALE = (1080 - BAND) / 1063;
+
+const ChapterView = ({ id, band }: { id: string; band: boolean }) => {
   const ch = CHAPTERS.find((c) => c.id === id)!;
   const { shots, callouts } = EDL[id]();
   const len = ch.end - ch.start;
@@ -31,6 +35,7 @@ const ChapterView = ({ id }: { id: string }) => {
   return (
     <AbsoluteFill>
       <Ground />
+      <AbsoluteFill style={band ? { scale: String(PICTURE_SCALE), transformOrigin: "50% 0" } : undefined}>
       {sorted.map((s, i) => {
         const from = Math.max(0, s.at - ch.start);
         const until = i < sorted.length - 1 ? sorted[i + 1].at - ch.start + OVER : len;
@@ -47,6 +52,7 @@ const ChapterView = ({ id }: { id: string }) => {
         </Sequence>
       ))}
       <Corner />
+      </AbsoluteFill>
       {ch.index > 0 ? (
         <Sequence durationInFrames={CARD}>
           <ChapterCard n={ch.index} title={ch.title} len={CARD} />
@@ -61,13 +67,14 @@ const ChapterView = ({ id }: { id: string }) => {
   );
 };
 
-export const Demo = () => (
+export const Demo = ({ captions = false }: { captions?: boolean }) => (
   <AbsoluteFill style={{ background: "#00222d" }}>
     {CHAPTERS.map((c) => (
       <Sequence key={c.id} from={c.start} durationInFrames={c.end - c.start} name={`${c.id} ${c.title}`}>
-        <ChapterView id={c.id} />
+        <ChapterView id={c.id} band={captions} />
       </Sequence>
     ))}
+    {captions ? <CaptionBand /> : null}
     {PARTS.map((p) => (
       <Sequence key={p.id} from={p.start} durationInFrames={p.len + 6} name={`vo ${p.id}`}>
         <Audio src={staticFile(`demo-vo/${p.id}.mp3`)} />
@@ -78,3 +85,5 @@ export const Demo = () => (
 );
 
 export const DEMO_TOTAL = TOTAL;
+/** The same film with burned-in captions in a band of their own. */
+export const DemoCaptions = () => <Demo captions />;
