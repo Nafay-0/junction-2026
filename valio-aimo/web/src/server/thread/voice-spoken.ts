@@ -64,7 +64,7 @@ const SCREEN_ONLY = /^(tap|click|press|see|scroll|open|use the button|napauta|kl
  * The written line as it is spoken: no marks, no codes or addresses, money and days as said, units in words,
  * thousands without spaces. `max` words, whole sentences only; what is cut is said as what it is.
  */
-export function speakable(text: string, lang: Lang, max = 45, rest = true): string {
+export function speakable(text: string, lang: Lang, max = 45, rest = false): string {
   let t = text.replace(/\*\*|\{\{|\}\}|__|`/g, "");
   t = t.replace(/https?:\/\/\S+/g, "").replace(/\b(req|ord|apr|trn|sht|pln|card|call|sbx|qt|quo|q)_[A-Za-z0-9_-]{4,}\b/g, "");
   // Money: "1 010,00 €", "€1,010.00", "11,40 €", "101 €" -> euros as said.
@@ -210,7 +210,9 @@ function fromCards(turn: AgentTurn, said: string, lang: Lang): string[] {
   const out: string[] = [];
   const has = (s: string) => said.toLowerCase().includes(s.toLowerCase());
   const gate = turn.cards.find((c) => c.type === "gate" && c.outcome === "waiting");
-  if (gate?.type === "gate" && gate.approver?.name && !has(gate.approver.name.split(" ")[0])) {
+  // Said only when the written reply does not already say whose OK it needs (by name, or "the manager's OK").
+  const saysOk = /['’]s (own )?OK\b|spend alone|hyväksyn|godkänn/i.test(said);
+  if (gate?.type === "gate" && gate.approver?.name && !has(gate.approver.name.split(" ")[0]) && !saysOk) {
     out.push({ en: `That's over what I may spend alone, so it needs ${gate.approver.name}'s OK: it's on their phone now.`, fi: `Se ylittää sen, mitä saan käyttää yksin, joten se tarvitsee hyväksynnän (${gate.approver.name}): pyyntö on nyt hänen puhelimessaan.`, sv: `Det är mer än jag får handla för ensam, så det behöver godkännas av ${gate.approver.name}: det ligger i deras telefon nu.` }[lang]);
   }
   const menu = turn.cards.find((c) => c.type === "menu");
@@ -271,7 +273,7 @@ export function spokenReply(turn: AgentTurn, lang: Lang, hold?: SpokenReadBack):
   // Spoken is shorter than written: about thirty words, whole sentences, made fit to hear. With the options' question,
   // only what the question does not say (an exception: the usual cannot come, a stand-in) stays before it, and the
   // written reply's own question gives way (one question at a time).
-  const line = speakable(spokenSentences(turn.line ?? "", turn, { optionsAsked: !!ask }), lang, ask ? 22 : 40, !ask);
+  const line = speakable(spokenSentences(turn.line ?? "", turn, { optionsAsked: !!ask }), lang, ask ? 22 : 40, false);
   const extra = fromCards(turn, line, lang);
   const said = [line, ...extra, ask?.say ?? ""].filter(Boolean).join(" ").trim();
   if (said) return { say: said, ...(ask ? { hold: ask.hold } : {}) };

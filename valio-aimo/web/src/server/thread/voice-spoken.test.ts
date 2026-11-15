@@ -39,7 +39,7 @@ describe("the spoken form", () => {
 
   it("is shorter than the written reply: whole sentences up to the limit, and says what the rest is", () => {
     const long = Array.from({ length: 8 }, (_, i) => `Sentence number ${i + 1} has quite a few words in it to read.`).join(" ");
-    const t = speakable(long, "en", 30);
+    const t = speakable(long, "en", 30, true);
     expect(t.split(/\s+/).length).toBeLessThan(long.split(/\s+/).length);
     expect(t).toMatch(/The rest is written on your screen\.$/);
     expect(speakable("Tap the button below to order. I have three options.", "en")).toBe("I have three options.");
@@ -101,5 +101,14 @@ describe("the spoken form", () => {
     expect(said).toMatch(/^I've found 3 options for 1000 litres\. The first is Valio Eila milk/);
     expect(spokenName("Valio Eila lactose-free whipping cream 2 dl", "fi")).toBe("Valio Eila kuohukerma");
     expect(spokenName("Valio Eila lactose-free milk 1 l", "sv")).toBe("Valio Eila mjölk");
+  });
+
+  it("from the hosted drive: whose OK it needs is said once, and a long reply does not end on 'the rest is on your screen'", () => {
+    const waiting = turn({ status: "waiting_approver", line: "1 000 × Valio Eila for **1 010,00 €** is over the **250,00 €** I may spend alone, so it needs the manager's OK. Shall I email the receipt?", cards: [{ type: "gate", cardId: "gate:o1", requestId: "r1", orderId: "o1", outcome: "waiting", reasons: [], approver: { name: "Food service manager", role: "manager" } }] });
+    const said = spokenOf(waiting, "en");
+    expect(said.match(/OK/g)).toHaveLength(1);
+    expect(said).toMatch(/\?$/);
+    const refusal = turn({ line: "I can't skip them or the OK, whoever asks. Anything over **250,00 €** waits for the manager's own OK on their device. The **1 010,00 €** order for **1 000 l** of the Valio Eila is still waiting, and nothing has been ordered without it. Only their own OK on their own device places it, and that is how your rules are written." });
+    expect(spokenOf(refusal, "en")).not.toMatch(/rest is written/);
   });
 });
