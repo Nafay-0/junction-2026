@@ -298,7 +298,7 @@ async function milk(browser: Browser) {
     await page.waitForTimeout(800);
   }
   if (firstName) await topAlign(page, page.getByText(firstName, { exact: false }).last(), 110).catch(() => undefined);
-  await shoot(page, "flow-options", "phone", "Options at fixed prices from the live price call: each with its total, price per litre and delivery day.");
+  await shoot(page, "flow-options", "phone", "Options at fixed prices from the live price call: each with its total, price per litre, delivery day, delivery record and estimated CO₂.");
   if (await more.count()) await page.reload().then(() => page.waitForTimeout(2500));
 
   // Choose: the order is over the agent's limit, so it waits for a person.
@@ -500,12 +500,20 @@ async function menu(browser: Browser) {
   await page.waitForTimeout(2500);
   await say(page, "Plan a lunch for 10 people on Monday");
   let t = await idle(ctx, kitchen, 1, 180_000);
+  let asked = 1;
+  // Today the planner first asks what the kitchen is in the mood for: let it surprise.
+  if (!cardsOf(t).some((c) => c.type === "menu")) {
+    await page.waitForTimeout(1500);
+    await say(page, "Surprise me.");
+    asked++;
+    t = await idle(ctx, kitchen, asked, 180_000);
+  }
   await page.waitForTimeout(2500);
   await shoot(page, "agent-menu", "desktop", "The menu planner in the agent: dishes for the covers, what the kitchen has, what must be ordered.");
   const m = cardsOf(t).filter((c) => c.type === "menu").at(-1);
-  if (m?.type === "menu" && m.stage === "choose") {
+  if ((m?.type === "menu" && m.stage === "choose") || asked > 1) {
     await say(page, "the first one");
-    t = await idle(ctx, kitchen, 2, 180_000);
+    t = await idle(ctx, kitchen, asked + 1, 180_000);
     await page.waitForTimeout(2500);
     await shoot(page, "agent-menu-sheet", "desktop", "A menu chosen: each dish's ingredients matched to products, with the total for the covers.");
   }

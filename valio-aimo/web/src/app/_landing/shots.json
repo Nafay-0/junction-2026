@@ -67,7 +67,7 @@
     "w": 780,
     "h": 1688,
     "kind": "phone",
-    "caption": "Options at fixed prices from the live price call: each with its total, price per litre and delivery day."
+    "caption": "Options at fixed prices from the live price call: each with its total, price per litre, delivery day, delivery record and estimated CO₂."
   },
   "flow-request": {
     "src": "/landing/flow-request.webp",

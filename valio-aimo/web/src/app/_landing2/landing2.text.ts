@@ -101,7 +101,7 @@ export const L2 = {
       { id: "buyer", name: "The kitchen's buying agent", fact: "Heard right in 33 of 36 held-out voice clips, in hall noise and three languages.", href: "/docs/doors", shot: "agent-voice", kind: "phone", alt: "Voice mode on a phone: the agent speaking, a large Hold to talk button and End call." },
       { id: "seller", name: "The wholesaler's selling agent", fact: "At most two signed offers a kitchen in seven days. An offer never buys.", href: "/docs/offers", shot: "agent-seller-phone", kind: "phone", alt: "The kitchen's agent showing the wholesaler's offer: the same milk 0,37 € less per litre, the price held until a stated time." },
       { id: "watch", name: "The watch", fact: "Notices a stock-out before the kitchen does, and asks before it switches.", href: "/docs/connect-an-agent", shot: "agent-watch", kind: "phone", alt: "The agent on a phone: Monday's milk cannot come, here is the substitute, it needs a sign-off. Staged for the demo, and marked so." },
-      { id: "menu", name: "The menu planner", fact: "Swaps by the ingredient's job in the dish, each checked against the kitchen's rules.", href: "/docs/connect-an-agent", shot: "agent-menu-sheet", kind: "crop", alt: "The agent after planning a lunch for ten: nothing arrives Monday so Tuesday, a salmon soup lunch at 31,43 €, about 3,14 € a cover." },
+      { id: "menu", name: "The menu planner", fact: "Swaps by the ingredient's job in the dish, each checked against the kitchen's rules.", href: "/docs/connect-an-agent", shot: "agent-menu-sheet", kind: "crop", alt: "The agent after planning a lunch for ten: an oven-baked cheese pancake; milk and rye bread cannot arrive Monday, so it offers Tuesday or just the eggs and cheese, each line with its delivery record and estimated CO₂." },
       { id: "outside", name: "Any outside agent", fact: "Seven agent frameworks reached a person's sign-off with only the address and a signed mandate.", href: "/docs/runtime-results", shot: "agent-outside", kind: "desktop", alt: "The page for outside agents: one address for your assistant, or one command; MCP and the OpenAPI document." },
       { id: "ops", name: "The operations copilot", fact: "Answers from rows, never written by a model; a write is refused before it is sent.", href: "/ops/platform", shot: "ops-agents", kind: "desktop", alt: "The operations agents page: the scorecard with each agent performing or failing, and the orders waiting for a person." },
     ],
@@ -176,7 +176,7 @@ export const WEBSHOP = defineText({
     line: "The buying agent is not a separate app. It opens inside the shop the kitchen already uses, next to the catalogue.",
     label: "The kitchen's webshop on a desk and on a phone, with its buying agent beside the catalogue: from the closed panel to a request for 1,000 litres of lactose-free milk, a substitute and a sign-off.",
     deskAlt: "The webshop on a desk: lactose-free milk in the catalogue, and beside it the agent's panel, where the substitute order waits for the kitchen manager's OK.",
-    phoneAlt: "The same agent on a phone, full screen over the shop: the usual milk misses Monday's order cut-off, and three one-litre options with their prices.",
+    phoneAlt: "The same agent on a phone, full screen over the shop: the usual milk misses Monday's order cut-off, and three one-litre options with their prices, delivery records and estimated CO₂.",
     steps: [
       "The kitchen's own shop, milk searched in the catalogue",
       "Ctrl K: the agent opens beside it, and the chef asks",
