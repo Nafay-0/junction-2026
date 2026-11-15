@@ -147,6 +147,11 @@ export const L2 = {
     title: "The two-minute film",
     note: "Coming here soon. Until then, every picture on this page is the product itself.",
     label: "AimoPilot in two minutes",
+    // The longer walk-through, on YouTube: every screen, narrated, with captions.
+    more: "Watch the detailed 10-minute demo",
+    moreHref: "https://youtu.be/JFcHMe_fxio",
+    filmHref: "https://youtu.be/9ckYi6chCec",
+    onYouTube: "The film on YouTube",
   },
 
   honest: {

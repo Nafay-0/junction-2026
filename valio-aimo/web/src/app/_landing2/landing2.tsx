@@ -765,6 +765,14 @@ export function Landing2() {
               </div>
             )}
           </div>
+          <p className="mt-4 flex flex-wrap gap-x-6 gap-y-2">
+            <a href={t.film.moreHref} target="_blank" rel="noreferrer" className={QUIET}>
+              {t.film.more}
+            </a>
+            <a href={t.film.filmHref} target="_blank" rel="noreferrer" className={QUIET}>
+              {t.film.onYouTube}
+            </a>
+          </p>
         </Section>
 
         <Section id="honest" title={t.honest.title} line={t.honest.line}>
