@@ -1,5 +1,5 @@
 import { type Callout, CLIPS, ev, has, type Shot } from "./parts";
-import { chapter, cue, partAt } from "./timeline";
+import { chapter, cue, PARTS, partAt } from "./timeline";
 
 /**
  * The edit: per chapter, its shots (each lasts until the next starts) and its callouts, placed on the narrator's
@@ -10,6 +10,23 @@ const ph = (at: number, what: string, label?: string): Shot => ({ clip: "placeho
 /** The clip if it has arrived, otherwise a placeholder saying what it will show. */
 const clip = (name: string, shot: Omit<Shot, "clip">, what: string): Shot => (has(name) ? { clip: name, ...shot } : { clip: "placeholder", at: shot.at, what, label: shot.label });
 const start = (id: string) => chapter(id).start;
+/** Version B of c04's first paragraph (the dish flow in the conversation) is in use when its clip is there and the narration says so. */
+const dishB = () => has("c04-03-dish-flow") && PARTS.some((p) => p.id === "c04-1" && p.text.includes("Ask for a dish"));
+/** The dish clip's events, matched by words, each on the narrator's matching phrase; only anchors that move forward. */
+function dishSync(): [number, number][] {
+  const evs = Object.entries(CLIPS["c04-03-dish-flow"].events).map(([n, t]) => [n.toLowerCase(), t] as const);
+  const find = (...keys: string[]) => evs.find(([n]) => keys.some((k) => n.includes(k)))?.[1];
+  const want: [number | undefined, number][] = [
+    [find("mood", "asks"), cue("c04-1", "it asks what", -0.2)],
+    [find("three", "dishes", "offers"), cue("c04-1", "then offers", 0.2)],
+    [find("pick", "first one", "chose"), cue("c04-1", "Pick one", 0)],
+    [find("you have", "has,", "have /", "can't get"), cue("c04-1", "it shows what", 0)],
+    [find("delivery record", "footprint", "co2", "co₂"), cue("c04-1", "Under the dish", 0)],
+  ];
+  const out: [number, number][] = [];
+  for (const [s, f] of want) if (s !== undefined && (!out.length || s > out[out.length - 1][0])) out.push([s, f]);
+  return out;
+}
 
 export type ChapterEdit = { shots: Shot[]; callouts: Callout[] };
 
@@ -100,7 +117,10 @@ export const EDL: Record<string, () => ChapterEdit> = {
 
   c04: () => ({
     shots: [
-      clip("c04-03b-menu-planner", { at: start("c04"), label: "Hotel Lumo kitchen · menu planner", url: `${K}/k`, from: 0.2, sync: has("c04-03b-menu-planner") ? [[ev("c04-03b-menu-planner", "the Menu planner tab"), cue("c04-1", "In the menu", -0.2)], [ev("c04-03b-menu-planner", "Plan it"), cue("c04-1", "The agent drafts", -0.3)], [ev("c04-03b-menu-planner", "the plan:"), cue("c04-1", "The plan shows", -0.3)]] : undefined }, "The Menu planner: you have, I'll order, can't get"),
+      ...(dishB()
+        ? ([{ clip: "c04-03-dish-flow", at: start("c04"), label: "Hotel Lumo kitchen · a dish", url: `${K}/k`, from: 0.2, sync: dishSync() }] as Shot[])
+        : []),
+      ...(dishB() ? [] : [clip("c04-03b-menu-planner", { at: start("c04"), label: "Hotel Lumo kitchen · menu planner", url: `${K}/k`, from: 0.2, sync: has("c04-03b-menu-planner") ? [[ev("c04-03b-menu-planner", "the Menu planner tab"), cue("c04-1", "In the menu", -0.2)], [ev("c04-03b-menu-planner", "Plan it"), cue("c04-1", "The agent drafts", -0.3)], [ev("c04-03b-menu-planner", "the plan:"), cue("c04-1", "The plan shows", -0.3)]] : undefined }, "The Menu planner: you have, I'll order, can't get")]),
       clip("c04-01-watch", { at: partAt("c04-2", -0.2), label: "Hotel Lumo kitchen · the watch", url: `${K}/k`, until: 4.6, sync: has("c04-01-watch") ? [[ev("c04-01-watch", "the watch's opening"), cue("c04-2", "Here's its", -0.3)]] : undefined, zoom: [{ at: cue("c04-2", "Here's its", 0.2), s: 1.12, x: 0.35, y: 0.3 }] }, "The watch's opening note"),
       clip("c04-02-backup", { at: cue("c04-2", "And when", -0.3), label: "Hotel Lumo kitchen · a backup", url: `${K}/k`, from: 7.5, sync: has("c04-02-backup") ? [[ev("c04-02-backup", "a poor delivery"), cue("c04-2", "it warns you", -0.4)], [ev("c04-02-backup", "the backup lined up"), cue("c04-2", "Nothing extra", -0.2)]] : undefined }, "A backup for a product with a poor delivery record"),
       clip("c04-08-offer", { at: partAt("c04-3", -0.2), label: "A kitchen · the selling agent's offer", url: `${K}/k`, from: 8.0, sync: has("c04-08-offer") ? [[ev("c04-08-offer", "the wholesaler's selling"), cue("c04-3", "It brings", -0.3)]] : undefined, zoom: [{ at: cue("c04-3", "It brings", 0.3), s: 1.1, x: 0.4, y: 0.6 }] }, "An offer card from the selling agent"),
@@ -115,7 +135,7 @@ export const EDL: Record<string, () => ChapterEdit> = {
       clip("c04-06-shop-popup", { at: partAt("c04-6", -0.2), label: "Hotel Lumo kitchen · Catalogue", url: `${K}/k`, from: 4.0, sync: has("c04-06-shop-popup") ? [[ev("c04-06-shop-popup", "the Catalogue"), cue("c04-6", "In the catalogue", 0)], [ev("c04-06-shop-popup", "Ctrl K"), cue("c04-6", "Control K", 0.3)], [ev("c04-06-shop-popup", "asked in the panel"), partAt("c04-6", 1.6, true)]] : undefined }, "The Catalogue with the agent panel opening over it (Ctrl K)"),
     ],
     callouts: [
-      { at: cue("c04-1", "plain code", 0), text: "Plain code finds the products and checks the rules", pos: "bl", dur: 120 },
+      ...(dishB() ? [{ at: cue("c04-1", "Under the dish", 0), text: "Footprint: the product group's average, an estimate", pos: "tr" as const, dur: 120 }] : [{ at: cue("c04-1", "plain code", 0), text: "Plain code finds the products and checks the rules", pos: "bl" as const, dur: 120 }]),
       { at: cue("c04-3", "It brings", 0), text: "Offer staged for the demo", pos: "tr", dur: 75 },
       { at: cue("c04-3", "at most two", 0.2), text: "At most two offers a week; never an order", pos: "tr", dur: 105 },
     ],

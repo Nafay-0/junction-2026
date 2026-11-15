@@ -29,7 +29,8 @@ const rawDir = tryout ? (isAbsolute(tryout) ? tryout : join(root, tryout)) : joi
 mkdirSync(rawDir, { recursive: true });
 mkdirSync(join(root, "public/demo-vo"), { recursive: true });
 
-const script = JSON.parse(readFileSync(join(root, "src/demo/script.json"), "utf8"));
+// DEMO_SCRIPT=<file> records from another script file (a draft), e.g. into DEMO_OUT, without touching the film's.
+const script = JSON.parse(readFileSync(process.env.DEMO_SCRIPT ?? join(root, "src/demo/script.json"), "utf8"));
 const parts = script.flatMap((c) => c.parts.map((text, i) => ({ id: `${c.id}-${i + 1}`, chapter: c.id, text })));
 const only = process.argv.slice(2).filter((a) => !a.startsWith("--"));
 const wanted = (p) => !only.length || only.includes(p.id) || only.includes(p.chapter);
