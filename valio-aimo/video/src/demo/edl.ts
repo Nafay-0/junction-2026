@@ -123,7 +123,13 @@ export const EDL: Record<string, () => ChapterEdit> = {
   }),
 
   c05: () => ({
-    shots: [ph(start("c05"), "The voice bar: Listening, Hearing you, Working, Speaking; spoken turns with the microphone mark; the read-back; the order", "Hands-free voice")],
+    shots: has("c05-01-voice")
+      ? ([
+          { clip: "c05-01-voice", at: start("c05"), label: "Hotel Lumo kitchen · hands-free voice", url: `${K}/k`, from: 2.4, sync: [[ev("c05-01-voice", "one tap"), cue("c05-1", "Tap the", 0)], [ev("c05-01-voice", "Listening"), cue("c05-1", "listening", -0.2)], [ev("c05-01-voice", "spoken: \"Two"), cue("c05-1", "hearing you", -0.2)], [ev("c05-01-voice", "Working"), cue("c05-1", "Each spoken", 0.5)]], zoom: [{ at: cue("c05-1", "The bar", -0.2), s: 1.12, x: 0.5, y: 0.9 }, { at: cue("c05-1", "Each spoken", 0), s: 1.08, x: 0.4, y: 0.6 }] },
+          { clip: "c05-01-voice", at: partAt("c05-2", -0.2), label: "Hotel Lumo kitchen · hands-free voice", url: `${K}/k`, from: 12.8, sync: [[ev("c05-01-voice", "it reads the order back"), cue("c05-2", "reads the order", -0.3)]] },
+          { clip: "c05-01-voice", at: cue("c05-2", "A sign-off still", -0.3), label: "Hotel Lumo kitchen · hands-free voice", url: `${K}/k`, from: 56.4, sync: [[ev("c05-01-voice", "a sign-off still"), cue("c05-2", "the passkey", 0)]] },
+        ] as Shot[])
+      : [ph(start("c05"), "The voice bar: Listening, Hearing you, Working, Speaking; spoken turns with the microphone mark; the read-back; the order", "Hands-free voice")],
     callouts: [{ at: cue("c05-2", "The voice model"), text: "Same engine as typing: same rules, same gate", pos: "tr", dur: 150 }],
   }),
 
@@ -149,7 +155,8 @@ export const EDL: Record<string, () => ChapterEdit> = {
         clip(tc, { at: cue("c06-4", "Trace replays", -0.3), label: L("Trust · trace"), url: U, from: 1.8, sync: has(tc) ? [[ev(tc, "Trace"), cue("c06-4", "Trace replays", 0)], [ev(tc, "stepping"), cue("c06-4", "step by", -0.2)]] : undefined }, "Trace: step through a request"),
         clip(tm, { at: cue("c06-4", "The time machine", -0.3), label: L("Trust · time machine"), url: U, from: 1.4, sync: has(tm) ? [[ev(tm, "Time machine"), cue("c06-4", "time machine", 0)], [ev(tm, "scrubbing"), cue("c06-4", "scrub back", -0.2)]] : undefined }, "Time machine: scrub back"),
         clip(tr, { at: cue("c06-4", "And the recall", -0.3), label: L("Trust · recall radar"), url: U, from: 26.4, sync: has(tr) ? [[ev(tr, "Recall radar"), cue("c06-4", "recall radar", 0)]] : undefined }, "Recall radar"),
-        ph(partAt("c06-5", -0.2), "Customers, Accounts, Mail; Control: suspend and resume an agent", L("Control")),
+        clip("c06-07-setup", { at: partAt("c06-5", -0.2), label: L("Setup"), url: U, from: 0.6, sync: has("c06-07-setup") ? [[ev("c06-07-setup", "Customers"), cue("c06-5", "customers", -0.1)], [ev("c06-07-setup", "Accounts"), cue("c06-5", "accounts", -0.1)], [ev("c06-07-setup", "Mail"), cue("c06-5", "mail", -0.1)]] : undefined }, "Customers, Accounts, Mail"),
+        clip("c06-08-control", { at: cue("c06-5", "One switch", -0.3), label: L("Control"), url: U, from: 0.8, sync: has("c06-08-control") ? [[ev("c06-08-control", "Control"), cue("c06-5", "One switch", 0)], [ev("c06-08-control", "read exactly"), cue("c06-5", "refused", 0)]] : undefined }, "Control: suspend and resume an agent"),
       ],
       callouts: [
         { at: cue("c06-1", "Anyone can look"), text: "View without a passcode; acting needs staff access", pos: "tr", dur: 120 },
@@ -162,7 +169,7 @@ export const EDL: Record<string, () => ChapterEdit> = {
     shots: [
       clip("c07-01-try", { at: start("c07"), label: "The open door · /try", url: `${K}/try` }, "/try: one address and a signed mandate"),
       clip("c07-02-docs", { at: cue("c07-1", "There are", -0.3), label: "The open door · /docs", url: `${K}/docs` }, "/docs: the MCP tools and the OpenAPI document"),
-      ph(partAt("c07-2", -0.2), "Platform: “Send in an Aiven agent”, one run with its steps arriving", "Platform · Aiven agent"),
+      clip("c07-03-aiven-agent", { at: partAt("c07-2", -0.3), label: "Platform · an agent on Aiven Managed Agents", url: `${K}/ops/platform`, from: 0 }, "Platform: “Send in an Aiven agent”, one run with its steps arriving"),
     ],
     callouts: [{ at: cue("c07-2", "No tool"), text: "No tool lets an agent approve", pos: "tr", dur: 90 }],
   }),

@@ -205,18 +205,17 @@
   }
  },
  "c04-03-menu": {
-  "seconds": 65.167,
+  "seconds": 47.533,
   "size": "1920x1080@30/1",
   "chapter": "c04",
   "what": "Hotel Lumo: the menu planner, a dish for 40 covers on Friday: it asks, offers dishes, then sorts what the kitchen has, what it will order and what it can't get",
   "events": {
-   "typed: Plan a dish for 40 covers for Friday.": 0.72,
-   "the menu planner asks what it needs": 7.94,
-   "typed: Something warming with fish.": 11.52,
-   "answered: something warming with fish": 19.46,
-   "typed: The first one.": 34.29,
-   "picked the first dish": 41.2,
-   "You have / I'll order / Can't get, with reasons": 56.15
+   "typed: Plan a dish for 40 covers for Friday.": 1.05,
+   "the menu planner asks what it needs: what are you in the mood for": 8.3,
+   "typed: Something warming with fish.": 11.81,
+   "three dishes offered": 19.41,
+   "typed: The creamy salmon soup (your rules cover all of it).\n2. Fish and root vegetable stew in tomato.": 23.48,
+   "You have / I'll order / Can't get, with reasons": 38.49
   }
  },
  "c04-04-memory": {
@@ -231,47 +230,67 @@
   }
  },
  "c04-05-orders": {
-  "seconds": 16.4,
+  "seconds": 5.667,
   "size": "1920x1080@30/1",
   "chapter": "c04",
   "what": "Hotel Lumo: the Orders tab and one order opened (its timeline, steps and signed receipt)",
   "events": {
-   "the Orders tab": 3.52,
-   "one order: its steps and the wholesaler's signed receipt": 7.36
+   "the Orders tab": 3.01
   }
  },
  "c04-06-shop-popup": {
-  "seconds": 21.133,
+  "seconds": 40.333,
   "size": "1920x1080@30/1",
   "chapter": "c04",
   "what": "Hotel Lumo: the Catalogue searched for lactose-free milk; Ctrl K opens the agent as a panel over the shop; a request answered there",
   "events": {
-   "the Catalogue: the shop the kitchen already knows": 5.47,
-   "Ctrl K: the agent opens over the shop": 5.53,
-   "typed: Two cases of tomatoes for Thursday.": 7.58,
-   "asked in the panel, answered beside the catalogue": 16.61
+   "the Catalogue: the shop the kitchen already knows": 10.83,
+   "Ctrl K: the agent opens over the shop": 19.29,
+   "typed: Two cases of tomatoes for Thursday.": 22.07,
+   "asked in the panel, answered beside the catalogue": 35.82
   }
  },
  "c04-07-guide": {
-  "seconds": 16.9,
+  "seconds": 16.833,
   "size": "1920x1080@30/1",
   "chapter": "c04",
   "what": "Hotel Lumo: the 'Try everything' guide, each capability with words to say, ticked as tried",
   "events": {
-   "Try everything: one row per capability, ticked when the kitchen's record shows it": 2.21
+   "Try everything: one row per capability, ticked when the kitchen's record shows it": 2.04
   }
  },
  "c04-08-offer": {
-  "seconds": 26.933,
+  "seconds": 27.833,
   "size": "1920x1080@30/1",
   "chapter": "c04",
   "what": "A fresh kitchen with a sample history: the wholesaler's selling agent's offer (staged for the demo, marked so), answered in words",
   "events": {
-   "the kitchen's opening notes": 0.83,
-   "typed: No, leave that as it is.": 3.33,
-   "the wholesaler's selling agent: one signed offer with its reason": 10.98,
-   "typed: Yes, add it.": 16,
-   "answered in words": 22.93
+   "the kitchen's opening notes": 0.87,
+   "typed: yes to the watch's switch: an order is placed": 3.37,
+   "the wholesaler's selling agent adds one signed offer with its reason, never a purchase": 9.67,
+   "typed: No receipt. And yes, add the Arla Milkdrink.": 15.19,
+   "answered in words": 23.84
+  }
+ },
+ "c05-01-voice": {
+  "seconds": 68.633,
+  "size": "1920x1080@30/1",
+  "chapter": "c05",
+  "what": "Hands-free voice (live voice model, synthetic test speech into a fake microphone): Listening, Hearing you, Working, Speaking; spoken turns in the thread with the microphone mark; read-back; an order alone; one over the limit signed with the passkey",
+  "events": {
+   "one tap on the microphone: hands-free": 3.29,
+   "Listening": 4.16,
+   "spoken: \"Two hundred litres of lactose-free milk for Thursday.\"": 5.67,
+   "Working, then Speaking: the options, read out": 9.77,
+   "spoken: \"Yes, order it.\"": 16.09,
+   "it reads the order back and places it alone (within the limit)": 18.51,
+   "spoken: \"Six hundred litres of lactose-free milk for Thursday.\"": 24.83,
+   "over the limit: it says a sign-off is needed": 29.04,
+   "spoken: \"Yes, order the first one.\"": 35.39,
+   "answered by voice": 38.43,
+   "a sign-off still needs the passkey: signed": 58.05,
+   "the agent says it is signed and placed": 58.51,
+   "End: back to the typed conversation, exactly where it was": 66.06
   }
  },
  "c06-01-live": {
@@ -349,6 +368,27 @@
    "Mail: receipts and alerts to kitchens": 15.5
   }
  },
+ "c06-08-control": {
+  "seconds": 10.533,
+  "size": "1920x1080@30/1",
+  "chapter": "c06",
+  "what": "Control: suspend an agent with a reason (read what will happen, confirm), then resume it; both written to the ledger",
+  "events": {
+   "Control: suspend an agent": 1.32,
+   "chose Hotel Lumo kitchen's buyer agent, Hotel Lumo kitchen, seen just now": 3.78,
+   "read exactly what will happen, then confirm": 8.52
+  }
+ },
+ "c06-09-hosted-trace-time": {
+  "seconds": 24.3,
+  "size": "1920x1080@30/1",
+  "chapter": "c06",
+  "what": "Hosted (visitor): Trace list and Time machine with the site's own history",
+  "events": {
+   "hosted Trace: requests from the real site": 0.01,
+   "hosted Time machine": 13.76
+  }
+ },
  "c07-01-try": {
   "seconds": 19.067,
   "size": "1920x1080@30/1",
@@ -365,6 +405,17 @@
   "what": "Hosted /docs: the documented interface (OpenAPI, MCP tools)",
   "events": {
    "/docs: the OpenAPI document and the MCP tools": 0
+  }
+ },
+ "c07-03-aiven-agent": {
+  "seconds": 19.867,
+  "size": "1920x1080@30/1",
+  "chapter": "c07",
+  "what": "Hosted: Send in an Aiven agent, one live run: an agent on Aiven Managed Agents connects over MCP, searches, quotes, tries to order and stops at the sign-off",
+  "events": {
+   "Send in an Aiven agent: a buyer AimoPilot does not run": 0,
+   "sent in: it connects over MCP with a mandate minted for this run": 4.74,
+   "the run ended: stopped at a person's sign-off like every other agent": 4.74
   }
  },
  "c08-01-landing-search-map": {
@@ -393,6 +444,26 @@
   "what": "Hosted Platform: Observe (dashboards and alerts)",
   "events": {
    "Observe: dashboards and alerts": 0.02
+  }
+ },
+ "c08-04-stream": {
+  "seconds": 16.3,
+  "size": "1920x1080@30/1",
+  "chapter": "c08",
+  "what": "Hosted Platform: The stream (dock.actions on Kafka, arriving live)",
+  "events": {
+   "The stream: every action on Kafka": 0
+  }
+ },
+ "c08-05-ask": {
+  "seconds": 22.4,
+  "size": "1920x1080@30/1",
+  "chapter": "c08",
+  "what": "Hosted Platform: Ask the platform, one question answered from the records",
+  "events": {
+   "Ask the platform: the copilot answers from the records": 0.02,
+   "question asked": 6.7,
+   "the answer, with the query it ran": 7.91
   }
  },
  "c10-01-webshop-end": {
