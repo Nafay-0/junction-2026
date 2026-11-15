@@ -1,3 +1,4 @@
+import { signerL } from "@/app/_i18n/signer";
 import { dayIn } from "./dish";
 import { ownCards } from "./visitor";
 import { randomBytes } from "node:crypto";
@@ -309,9 +310,36 @@ export function turnContext(run: TurnRun, refs: OpenRef[]): string {
     refs.length ? `OPEN DECISIONS (ref: what it does):\n${refs.map((r) => `- ${r.ref}: ${r.label}`).join("\n")}` : "OPEN DECISIONS: none.",
     orderTimes(cardsNow),
     waiting.length ? `WAITING FOR A PERSON'S OK (you know these orders; say which one when asked; nobody but that person, with their own passkey, can place it): ${waiting.join("; ")}.` : "",
+    rulesFacts(run),
+    lastShown(run),
   ]
     .filter(Boolean)
     .join("\n\n");
+}
+
+const eurOf = (cents: number) => `${(cents / 100).toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, " ")} €`;
+
+/**
+ * The kitchen's signed rules as facts, every turn: the per-order limit, who OKs above it, the weekly budget. The store's
+ * own sentences quote them ("Anything over 500,00 € waits for the kitchen manager's own OK"); without them here, the
+ * model took a figure it did not write for one it could not back, and disowned it.
+ */
+export function rulesFacts(run: Pick<TurnRun, "session">): string {
+  const m = run.session.mandate;
+  const who = m.approvers?.[0]?.name;
+  return `THE KITCHEN'S RULES (its signed mandate; facts, the same the store's own sentences quote): you may spend up to ${eurOf(m.perOrderLimitCents)} on one order alone; above that ${who ? signerL(who, "en") : "the approver"} gives the OK with their passkey on their own device; the weekly budget is ${eurOf(m.weeklyBudgetCents)}.`;
+}
+
+/**
+ * The previous reply as the buyer saw it. The history holds only the model's own text; the store adds its own sentences
+ * (the gate's, the rules', the options in words), so what the buyer read is given here, all of it backed by the cards.
+ */
+export function lastShown(run: Pick<TurnRun, "thread" | "turnId">): string {
+  // Never across a session boundary: another visitor's reply is not this session's (visitor.ts).
+  const last = [...run.thread.turns].reverse().find((x) => x.role === "agent" && x.turnId !== run.turnId && (x.boundary || x.replyTo !== ""));
+  if (last?.role === "agent" && last.boundary) return "";
+  const line = last?.role === "agent" ? (last.line ?? "").replace(/\*\*|\{\{|\}\}/g, "").trim() : "";
+  return line ? `YOUR LAST REPLY AS THE BUYER SAW IT (with the store's own sentences, every figure from the rules or the cards: stand by it): "${line.slice(0, 900)}"` : "";
 }
 
 // ---------- the agent ----------
