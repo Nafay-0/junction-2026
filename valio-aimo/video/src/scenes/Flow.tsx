@@ -112,6 +112,34 @@ const Working = ({ label }: { label: string }) => {
   );
 };
 
+/**
+ * The two marks the product draws on every option today (web/src/app/k/[kitchen]/thread-marks.tsx, CompactMarks):
+ * five pips for the delivery record and a leaf with the estimated footprint. All three products have a good record;
+ * the kilograms are the live site's figures. They come in once their row has landed: the pips fill one by one, then
+ * the leaf and its figure rise into place.
+ */
+const Marks = ({ at, kg }: { at: number; kg: string }) => {
+  const frame = useCurrentFrame();
+  const leaf = prog(frame, at + 10, 14);
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: "0.5em", marginLeft: "0.5em", verticalAlign: "middle" }}>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: "0.17em" }}>
+        {[0, 1, 2, 3, 4].map((i) => {
+          const on = prog(frame, at + i * 2, 6);
+          return <span key={i} style={{ width: "0.42em", height: "0.42em", borderRadius: "50%", background: "currentColor", opacity: 0.25 + 0.75 * on, scale: String(0.8 + 0.2 * on) }} />;
+        })}
+      </span>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: "0.2em", fontVariantNumeric: "tabular-nums", opacity: leaf, translate: `0px ${((1 - leaf) * 7).toFixed(2)}px` }}>
+        <svg width="0.95em" height="0.95em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z" />
+          <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12" />
+        </svg>
+        {kg}
+      </span>
+    </span>
+  );
+};
+
 const Thread = () => {
   const frame = useCurrentFrame();
   const pulse = (frame % 30) / 30;
@@ -172,7 +200,12 @@ const Thread = () => {
             <OptionRow
               title="Valio Hyvä suomalainen Arki® Eila® semi skimmed milk drink 1 l lactose free"
               price="1 010,00 €"
-              sub="1,01 €/l · Mon 16 Nov"
+              sub={
+                <>
+                  1,01 €/l · Mon 16 Nov
+                  <Marks at={T.options[0] + 16} kg="≈1 128 kg" />
+                </>
+              }
               style={{
                 boxShadow: `0 0 0 ${2.5 * prog(frame, T.options[2] + 10, 12)}px ${C.lime}, 0 1px 2px rgb(0 54 70 / 0.05)`,
               }}
@@ -182,14 +215,24 @@ const Thread = () => {
             <OptionRow
               title="Valio semi skimmed milk 1 l lactose free UHT"
               price="1 560,00 €"
-              sub="1,56 €/l · Mon 16 Nov · 550,00 € more"
+              sub={
+                <>
+                  1,56 €/l · 550,00 € more
+                  <Marks at={T.options[1] + 16} kg="≈1 134 kg" />
+                </>
+              }
             />
           </Grow>
           <Grow at={T.options[2]}>
             <OptionRow
               title="Arla Semi skimmed milkdrink + Valio Arki Eila semi"
               price="1 574,48 €"
-              sub="2,48 €/l · Mon 16 Nov · Lowest carbon, 564,48 € more"
+              sub={
+                <>
+                  2,48 €/l · Lowest carbon, 564,48 € more
+                  <Marks at={T.options[2] + 16} kg="≈1 127 kg" />
+                </>
+              }
             />
           </Grow>
           <Grow at={T.options[2] + 12}>
@@ -1282,6 +1325,38 @@ export const Flow = () => {
         <Side at={T.options[0]} exit={T.send2 - Q}>
           <Ranks />
         </Side>
+        {/* One label, so the marks on every option are noticed: under the ranked cards, clear of every card. */}
+        <Rise
+          at={T.options[2] + 6}
+          exit={T.options[2] + 58}
+          y={8}
+          style={{ position: "absolute", left: 1100, top: 700 }}
+        >
+          <div
+            style={{
+              ...sans,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 14,
+              height: 62,
+              padding: "0 28px",
+              borderRadius: 31,
+              background: "rgb(255 255 255 / 0.1)",
+              border: `1.5px solid rgb(192 224 33 / 0.6)`,
+              color: C.paper,
+              fontSize: 28,
+              fontWeight: 600,
+              whiteSpace: "nowrap",
+            }}
+          >
+            <span style={{ display: "inline-flex", gap: 4 }}>
+              {[0, 1, 2, 3, 4].map((i) => (
+                <span key={i} style={{ width: 8, height: 8, borderRadius: "50%", background: C.lime }} />
+              ))}
+            </span>
+            Delivery record and CO₂ on every option
+          </div>
+        </Rise>
         <Side at={T.send2 + 2} exit={T.phone - 4}>
           <Limit />
         </Side>
