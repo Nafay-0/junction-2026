@@ -110,6 +110,8 @@ export function useCall(kitchen: string) {
   /** The voice model is in the middle of a turn of its own (speaking, or about to): nothing is given to it then. */
   const modelTurnOpen = useRef(false);
   const modelTurnAt = useRef(0);
+  /** When words were last sent for an utterance: a relay right after with no new words is the same utterance. */
+  const lastRelayAt = useRef(0);
   /** When the buyer last talked over the agent (the provider's barge-in). */
   const interruptedAt = useRef(0);
   const queue = useRef<string[]>([]);
@@ -263,15 +265,20 @@ export function useCall(kitchen: string) {
       timing(t, { toolCall: Date.now() - lastHeardAt.current });
       set({ heard: "" });
       const responses: { id: string; name: string; response: unknown }[] = [];
+      let sentWords = false;
       for (const fc of fcs) {
         if (fc.name !== "relay") {
           responses.push({ id: fc.id, name: fc.name, response: { say: "", note: "There is no such tool. Only relay exists." } });
           continue;
         }
-        if (!words) {
-          responses.push({ id: fc.id, name: fc.name, response: { say: tx().notCaught } });
+        // A second relay for words already sent (the model sometimes calls twice for one utterance): nothing to say.
+        // Only a relay with no words at all, and none just sent, is a "say it again".
+        if (!words || (sentWords && fc !== fcs[0])) {
+          responses.push({ id: fc.id, name: fc.name, response: { say: Date.now() - lastRelayAt.current < 3_000 || sentWords ? "" : tx().notCaught } });
           continue;
         }
+        sentWords = true;
+        lastRelayAt.current = Date.now();
         set({ working: true });
         const r = await post<Spoken>(`${base}/call/${callId.current}`, { op: "heard", text: words, turn: t, modelWords: typeof fc.args?.words === "string" ? fc.args.words.slice(0, 2000) : undefined, overlap: wasOverlap, duringAgent: wasDuring, lang: langRef.current });
         if (!r.ok) {
