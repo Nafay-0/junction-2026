@@ -140,8 +140,8 @@ We built this with AI coding agents (Claude Code; Claude Fable 5.2 as the orches
 ```
 
 > Before pasting, count and, if you want a figure, put it in place of "most": `git log --oneline | wc -l` and
-> `git log --grep='Co-Authored-By: Claude' --oneline | wc -l` on `main`. On Saturday 14 Nov at 01:30 it was 179 of
-> 220 on `main`; that figure is stale.
+> `git log --grep='Co-Authored-By: Claude' --oneline | wc -l` on `main`. On Sunday 15 Nov at 06:20 it was 1,000 of
+> 1,290 commits on `main` (the count includes the team's second project in `exa/`).
 
 ## Links
 

@@ -18,6 +18,14 @@ with the server's clock at 10:30 and again at 00:30 with the real clock.
   passkeys belong to it.
 - Second tab: `https://aimopilot.zeroanomaly.tech/ops` (no passcode needed to look).
 - Hotel Lumo is shared and reset every 60 minutes. If another visitor is in it, use Metsola school kitchen (below).
+- **Between reviewers, in the same kitchen.** The test kitchens reset by themselves every 60 minutes, counted from
+  the last deploy: today at **8 minutes past each hour** (10:08, 11:08, 12:08). Do not start a reviewer's order at
+  11:06 to 11:08: a reset in the middle empties the conversation and the waiting order. Until the next reset the
+  kitchen keeps what earlier reviewers did, so the second reviewer is first asked "You already ordered 1,000 L of milk
+  a moment ago … Shall I order it again on top of it?": say **yes** (it is the duplicate check, worth one sentence).
+  Hotel Lumo's weekly budget takes about seven 1 010 € orders an hour, Metsola's two; if the agent says the week's
+  budget is used up, that is the gate working: switch kitchen, or use **Start a fresh kitchen** on `/k` (one click,
+  clean, any phone can join as its approver). Each test kitchen takes up to 30 reviewers' phones between resets.
 - Do not deploy, restart or reset anything during review (`infra/RUNBOOK.md`, "Never during a live demo").
 - The partner's data does not move over the weekend: the usual 10 l milk boxes have missed their cut-off for Monday,
   and the 1 l cartons can still be ordered for Monday until **17:00 today**. So "by Monday" shows partial
