@@ -28,13 +28,16 @@ vk=$(python3 -c "print(int(55*8*1024/$dur - 96))")
 ( cd $tmp && ffmpeg -y -hide_banner -loglevel error -i "$dst/aimopilot-demo-10min.mp4" -c:v libx264 -preset slow -b:v ${vk}k -pass 1 -an -f null /dev/null \
   && ffmpeg -y -hide_banner -loglevel error -i "$dst/aimopilot-demo-10min.mp4" -c:v libx264 -preset slow -b:v ${vk}k -pass 2 -pix_fmt yuv420p -c:a aac -b:a 96k -movflags +faststart "$dst/aimopilot-demo-10min-small.mp4" )
 
+# 2b. A 720p preview for chat (under about 28 MB).
+ffmpeg -y -hide_banner -loglevel error -i "$dst/aimopilot-demo-10min.mp4" -vf scale=1280:720 -r 24 -c:v libx264 -preset slow -crf 29 -pix_fmt yuv420p -c:a aac -b:a 80k -movflags +faststart "$dst/aimopilot-demo-10min-preview.mp4"
+
 # 3. A contact sheet: a frame every 15 seconds.
 ffmpeg -y -hide_banner -loglevel error -i "$dst/aimopilot-demo-10min-small.mp4" -vf "fps=1/15,scale=320:-1,tile=8x5" -frames:v 1 "$dst/aimopilot-demo-10min-sheet.jpg"
 
 # 4. Captions and the script.
 node "$here/demo-export.mjs" "$dst"
 
-for f in aimopilot-demo-10min.mp4 aimopilot-demo-10min-small.mp4; do
+for f in aimopilot-demo-10min.mp4 aimopilot-demo-10min-small.mp4 aimopilot-demo-10min-preview.mp4; do
   echo "$f $(ffprobe -v error -show_entries format=duration:format=size -of csv=p=0 "$dst/$f")"
 done
 ffmpeg -hide_banner -nostats -i "$dst/aimopilot-demo-10min.mp4" -af ebur128=peak=true -f null - 2>&1 | grep -E "^\s+(I:|Peak:)" | head -2

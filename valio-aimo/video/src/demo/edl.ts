@@ -1,4 +1,4 @@
-import { type Callout, ev, has, type Shot } from "./parts";
+import { type Callout, CLIPS, ev, has, type Shot } from "./parts";
 import { chapter, cue, partAt } from "./timeline";
 
 /**
@@ -10,6 +10,8 @@ const ph = (at: number, what: string, label?: string): Shot => ({ clip: "placeho
 /** The clip if it has arrived, otherwise a placeholder saying what it will show. */
 const clip = (name: string, shot: Omit<Shot, "clip">, what: string): Shot => (has(name) ? { clip: name, ...shot } : { clip: "placeholder", at: shot.at, what, label: shot.label });
 const start = (id: string) => chapter(id).start;
+/** The first c02 takes showed a later chapter's exchange in the thread; a re-take (another length) needs no mask. */
+const oldTake = (name: string, seconds: number) => has(name) && Math.abs(CLIPS[name].seconds - seconds) < 0.05;
 
 export type ChapterEdit = { shots: Shot[]; callouts: Callout[] };
 
@@ -64,8 +66,8 @@ export const EDL: Record<string, () => ChapterEdit> = {
         clip(r, { at: start("c02"), label: "Hotel Lumo kitchen · Agent", url: `${K}/k`, sync: has(r) ? [[ev(r, "typing"), cue("c02-1", "I need", -0.4)], [ev(r, "request sent"), partAt("c02-1", 0.3, true)], [ev(r, "reply"), partAt("c02-2", 0.2)]] : undefined }, "Valio's request typed in Hotel Lumo"),
         clip(b, { at: cue("c02-2", "It read", -0.6), label: "Hotel Lumo kitchen · the agent's steps", url: `${K}/k`, sync: has(b) ? [[ev(b, "the steps"), cue("c02-2", "It read", -0.2)], [ev(b, "all the steps"), cue("c02-2", "Then it asked", -0.3)], [ev(b, "the ranked"), cue("c02-3", "offers stand-ins", -0.4)]] : undefined, zoom: [{ at: cue("c02-2", "It read", 0.4), s: 1.14, x: 0.3, y: 0.75 }, { at: cue("c02-3", "And there's"), s: 1.14, x: 0.3, y: 0.12 }, { at: cue("c02-3", "offers stand-ins", -0.2), s: 1.1, x: 0.4, y: 0.45 }, { at: partAt("c02-3", 0, true), s: 1, x: 0.4, y: 0.45 }] }, "The steps under the reply, open; the ranked stand-ins"),
         clip(g, { at: partAt("c02-4", -0.3), label: "Hotel Lumo kitchen · the gate", url: `${K}/k`, sync: has(g) ? [[ev(g, "typing"), cue("c02-4", "We pick", -0.3)], [ev(g, "the gate"), cue("c02-4", "This order is")]] : undefined, zoom: [{ at: cue("c02-4", "This order is", 0.6), s: 1.12, x: 0.5, y: 0.62 }] }, "The quote, then the gate stops the order over the 500 € limit: the sign-off slab"),
-        clip(ph2, { at: cue("c02-5", "Tap Send", -0.5), label: "Hotel Lumo kitchen · the approver's phone", url: `${K}/k`, sync: has(ph2) ? [[ev(ph2, "Send to my phone"), cue("c02-5", "Tap Send", 0.1)], [ev(ph2, "the sign-off screen"), cue("c02-5", "the approver sees", -0.2)], [ev(ph2, "approved with"), cue("c02-5", "approves exactly", -0.1)], [ev(ph2, "signed on the phone"), partAt("c02-6", 0.6)]] : undefined, masks: [{ x: 20, y: 560, w: 1380, h: 380, color: "#f2f7f7" }], zoom: [{ at: cue("c02-5", "On the phone", -0.2), s: 1.14, x: 0.86, y: 0.5 }, { at: partAt("c02-6", 0.2), s: 1.1, x: 0.3, y: 0.3 }] }, "A phone-sized window: the approval page and the passkey prompt"),
-        clip(sg, { at: cue("c02-6", "the signed order", -0.3), label: "Hotel Lumo kitchen · signed", url: `${K}/k`, sync: has(sg) ? [[ev(sg, "the signed order"), cue("c02-6", "appears by itself", -0.2)], [ev(sg, "See this order"), cue("c02-6", "One link", 0)]] : undefined, masks: [{ x: 380, y: 540, w: 1160, h: 420, color: "#f4f9f9" }] }, "The signed order appears; “See this order as the wholesaler sees it”"),
+        clip(ph2, { at: cue("c02-5", "Tap Send", -0.5), label: "Hotel Lumo kitchen · the approver's phone", url: `${K}/k`, sync: has(ph2) ? [[ev(ph2, "Send to my phone"), cue("c02-5", "Tap Send", 0.1)], [ev(ph2, "the sign-off screen"), cue("c02-5", "the approver sees", -0.2)], [ev(ph2, "approved with"), cue("c02-5", "approves exactly", -0.1)], [ev(ph2, "signed on the phone"), partAt("c02-6", 0.6)]] : undefined, masks: oldTake(ph2, 23.967) ? [{ x: 20, y: 560, w: 1380, h: 380, color: "#f2f7f7" }] : undefined, zoom: [{ at: cue("c02-5", "On the phone", -0.2), s: 1.14, x: 0.86, y: 0.5 }, { at: partAt("c02-6", 0.2), s: 1.1, x: 0.3, y: 0.3 }] }, "A phone-sized window: the approval page and the passkey prompt"),
+        clip(sg, { at: cue("c02-6", "the signed order", -0.3), label: "Hotel Lumo kitchen · signed", url: `${K}/k`, sync: has(sg) ? [[ev(sg, "the signed order"), cue("c02-6", "appears by itself", -0.2)], [ev(sg, "See this order"), cue("c02-6", "One link", 0)]] : undefined, masks: oldTake(sg, 18.567) ? [{ x: 380, y: 540, w: 1160, h: 420, color: "#f4f9f9" }] : undefined }, "The signed order appears; “See this order as the wholesaler sees it”"),
         ...(has(sg) ? [{ clip: sg, at: cue("c02-6", "One link", 1.2), label: "Operations · the order as the wholesaler sees it", url: `${K}/ops`, sync: [[ev(sg, "See this order"), cue("c02-6", "One link", 0)]] as [number, number][] }] : []),
       ],
       callouts: [
