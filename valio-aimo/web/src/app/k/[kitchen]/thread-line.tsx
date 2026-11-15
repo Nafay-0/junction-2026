@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Check, ChevronDown, Mic, ScanFace, Sparkles } from "lucide-react";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useFormat, useText } from "../../_i18n/provider";
@@ -104,6 +105,8 @@ export function ThreadLine({ className = "", landing = false }: { className?: st
           turns.map((x) =>
             x.role === "agent" && x === opening && !onlyOpening && !x.cards.some((c) => (c.type === "today" && c.items.length > 0) || c.type === "offer" || c.type === "watch") ? null : x.role === "buyer" ? (
               <BuyerLine key={x.turnId} turn={x} />
+            ) : x.role === "agent" && x.boundary ? (
+              x.note ? <VisitorNote key={x.turnId} /> : null
             ) : queued.has(x.turnId) ? (
               <QueuedNode key={x.turnId} />
             ) : (
@@ -158,6 +161,20 @@ function WorkingNode({ label }: { label?: string }) {
 }
 
 /** A message sent while the agent still works on the one before: kept, and answered next, in order. */
+/** A shared test kitchen used by another visitor a moment ago: one quiet line, with the way to a kitchen of one's own. */
+function VisitorNote() {
+  const tx = useText(THREAD_LINE_TEXT);
+  return (
+    <li className="relative" data-visitor-note>
+      <p className="text-[0.86rem] text-ink-soft">
+        {tx.otherVisitor.before}
+        <Link href="/k" className="text-petrol underline decoration-petrol/40 underline-offset-4">{tx.otherVisitor.link}</Link>
+        {tx.otherVisitor.after}
+      </p>
+    </li>
+  );
+}
+
 function QueuedNode() {
   const tx = useText(THREAD_LINE_TEXT);
   return (
@@ -741,7 +758,13 @@ function todaySentence(card: TodayCard, tx: Tx, f: ReturnType<typeof useFormat>)
       if (waiting.length > 1 && i !== waiting[0]) continue;
       parts.push(waiting.length > 1 ? tx.today.signOffMany(waiting.length, money(i.totalCents)) : tx.today.signOff(money(i.totalCents), ""));
     }
-    else if (i.kind === "cutoff") parts.push(tx.today.cutoff(i.name, clock(i.orderBy)));
+    else if (i.kind === "cutoff") {
+      // Several closing at the same time: one sentence, each product by its short name.
+      const time = clock(i.orderBy);
+      const same = card.items.slice(0, 3).filter((x): x is Extract<TodayCard["items"][number], { kind: "cutoff" }> => x.kind === "cutoff" && clock(x.orderBy) === time);
+      if (i !== same[0]) continue;
+      parts.push(tx.today.cutoffs(same.map((x) => x.short ?? x.name), time));
+    }
     else if (i.kind === "drift") {
       // What changed, with its figures, and the one question a yes answers (the next one at the usual amount): only
       // for the first drift, and only when nothing waits for a person's OK.

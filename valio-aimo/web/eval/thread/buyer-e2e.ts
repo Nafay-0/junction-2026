@@ -617,6 +617,13 @@ async function main() {
     results.push(...(await Promise.all([runSession(a, pw), runSession(b, pw)])));
     // Nothing of one reviewer's request in the other's replies.
     for (const [x, other] of [[results[0], /butter/i], [results[1], /lactose|milk/i]] as const) for (const r of x.recs) if (other.test(r.line) || other.test(r.cards.join(" "))) r.flaws.push(`the other reviewer's request shows here: "${r.line.slice(0, 160)}"`);
+    // The quiet line: another visitor is using this shared kitchen (a boundary turn with the note).
+    const probe = new Client(BASE, "probe");
+    await probe.signIn("hotel-lumo");
+    const th = await probe.thread();
+    const notes = (th?.turns ?? []).filter((t: any) => t.role === "agent" && t.boundary === "visitor" && t.note).length;
+    if (!notes) results[1].recs[0]?.flaws.push("no quiet line that another visitor is using this shared kitchen");
+    console.log(`boundary turns with the quiet line: ${notes}`);
   } else {
     for (const s of chosen) {
       const r = await runSession(s, pw);

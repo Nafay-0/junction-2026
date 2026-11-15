@@ -45,7 +45,8 @@ export function optionNames(options: Pick<OptionView, "title" | "lines">[], lang
       const [a, b] = o.lines.map((l) => short(l.name, lang).split(/\s+/).slice(0, 2).join(" "));
       return { en: `part ${a}, part ${b}`, fi: `osin ${a}, osin ${b}`, sv: `delvis ${a}, delvis ${b}` }[lang];
     }
-    const base = short(full[i], lang);
+    // "Eleplant plant power for": a name cut at four words never ends on a word that leads on.
+    const base = short(full[i], lang).replace(/(\s+(for|with|and|of|in|the|a|ja|och|med|för|från))+$/i, "");
     const stripped = base.replace(KIND, "");
     let n = stripped.split(/\s+/).length >= 2 ? stripped : base;
     // A bare brand names nothing: the next words of the product's name, up to three in all.
@@ -107,12 +108,16 @@ function tradeOff(o: OptionView, first: OptionView, lang: Lang, n0: string): str
 }
 
 /** "The Valio Eila is first at 1 010,00 €: the cheapest that can arrive Monday 16 Nov. The Valio UHT costs 550,00 € more." */
-export function optionsSaid(options: OptionView[], lang: Lang): string | undefined {
+export function optionsSaid(options: OptionView[], lang: Lang, opts: { standInSaid?: boolean } = {}): string | undefined {
   const can = options.filter((o) => o.gate?.outcome !== "reject");
   if (can.length < 2) return undefined;
   const [first, ...rest] = can.slice(0, 3);
   const [n1, ...ns] = optionNames(can.slice(0, 3), lang);
-  const head = { en: `The ${n1} is first at **${eur(first.totalCents)}**: ${whyFirst(first, lang)}.`, fi: `${n1} on ensimmäinen, **${eur(first.totalCents)}**: ${whyFirst(first, lang)}.`, sv: `${n1} är först, **${eur(first.totalCents)}**: ${whyFirst(first, lang)}.` }[lang];
+  // The first one stands in for the usual product: said so in the same sentence, unless the reply says it already.
+  const standIn = !opts.standInSaid && first.lines.some((l) => l.substituteFor);
+  const head = standIn
+    ? { en: `In place of your usual, the ${n1} is first at **${eur(first.totalCents)}**: ${whyFirst(first, lang)}.`, fi: `Tavallisen tilalle ${n1} on ensimmäinen, **${eur(first.totalCents)}**: ${whyFirst(first, lang)}.`, sv: `I stället för det vanliga är ${n1} först, **${eur(first.totalCents)}**: ${whyFirst(first, lang)}.` }[lang]
+    : { en: `The ${n1} is first at **${eur(first.totalCents)}**: ${whyFirst(first, lang)}.`, fi: `${n1} on ensimmäinen, **${eur(first.totalCents)}**: ${whyFirst(first, lang)}.`, sv: `${n1} är först, **${eur(first.totalCents)}**: ${whyFirst(first, lang)}.` }[lang];
   const others = rest.map((o, i) => tradeOff(o, first, lang, ns[i]));
   const tail = others.length ? `${others.join("; ").replace(/^./, (c) => c.toUpperCase())}.` : "";
   // "pe 20.11." ends in its own stop: never "20.11.. Valio".

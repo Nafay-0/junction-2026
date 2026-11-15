@@ -110,6 +110,8 @@ export type BuyerTurn = {
   turnId: string;
   role: "buyer";
   at: string;
+  /** The browser session that sent it (a hash of its sign-in cookie), in a shared test kitchen. */
+  visitor?: string;
   door: ThreadDoor;
   via: TurnVia;
   /** The buyer's own words, exactly as typed or transcribed. Absent for a pure tap. */
@@ -141,6 +143,10 @@ export type AgentTurn = {
   turnId: string;
   role: "agent";
   at: string;
+  /** Not a reply: where a different browser session took over a shared test kitchen's conversation. What was open
+   * before it is that session's; `note`: show the quiet line that another visitor is using the kitchen. */
+  boundary?: "visitor";
+  note?: boolean;
   /** The buyer turn this answers. */
   replyTo: string;
   status: AgentTurnStatus;
@@ -532,7 +538,7 @@ export type TodayItem =
   /** An order waiting for a named person's sign-off: signed in place (the gate card's sign-off widget). */
   | { kind: "sign_off"; orderId: string; requestId?: string; approvalId: string; totalCents: number; approver: { name: string; role: string }; requestedAt: string; lines: { name: string; quantity: number }[] }
   /** The order cut-off for something the kitchen usually buys closes today: order the usual now (onto the sheet). */
-  | { kind: "cutoff"; family: string; productId: string; name: string; orderBy: string; deliveryDate: string; usual: { amount: number; unit: string }; packs: number }
+  | { kind: "cutoff"; family: string; productId: string; name: string; /** As said in a sentence (home.ts spokenProduct). */ short?: string; orderBy: string; deliveryDate: string; usual: { amount: number; unit: string }; packs: number }
   /** A recurring order whose amount or price has drifted from the usual. */
   | { kind: "drift"; family: string; warning: string; productId: string; name: string; usual: { amount: number; unit: string }; recent: number; amountPct: number | null; pricePct: number | null; nextDue?: string }
   /** A recall hold on a product the kitchen has bought. */
