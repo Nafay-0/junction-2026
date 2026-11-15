@@ -147,11 +147,17 @@ export const L2 = {
     title: "The two-minute film",
     note: "Coming here soon. Until then, every picture on this page is the product itself.",
     label: "AimoPilot in two minutes",
-    // The longer walk-through, on YouTube: every screen, narrated, with captions.
-    more: "Watch the detailed 10-minute demo",
-    moreHref: "https://youtu.be/JFcHMe_fxio",
     filmHref: "https://youtu.be/9ckYi6chCec",
     onYouTube: "The film on YouTube",
+  },
+
+  // The longer walk-through, on YouTube: every screen, narrated, with captions. Shown last on the page.
+  demo: {
+    title: "The detailed demo",
+    line: "Ten minutes, narrated and captioned: getting in, an order and what happens behind it, the guardrails, the other agents, voice, the wholesaler's side, the open door, search, and how it was tested.",
+    label: "Watch the detailed ten-minute demo on YouTube (opens in a new tab)",
+    cta: "Watch the 10-minute demo",
+    href: "https://youtu.be/JFcHMe_fxio",
   },
 
   honest: {

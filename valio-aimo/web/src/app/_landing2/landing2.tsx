@@ -315,6 +315,29 @@ export function Landing2() {
           </button>
         </section>
 
+        {/* The two-minute film, right under the hero: the whole idea before the detail */}
+        <Section id="film" title={t.film.title}>
+          <div className="l2-film">
+            {film.video ? (
+              <video controls preload="none" playsInline poster={film.poster ? `/landing/${film.poster}` : undefined} className="h-full w-full" aria-label={t.film.label}>
+                <source src={film.video} type="video/mp4" />
+                {/* Captions are offered, not switched on: the film carries its own words on screen. */}
+                {film.captions && <track kind="captions" src={film.captions} srcLang="en" label="Captions" />}
+              </video>
+            ) : (
+              <div className="l2-poster" role="img" aria-label={`${t.film.label}. ${t.film.note}`}>
+                <Wordmark tone="paper" size={30} />
+                <p className="text-paper/80">{t.film.note}</p>
+              </div>
+            )}
+          </div>
+          <p className="mt-4">
+            <a href={t.film.filmHref} target="_blank" rel="noreferrer" className={QUIET}>
+              {t.film.onYouTube}
+            </a>
+          </p>
+        </Section>
+
         {/* The main act: the agent at work, driven by the scroll */}
         <Section id="story" title={t.story.title} line={t.story.line} wide>
           <div className="l2-story" data-story>
@@ -750,29 +773,18 @@ export function Landing2() {
           </div>
         </Section>
 
-        <Section id="film" title={t.film.title}>
-          <div className="l2-film">
-            {film.video ? (
-              <video controls preload="none" playsInline poster={film.poster ? `/landing/${film.poster}` : undefined} className="h-full w-full" aria-label={t.film.label}>
-                <source src={film.video} type="video/mp4" />
-                {/* Captions are offered, not switched on: the film carries its own words on screen. */}
-                {film.captions && <track kind="captions" src={film.captions} srcLang="en" label="Captions" />}
-              </video>
-            ) : (
-              <div className="l2-poster" role="img" aria-label={`${t.film.label}. ${t.film.note}`}>
-                <Wordmark tone="paper" size={30} />
-                <p className="text-paper/80">{t.film.note}</p>
-              </div>
-            )}
-          </div>
-          <p className="mt-4 flex flex-wrap gap-x-6 gap-y-2">
-            <a href={t.film.moreHref} target="_blank" rel="noreferrer" className={QUIET}>
-              {t.film.more}
-            </a>
-            <a href={t.film.filmHref} target="_blank" rel="noreferrer" className={QUIET}>
-              {t.film.onYouTube}
-            </a>
-          </p>
+
+        {/* The detailed demo closes the page: ten minutes, every screen, on YouTube (a link, never an embedded player) */}
+        <Section id="demo" title={t.demo.title} line={t.demo.line}>
+          <a href={t.demo.href} target="_blank" rel="noreferrer" className="l2-film l2-demo" aria-label={t.demo.label}>
+            <Image src="/landing/demo-poster.webp" width={1600} height={900} alt="" sizes="(min-width: 1024px) 832px, 92vw" unoptimized loading="lazy" />
+            <span className="l2-demo-play" aria-hidden>
+              <span className="l2-demo-badge">
+                <Play size={18} aria-hidden />
+                {t.demo.cta}
+              </span>
+            </span>
+          </a>
         </Section>
 
         <Section id="honest" title={t.honest.title} line={t.honest.line}>
