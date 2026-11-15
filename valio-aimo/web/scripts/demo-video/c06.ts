@@ -59,14 +59,33 @@ async function main() {
     await take.record(page);
     await rail(take, page, "/ops/orders", "Orders: every order and its whole life");
     await sleep(2000);
-    const row = page.locator("main a[href^='/ops/orders/']").first();
+    // The order just placed in c02 (Hotel Lumo, 1 010,00 €) if it is there, else the newest.
+    const mine = page.locator("main a[href^='/ops/orders/']").filter({ hasText: /1\s?010,00/ }).first();
+    const row = (await mine.count()) ? mine : page.locator("main a[href^='/ops/orders/']").first();
     if (await row.count()) {
       await click(row, { pause: 100 });
       await take.wait(() => quiet(page));
       await sleep(800);
-      take.event("one order's full timeline");
+      take.event("the order just placed: its full timeline");
       await sleep(1800);
-      await browse(page, 4, 300, 1500);
+      await browse(page, 3, 300, 1500);
+      const confirm = page.getByRole("button", { name: /Confirm for delivery/i }).first();
+      if (await confirm.count()) {
+        await reveal(confirm, { block: "center" });
+        await sleep(900);
+        await click(confirm);
+        await take.wait(() => quiet(page));
+        await sleep(600);
+        // a second step (a confirm dialog) if the page asks for one
+        const again = page.getByRole("button", { name: /^(Confirm|Yes, confirm)/i }).last();
+        if (await again.isVisible().catch(() => false)) {
+          await click(again);
+          await take.wait(() => quiet(page));
+        }
+        take.event("staff confirm it for delivery; the timeline gains the step");
+        await sleep(2500);
+        await browse(page, 2, 300, 1500);
+      }
     }
     await rail(take, page, "/ops/control#waiting", "Waiting for a person: sign-offs not given yet");
     await sleep(2500);

@@ -318,6 +318,17 @@ export function deliver(
   const { files, seconds, events } = take.encode();
   fs.mkdirSync(CLIPS, { recursive: true });
   const out = path.join(CLIPS, `${o.id}.mp4`);
+  // Second pass: the first pass's clip is kept once under clips/previous/ before it is replaced.
+  if (process.env.KEEP_PREVIOUS && fs.existsSync(out)) {
+    const prev = path.join(CLIPS, "previous");
+    fs.mkdirSync(path.join(prev, "sheets"), { recursive: true });
+    for (const [from, to] of [
+      [out, path.join(prev, `${o.id}.mp4`)],
+      [path.join(CLIPS, `${o.id}.json`), path.join(prev, `${o.id}.json`)],
+      [path.join(CLIPS, "sheets", `${o.id}.jpg`), path.join(prev, "sheets", `${o.id}.jpg`)],
+    ])
+      if (fs.existsSync(from) && !fs.existsSync(to)) fs.renameSync(from, to);
+  }
   const layout = o.layout ?? "desk";
   const desk = files[o.desk ?? "main"];
   const phone = files[o.phone ?? "phone"];

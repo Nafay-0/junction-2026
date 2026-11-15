@@ -25,7 +25,7 @@ const k0 = (page: Page) => page.getByText(/wholesaler's agent suggests/i).last()
 
 async function main() {
   const browser = await launch();
-  const needLumo = ["watch", "backup", "menu", "memory", "tabs", "planner"].some(on);
+  const needLumo = ["watch", "backup", "menu", "memory", "tabs", "planner", "dish"].some(on);
   const k = needLumo ? await new Kitchen(browser, base, "hotel-lumo").open({ resetAccounts: true }) : undefined;
 
   if (k && on("watch")) {
@@ -184,6 +184,44 @@ async function main() {
     await take.stop();
     deliver(take, { id: "c04-07-guide", chapter: "c04", what: "Hotel Lumo: the 'Try everything' guide, each capability with words to say, ticked as tried" });
   }
+  if (k && on("dish")) {
+    await resetThread(k.ctx, base, "hotel-lumo");
+    await k.page.reload();
+    await quiet(k.page);
+    await k.settle();
+    const take = new Take("c04-03-dish");
+    await take.record(k.page);
+    await sleep(700);
+    let t = await k.say(take, "Plan a dish for 40 covers for Friday.", { label: "typed: a dish for 40 covers on Friday" });
+    take.event("it asks what the kitchen is in the mood for");
+    await sleep(3500);
+    t = await k.say(take, "Surprise me.");
+    take.event("three ideas");
+    console.log("  cards:", lastAgent(t)?.cards.map((c) => c.type).join(","));
+    await sleep(4500);
+    t = await k.say(take, "The first one.");
+    console.log("  cards:", lastAgent(t)?.cards.map((c) => c.type).join(","));
+    await sleep(1200);
+    const have = k.page.getByText(/^You have|You have/).last();
+    if (await have.count()) await reveal(have, { block: "start", offset: 110, ms: 1100 });
+    take.event("the dish card: You have / I'll order / Can't get, with reasons");
+    await sleep(4000);
+    for (let i = 0; i < 3; i++) {
+      await scrollBy(k.page, 260, { at: { x: 640, y: 380 } });
+      await sleep(2200);
+    }
+    const list = k.page.getByText(/^Show the list|^Show the \d+ products|^\d+ products?$/).last();
+    if (await list.isVisible().catch(() => false)) {
+      await click(list);
+      take.event("the list of products, with delivery-record and carbon marks");
+      await sleep(1000);
+      await scrollBy(k.page, 300, { at: { x: 640, y: 380 } });
+      await sleep(3000);
+    }
+    await take.stop();
+    deliver(take, { id: "c04-03-dish-flow", chapter: "c04", what: "Hotel Lumo, in the conversation: a dish for 40 covers on Friday; it asks the mood; 'Surprise me.' gives three ideas; 'The first one.' gives the dish card (You have / I'll order / Can't get) and its products" });
+  }
+
   if (k && on("planner")) {
     const take = new Take("c04-03b");
     await take.record(k.page);

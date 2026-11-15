@@ -164,15 +164,20 @@ async function main() {
   await quiet(pp);
   await sleep(1500);
   const create = pp.getByRole("button", { name: /Create the passkey on this phone/ });
+  const approve = pp.getByRole("button", { name: /^Approve \d/ });
   if (await create.count()) {
     take.event("the phone adds a passkey (Face ID stand-in)");
     await click(create);
+    // Older builds stop at "Sign the waiting order"; newer ones go straight on to the order's sign-off.
     const signLink = pp.getByText(/Sign the waiting order/).first();
-    await take.wait(() => signLink.waitFor({ timeout: 30_000 }));
-    await sleep(1500);
-    await click(signLink);
+    const which = await take.wait(() =>
+      Promise.race([signLink.waitFor({ timeout: 40_000 }).then(() => "link"), approve.waitFor({ timeout: 40_000 }).then(() => "approve")]),
+    );
+    if (which === "link") {
+      await sleep(1500);
+      await click(signLink);
+    }
   }
-  const approve = pp.getByRole("button", { name: /^Approve \d/ });
   await take.wait(() => approve.waitFor({ timeout: 30_000 }));
   await quiet(pp);
   take.event("the sign-off screen: what, how much, why it stopped");
