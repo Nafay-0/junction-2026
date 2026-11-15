@@ -976,7 +976,7 @@ type WaysForward = {
 const waysOf = (run: TurnRun) => run.thread as unknown as { ways?: WaysForward };
 // The reply's closing question: its whole last sentence, never cut inside it ("…for {{Monday 16 Nov}}, shall I…?" is
 // one sentence: cutting at the last space before it left "…for {{Monday").
-export const CLOSING_ASK = /(?:^|(?<=[.!?]["”»)]?)\s+)(?:(?![.!?]["”»)]?\s).)*\?\s*$/s;
+export const CLOSING_ASK = /(?:^|(?<=[.!?]["”»)]?)\s+)(?:(?![.!?]["”»)]?\s)[\s\S])*\?\s*$/;
 
 /**
  * Nothing left out, swapped or moved silently (differences.ts): the plan shown or changed in this turn, against what it
