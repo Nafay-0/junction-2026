@@ -1,6 +1,6 @@
 import type { LanguageModelV4CallOptions, LanguageModelV4StreamPart } from "@ai-sdk/provider";
 import { MockLanguageModelV4 } from "ai/test";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { localNow } from "@/core/kitchen";
 import { setInterpretModelForTests } from "@/server/agent/interpret";
 import { resolveKitchen } from "@/server/console-kitchens";
@@ -9,6 +9,14 @@ import { getRuntime, resetRuntime } from "@/server/runtime";
 import { setAgentModelForTests } from "./agent";
 import { submitTurn, threadStore } from "./engine";
 import type { Card } from "./types";
+
+// What can be ordered, renewed or needs a second look depends on today's date (order cut-offs, delivery days, how
+// recent the kitchen's history is), so these scenarios gave another result on some weekdays and times of day. A
+// fixed morning (Date only; timers stay real), the same one the menu, sample and conversation tests use; set at the
+// top of the file because some scenarios work out their dates when the file loads.
+vi.useFakeTimers({ toFake: ["Date"] });
+vi.setSystemTime(new Date("2026-11-13T09:00:00Z"));
+afterAll(() => vi.useRealTimers());
 
 /**
  * The model cannot confirm for the buyer. In the store the buyer's typed reply to a mistake check reaches the

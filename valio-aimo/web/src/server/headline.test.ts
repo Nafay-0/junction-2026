@@ -1,10 +1,18 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { addDaysIso, isoWeekday, localNow } from "@/core/kitchen";
 import { signMandate } from "@/core/mandate";
 import type { AgentSession } from "@/core/orders";
 import { KITCHEN_ORG, demoKitchenKeyPair, demoKitchenMandate } from "./demo-kitchen";
 import { DEMO_ORG, demoMandate, demoOrgKeyPair } from "./dev-fixtures";
 import { getRuntime, resetRuntime } from "./runtime";
+
+// What can be ordered, renewed or needs a second look depends on today's date (order cut-offs, delivery days, how
+// recent the kitchen's history is), so these scenarios gave another result on some weekdays and times of day. A
+// fixed morning (Date only; timers stay real), the same one the menu, sample and conversation tests use; set at the
+// top of the file because some scenarios work out their dates when the file loads.
+vi.useFakeTimers({ toFake: ["Date"] });
+vi.setSystemTime(new Date("2026-11-13T09:00:00Z"));
+afterAll(() => vi.useRealTimers());
 
 /**
  * The partner's own headline request never ends in a dead end. "1000 litraa laktoositonta maitoa maanantaiksi" (as
