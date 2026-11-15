@@ -267,3 +267,22 @@ test("the working line is visible with motion on", async ({ page }) => {
   const hidden = await page.screenshot({ clip: box, animations: "disabled" });
   expect(Buffer.compare(shown, hidden)).not.toBe(0);
 });
+
+/**
+ * The quiet marks beside what will be bought: a product on the order sheet shows its delivery record (pips and "about
+ * n in 10 arrived as ordered") and its carbon estimate ("≈ … kg CO₂e") under its name in the list, and the list's
+ * summary and the note on group averages under the total. From the catalogue index: no extra call.
+ */
+test("a list row shows the delivery record and the carbon estimate", async ({ page: phone }) => {
+  const { kitchen, page } = await phoneAndStore(phone);
+  await page.goto(`/k/${kitchen}/catalogue/VA-1010`);
+  await page.getByRole("textbox", { name: "Quantity in packs" }).fill("2");
+  await page.getByRole("button", { name: "Add to your order" }).click();
+  const row = threadLog(page).locator("tr").filter({ has: page.locator("[data-marks]") }).first();
+  await expect(row).toBeVisible({ timeout: 20_000 });
+  await expect(row.locator('[data-mark="delivery"]')).toContainText(/about \d+ in (10|20) arrived as ordered/);
+  await expect(row.locator('[data-mark="co2"]')).toContainText(/≈ \d+(,\d+)? kg CO₂e/);
+  const summary = threadLog(page).locator("[data-marks-summary]").first();
+  await expect(summary).toContainText(/delivery record/);
+  await expect(summary).toContainText(/product group's average per kilo/);
+});
