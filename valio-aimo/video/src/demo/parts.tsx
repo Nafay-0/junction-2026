@@ -53,7 +53,7 @@ export type Shot = {
   /** For a placeholder: what the picture will be. */
   what?: string;
   /** Areas of the clip (in its own 1920 x 1080 pixels) painted over in the page's own colour: content that belongs to a later chapter. */
-  masks?: { x: number; y: number; w: number; h: number; color: string }[];
+  masks?: { x: number; y: number; w: number; h: number; color: string; fade?: number }[];
 };
 type Piece = { start: number; dur: number; src: number; rate: number }; // rate 0: a held frame
 
@@ -166,7 +166,7 @@ export const ShotView = ({ shot, dur, title, fadeIn }: { shot: Shot; dur: number
       <AbsoluteFill style={{ transformOrigin: `${z.x * 100}% ${z.y * 100}%`, scale: String(z.s) }}>
         <ClipPieces shot={shot} dur={dur} />
         {(shot.masks ?? []).map((m, i) => (
-          <div key={i} style={{ position: "absolute", left: `${(m.x / 1920) * 100}%`, top: `${(m.y / 1080) * 100}%`, width: `${(m.w / 1920) * 100}%`, height: `${(m.h / 1080) * 100}%`, background: `linear-gradient(to bottom, transparent, ${m.color} 36px)` }} />
+          <div key={i} style={{ position: "absolute", left: `${(m.x / 1920) * 100}%`, top: `${(m.y / 1080) * 100}%`, width: `${(m.w / 1920) * 100}%`, height: `${(m.h / 1080) * 100}%`, background: `linear-gradient(to bottom, transparent, ${m.color} ${m.fade ?? 36}px)` }} />
         ))}
       </AbsoluteFill>
     );

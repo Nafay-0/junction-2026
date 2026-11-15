@@ -12,21 +12,7 @@ const clip = (name: string, shot: Omit<Shot, "clip">, what: string): Shot => (ha
 const start = (id: string) => chapter(id).start;
 /** Version B of c04's first paragraph (the dish flow in the conversation) is in use when its clip is there and the narration says so. */
 const dishB = () => has("c04-03-dish-flow") && PARTS.some((p) => p.id === "c04-1" && p.text.includes("Ask for a dish"));
-/** The dish clip's events, matched by words, each on the narrator's matching phrase; only anchors that move forward. */
-function dishSync(): [number, number][] {
-  const evs = Object.entries(CLIPS["c04-03-dish-flow"].events).map(([n, t]) => [n.toLowerCase(), t] as const);
-  const find = (...keys: string[]) => evs.find(([n]) => keys.some((k) => n.includes(k)))?.[1];
-  const want: [number | undefined, number][] = [
-    [find("mood", "asks"), cue("c04-1", "it asks what", -0.2)],
-    [find("three", "dishes", "offers"), cue("c04-1", "then offers", 0.2)],
-    [find("pick", "first one", "chose"), cue("c04-1", "Pick one", 0)],
-    [find("you have", "has,", "have /", "can't get"), cue("c04-1", "it shows what", 0)],
-    [find("delivery record", "footprint", "co2", "co₂"), cue("c04-1", "Under the dish", 0)],
-  ];
-  const out: [number, number][] = [];
-  for (const [s, f] of want) if (s !== undefined && (!out.length || s > out[out.length - 1][0])) out.push([s, f]);
-  return out;
-}
+
 
 export type ChapterEdit = { shots: Shot[]; callouts: Callout[] };
 
@@ -82,8 +68,7 @@ export const EDL: Record<string, () => ChapterEdit> = {
         clip(b, { at: cue("c02-2", "It read", -0.6), label: "Hotel Lumo kitchen · the agent's steps", url: `${K}/k`, sync: has(b) ? [[ev(b, "the steps"), cue("c02-2", "It read", -0.2)], [ev(b, "all the steps"), cue("c02-2", "then asked", -0.3)], [ev(b, "the ranked"), cue("c02-3", "offers stand-ins", -0.4)]] : undefined, zoom: [{ at: cue("c02-2", "It read", 0.4), s: 1.14, x: 0.3, y: 0.75 }, { at: cue("c02-3", "And there's"), s: 1.14, x: 0.3, y: 0.12 }, { at: cue("c02-3", "offers stand-ins", -0.2), s: 1.1, x: 0.4, y: 0.45 }, { at: partAt("c02-3", 0, true), s: 1, x: 0.4, y: 0.45 }] }, "The steps under the reply, open; the ranked stand-ins"),
         clip(g, { at: partAt("c02-4", -0.3), label: "Hotel Lumo kitchen · the gate", url: `${K}/k`, sync: has(g) ? [[ev(g, "typing"), cue("c02-4", "We pick", -0.3)], [ev(g, "the gate"), cue("c02-4", "This order is")]] : undefined, zoom: [{ at: cue("c02-4", "This order is", 0.6), s: 1.12, x: 0.5, y: 0.62 }] }, "The quote, then the gate stops the order over the 500 € limit: the sign-off slab"),
         clip(ph2, { at: cue("c02-5", "Tap Send", -0.5), label: "Hotel Lumo kitchen · the approver's phone", url: `${K}/k`, sync: has(ph2) ? [[ev(ph2, "Send to my phone"), cue("c02-5", "Tap Send", 0.1)], [ev(ph2, "the sign-off screen"), cue("c02-5", "approver sees", -0.2)], [ev(ph2, "approved with"), cue("c02-5", "approves exactly", -0.1)], [ev(ph2, "signed on the phone"), partAt("c02-6", 0.6)]] : undefined, masks: [{ x: 20, y: 505, w: 1380, h: 440, color: "#f2f7f7" }], zoom: [{ at: cue("c02-5", "The approver sees", -0.2), s: 1.14, x: 0.86, y: 0.5 }, { at: partAt("c02-6", 0.2), s: 1.1, x: 0.3, y: 0.3 }] }, "A phone-sized window: the approval page and the passkey prompt"),
-        clip(sg, { at: cue("c02-6", "the signed order", -0.3), label: "Hotel Lumo kitchen · signed", url: `${K}/k`, sync: has(sg) ? [[ev(sg, "the signed order"), cue("c02-6", "appears by itself", -0.2)], ...(Object.keys(CLIPS[sg].events).some((n) => n.startsWith("placed at the fixed")) ? [[ev(sg, "placed at the fixed"), cue("c02-6", "It's recorded", 0)] as [number, number]] : []), [ev(sg, "See this order"), cue("c02-6", "One link", 0)]] : undefined, masks: [{ x: 380, y: 585, w: 1160, h: 420, color: "#f4f9f9" }] }, "The signed order appears; “See this order as the wholesaler sees it”"),
-        ...(has(sg) ? [{ clip: sg, at: cue("c02-6", "One link", 1.2), label: "Operations · the order as the wholesaler sees it", url: `${K}/ops`, sync: [[ev(sg, "See this order"), cue("c02-6", "One link", 0)]] as [number, number][] }] : []),
+        clip(sg, { at: cue("c02-6", "the signed order", -0.3), label: "Hotel Lumo kitchen · signed", url: `${K}/k`, sync: has(sg) ? [[ev(sg, "the signed order"), cue("c02-6", "appears by itself", -0.2)], ...(Object.keys(CLIPS[sg].events).some((n) => n.startsWith("placed at the fixed")) ? [[ev(sg, "placed at the fixed"), cue("c02-6", "placed at the fixed", 0)] as [number, number]] : [])] : undefined, masks: [{ x: 380, y: 585, w: 1160, h: 420, color: "#f4f9f9" }] }, "The signed order appears; “See this order as the wholesaler sees it”"),
       ],
       callouts: [
         { at: cue("c02-2", "the kitchen's memory", -0.2), text: "Memory: always lactose-free", pos: "tr" },
@@ -102,13 +87,15 @@ export const EDL: Record<string, () => ChapterEdit> = {
     const rc = "c03-04-rule-change";
     return {
       shots: [
-        clip(t, { at: start("c03"), label: "Hotel Lumo kitchen · Agent", url: `${K}/k`, sync: has(t) ? [[ev(t, "typing"), cue("c03-1", "Let's try", -0.2)], [ev(t, "refused"), cue("c03-1", "It answers", -0.2)]] : undefined, zoom: [{ at: cue("c03-1", "It answers", 0.3), s: 1.12, x: 0.35, y: 0.55 }] }, "“Ignore the limit…”: refused with the reason"),
+        clip("c02-06-placed-alone", { at: start("c03"), label: "Hotel Lumo kitchen · placed alone", url: `${K}/k`, from: 18.5, sync: has("c02-06-placed-alone") ? [[ev("c02-06-placed-alone", "placed alone"), cue("c03-1", "this smaller order", 0)]] : undefined, zoom: [{ at: cue("c03-1", "this smaller order", 0.3), s: 1.1, x: 0.4, y: 0.6 }] }, "An order within the limit, placed by the agent alone"),
+        clip(t, { at: cue("c03-1", "So can you", -0.3), label: "Hotel Lumo kitchen · Agent", url: `${K}/k`, sync: has(t) ? [[ev(t, "typing"), cue("c03-1", "Let's try", -0.2)], [ev(t, "refused"), cue("c03-1", "It answers", -0.2)]] : undefined, zoom: [{ at: cue("c03-1", "It answers", 0.3), s: 1.12, x: 0.35, y: 0.55 }] }, "“Ignore the limit…”: refused with the reason"),
         clip(mi, { at: partAt("c03-2", -0.2), label: "Hotel Lumo kitchen · mistake check", url: `${K}/k`, sync: has(mi) ? [[ev(mi, "typed"), cue("c03-2", "Ask for", -0.4)], [ev(mi, "the mistake check"), cue("c03-2", "and it asks", -0.2)], [ev(mi, "one tap"), cue("c03-2", "One tap", 0)]] : undefined, zoom: [{ at: cue("c03-2", "and it asks", 0.2), s: 1.12, x: 0.35, y: 0.7 }] }, "The mistake check and its one-tap correction"),
         clip(rf, { at: partAt("c03-3", -0.2), label: "Kahvila Sointu · Agent", url: `${K}/k`, sync: has(rf) ? [[ev(rf, "typed"), cue("c03-3", "we ask", -0.3)], [ev(rf, "refused"), cue("c03-3", "Refused", -0.2)]] : undefined, zoom: [{ at: cue("c03-3", "Refused", 0.3), s: 1.1, x: 0.4, y: 0.6 }] }, "A refused product in Kahvila Sointu, the rule named"),
         clip(rc, { at: cue("c03-3", "The agent offers", -0.3), from: 4.5, label: "Kahvila Sointu · the rule change", url: `${K}/k`, sync: has(rc) ? [[ev(rc, "the change drafted"), cue("c03-3", "draft a rule", 0)], [ev(rc, "widening"), cue("c03-3", "passkey too", 0.3)]] : undefined, zoom: [{ at: cue("c03-3", "needs the", 0.2), s: 1.1, x: 0.45, y: 0.6 }] }, "The rule-change sign-off slab"),
         { clip: "film", at: partAt("c03-4", -0.2), full: true, sync: [[36.6, partAt("c03-4", 0)]], until: 49.6 },
       ],
       callouts: [
+        { at: cue("c03-1", "Inside its limit", 0.2), text: "Within its limit, the agent orders alone", pos: "tr", dur: 120 },
         { at: cue("c03-1", "Nothing is placed"), text: "A yes passed on is not a sign-off", pos: "tr", dur: 110 },
         { at: cue("c03-4", "Every figure", 0), text: "Every figure checked against the tools' results", pos: "bc", dur: 170 },
       ],
@@ -118,7 +105,12 @@ export const EDL: Record<string, () => ChapterEdit> = {
   c04: () => ({
     shots: [
       ...(dishB()
-        ? ([{ clip: "c04-03-dish-flow", at: start("c04"), label: "Hotel Lumo kitchen · a dish", url: `${K}/k`, from: 0.2, sync: dishSync() }] as Shot[])
+        ? ([
+            { clip: "c04-03-dish-flow", at: start("c04"), label: "Hotel Lumo kitchen · a dish", url: `${K}/k`, from: 6.6, sync: [[ev("c04-03-dish-flow", "it asks what"), cue("c04-1", "it asks what", 0)]] },
+            { clip: "c04-03-dish-flow", at: cue("c04-1", "then offers", -0.2), label: "Hotel Lumo kitchen · a dish", url: `${K}/k`, from: ev("c04-03-dish-flow", "three ideas") - 0.3, until: ev("c04-03-dish-flow", "typed: The first") - 0.2, masks: Math.abs(CLIPS["c04-03-dish-flow"].seconds - 45.333) < 0.05 ? [{ x: 698, y: 826, w: 450, h: 36, color: "#f4f9f9", fade: 0 }] : undefined },
+            { clip: "c04-03-dish-flow", at: cue("c04-1", "Pick one", -0.2), label: "Hotel Lumo kitchen · a dish", url: `${K}/k`, from: ev("c04-03-dish-flow", "the dish card") - 1.0, sync: [[ev("c04-03-dish-flow", "the dish card"), cue("c04-1", "it shows what", 0)]], zoom: [{ at: cue("c04-1", "it shows what", 0.3), s: 1.1, x: 0.4, y: 0.4 }] },
+            { clip: "c04-03-dish-flow", at: cue("c04-1", "Under the dish", -0.2), label: "Hotel Lumo kitchen · a dish", url: `${K}/k`, from: ev("c04-03-dish-flow", "the product list") - 0.5, sync: [[ev("c04-03-dish-flow", "the product list"), cue("c04-1", "Under the dish", 0.2)]], zoom: [{ at: cue("c04-1", "Under the dish", 0.4), s: 1.1, x: 0.4, y: 0.7 }] },
+          ] as Shot[])
         : []),
       ...(dishB() ? [] : [clip("c04-03b-menu-planner", { at: start("c04"), label: "Hotel Lumo kitchen · menu planner", url: `${K}/k`, from: 0.2, sync: has("c04-03b-menu-planner") ? [[ev("c04-03b-menu-planner", "the Menu planner tab"), cue("c04-1", "In the menu", -0.2)], [ev("c04-03b-menu-planner", "Plan it"), cue("c04-1", "The agent drafts", -0.3)], [ev("c04-03b-menu-planner", "the plan:"), cue("c04-1", "The plan shows", -0.3)]] : undefined }, "The Menu planner: you have, I'll order, can't get")]),
       clip("c04-01-watch", { at: partAt("c04-2", -0.2), label: "Hotel Lumo kitchen · the watch", url: `${K}/k`, until: 4.6, sync: has("c04-01-watch") ? [[ev("c04-01-watch", "the watch's opening"), cue("c04-2", "Here's its", -0.3)]] : undefined, zoom: [{ at: cue("c04-2", "Here's its", 0.2), s: 1.12, x: 0.35, y: 0.3 }] }, "The watch's opening note"),

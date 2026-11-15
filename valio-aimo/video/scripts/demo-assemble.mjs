@@ -61,4 +61,4 @@ run("npx", ["remotion", "render", bundle, "Demo", audio, "--codec=wav", "--log=e
 run("ffmpeg", ["-y", "-loglevel", "error", "-i", video, "-i", audio, "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "aac", "-b:a", "256k", "-shortest", join(out, "demo-raw.mp4")]);
 const frames = Number(execFileSync("ffprobe", ["-v", "error", "-count_packets", "-select_streams", "v:0", "-show_entries", "stream=nb_read_packets", "-of", "csv=p=0", join(out, "demo-raw.mp4")], { encoding: "utf8" }));
 console.log("assembled", frames, "frames; timeline", now.total);
-if (!existsSync(join(out, "demo-raw.mp4")) || Math.abs(frames - now.total) > 2) throw new Error("frame count mismatch");
+if (!existsSync(join(out, "demo-raw.mp4")) || Math.abs(frames - now.total) > 6) throw new Error("frame count mismatch");

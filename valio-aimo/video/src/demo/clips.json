@@ -138,6 +138,18 @@
    "See this order as the wholesaler sees it": 10.3
   }
  },
+ "c02-06-placed-alone": {
+  "seconds": 26.6,
+  "size": "1920x1080@30/1",
+  "chapter": "c02",
+  "what": "Hotel Lumo: 420 L within the 500 € limit is placed by the agent alone; the sentence that it is recorded at the fixed price and now with the wholesaler's team to confirm, and the state under the order",
+  "events": {
+   "typed: an order within the limit": 0.83,
+   "options at fixed prices": 10.54,
+   "typed: The first one.": 14.07,
+   "placed alone (under the 500 € limit): recorded at the fixed price, now with the wholesaler's team to confirm": 21.28
+  }
+ },
  "c03-01-talk-round": {
   "seconds": 15.033,
   "size": "1920x1080@30/1",
@@ -149,15 +161,15 @@
   }
  },
  "c03-02-mistake": {
-  "seconds": 24.2,
+  "seconds": 23.767,
   "size": "1920x1080@30/1",
   "chapter": "c03",
   "what": "Hotel Lumo: an order ten times the usual amount; the agent stops and asks before ordering; one tap corrects it",
   "events": {
-   "typed: an order ten times the usual amount": 0.86,
-   "the mistake check: it asks before ordering anything": 11.75,
-   "one tap: Make it 420 L": 17.35,
-   "corrected amount carried on": 20.69
+   "typed: an order ten times the usual amount": 0.9,
+   "the mistake check: it asks before ordering anything": 11.33,
+   "one tap: Make it 420 L": 16.91,
+   "corrected amount carried on": 20.24
   }
  },
  "c03-03-refused": {
@@ -203,6 +215,21 @@
    "a poor delivery record: it offers a backup in advance": 9.94,
    "typed: Yes, line it up.": 14.46,
    "the backup lined up; nothing extra bought": 20.41
+  }
+ },
+ "c04-03-dish-flow": {
+  "seconds": 46.233,
+  "size": "1920x1080@30/1",
+  "chapter": "c04",
+  "what": "Hotel Lumo, in the conversation: \"Plan a lunch dish for 20 on Friday.\" then \"Something warming with fish.\"; three ideas; \"The first one.\" gives the dish card (You have / I'll order / Can't get) and the product list with delivery-record and carbon marks and the summary under the total",
+  "events": {
+   "typed: Plan a lunch dish for 20 on Friday.": 1.11,
+   "it asks what the kitchen is in the mood for": 8.52,
+   "typed: Something warming with fish.": 12.09,
+   "three ideas": 20.04,
+   "typed: The first one.": 24.56,
+   "the dish card: You have / I'll order / Can't get, with reasons": 34.07,
+   "the product list: delivery-record and carbon marks, the summary under the total": 39.26
   }
  },
  "c04-03b-menu-planner": {
@@ -562,6 +589,33 @@
   "events": {
    "typing the attempt to talk it round": 0.64,
    "refused, with the reason: a yes passed on is not the manager's OK; nothing placed": 10.71
+  }
+ },
+ "previous/c03-02-mistake": {
+  "seconds": 24.2,
+  "size": "1920x1080@30/1",
+  "chapter": "c03",
+  "what": "Hotel Lumo: an order ten times the usual amount; the agent stops and asks before ordering; one tap corrects it",
+  "events": {
+   "typed: an order ten times the usual amount": 0.86,
+   "the mistake check: it asks before ordering anything": 11.75,
+   "one tap: Make it 420 L": 17.35,
+   "corrected amount carried on": 20.69
+  }
+ },
+ "previous/c04-03-dish-flow": {
+  "seconds": 45.333,
+  "size": "1920x1080@30/1",
+  "chapter": "c04",
+  "what": "Hotel Lumo, in the conversation: \"Plan a dish for 40 covers for Friday.\" then \"Surprise me.\"; three ideas; \"The first one.\" gives the dish card (You have / I'll order / Can't get) and the product list with delivery-record and carbon marks and the summary under the total",
+  "events": {
+   "typed: Plan a dish for 40 covers for Friday.": 0.77,
+   "it asks what the kitchen is in the mood for": 8.59,
+   "typed: Surprise me.": 12.2,
+   "three ideas": 19.36,
+   "typed: The first one.": 23.87,
+   "the dish card: You have / I'll order / Can't get, with reasons": 33.16,
+   "the product list: delivery-record and carbon marks, the summary under the total": 38.34
   }
  },
  "previous/c06-02-orders": {
