@@ -14,10 +14,10 @@ import { getRuntime, type Runtime } from "@/server/runtime";
 import { runAgent, remember, type AgentRunResult } from "./agent";
 import { cardId, gateCard, orderCard } from "./cards";
 import { withTurn } from "./context";
-import { byLine, checkOpen, read, record, runAction, step, type ItemOutcome, type TurnRun } from "./pipeline";
+import { byLine, checkOpen, read, record, REPEAT_SCALED, runAction, splitItems, step, type ItemOutcome, type TurnRun } from "./pipeline";
 import { earlierFor } from "./earlier";
 import { ThreadStore, type StoredThread } from "./store";
-import { subjectOf } from "./subject";
+import { isShort, subjectOf } from "./subject";
 import { localName, optionNames, optionsSaid, orderAsk } from "./options-said";
 import { runWidget } from "./widgets";
 import { speakFacts } from "./speak";
@@ -1359,6 +1359,25 @@ function sayRulesStand(run: TurnRun): void {
   record(run, "pressured", "The buyer asked to skip the rules or the OK: said in words that the rules stand.", {});
 }
 
+/**
+ * Start the reading of a plain request before the agent asks for it, in exactly the form the order tool asks for it
+ * (agent.ts order: the buyer's words, the earlier requests they point at). Only for words that read as one request:
+ * not a question, not a follow-up of the request on the table, not several items. What the agent decides is not
+ * touched: if it never calls the order tool, the reading is simply not used.
+ */
+export function readAhead(run: TurnRun, words: string): boolean {
+  if (run.buyer.action || !worthReading(words) || /\?\s*$/.test(words.trim())) return false;
+  if (subjectOf(run) && isShort(words)) return false;
+  if (splitItems(words).length > 1 || REPEAT_SCALED.test(words)) return false;
+  // The same key the tool's reading will have: its words trimmed (agent.ts), typos fixed (pipeline.ts orderFromWords).
+  const said = words.trim();
+  void earlierFor(run, said, {})
+    .then((earlier) => read(run, fixTypos(said), earlier))
+    .catch(() => undefined);
+  record(run, "read_ahead", "The request's reading started alongside the agent's first call.", {});
+  return true;
+}
+
 /** The end of an agent turn: what to remember, its status (waiting for the buyer, for a person, or done) and the record. */
 async function finishTurn(run: TurnRun): Promise<void> {
   const { store, thread } = run;
@@ -1380,8 +1399,11 @@ async function finishTurn(run: TurnRun): Promise<void> {
   record(run, "turn_done", `Agent turn finished (${a.status}, ${ended.outcome}${ended.rule ? ` by ${ended.rule}` : ""}) in ${Date.now() - run.t0} ms: ${a.cards.map((c) => c.type).join(", ") || "no cards"}.`, { status: a.status, ...ended, ms: Date.now() - run.t0, marks: a.marks, cards: a.cards.map((c) => c.type), requests: [...run.requests], orders: [...run.orders.keys()] });
   // A turn that ends with nothing for the buyer (no sentence, no card) failed them, whatever its status says.
   if (!a.line?.trim() && !a.cards.length) turnFailed(run, "empty_reply");
-  // What to remember comes after: the memory writer reads the order with a model, and nothing waits for it.
-  await proposeMemory(run);
+  // What to remember comes after: the memory writer reads the order with a model, and nothing waits for it, not even
+  // the buyer's next message (it used to hold the turn up to MEMORY_STEP_WAIT_MS); its card is saved when it is ready.
+  void proposeMemory(run)
+    .catch(() => undefined)
+    .finally(() => store.save(thread));
 }
 
 // ---------- a door that converses itself (the voice call) ----------
@@ -1616,6 +1638,9 @@ async function paused(run: TurnRun): Promise<void> {
 
 /** The agent loop for words (or a nudge from the engine), with the thread's history; the loop's messages are kept. */
 async function agentTurn(run: TurnRun, words: string | undefined, nudge?: string): Promise<AgentRunResult> {
+  // The reading the order tool will ask for, started while the agent's first call decides to make it (pipeline.ts read
+  // shares one reading per words in a turn): the reader's seconds overlap the agent's instead of following them.
+  if (words) readAhead(run, words);
   const history = trim(run.thread.messages);
   const user: ModelMessage = { role: "user", content: words ?? nudge ?? "" };
   let res: AgentRunResult;
