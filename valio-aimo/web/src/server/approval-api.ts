@@ -6,6 +6,7 @@ import { currentApprover } from "./approver-session";
 import { demoTapEnabled } from "./config";
 import { approvalRecallFlags } from "./radar/views";
 import type { Runtime } from "./runtime";
+import { accountOfOrg, phoneJoins } from "./accounts/phone-join";
 
 /** Who must sign an approval, and how. */
 export async function approverOf(rt: Runtime, approvalId: string) {
@@ -43,6 +44,12 @@ export async function requireApprovalReader(rt: Runtime, req: Request, approvalI
   if (token && (await rt.dock.approvalTokenMatches(approvalId, token))) return;
   const who = await principalOf(req, rt);
   if (canRead(who, c.order.orgId)) return;
+  // In a shared test kitchen or a fresh kitchen (public demo kitchens), a phone that may not open it is told what to do:
+  // any phone joins from the kitchen's screen. Anywhere else a stranger still cannot tell it exists (the phone's screen
+  // then says to open it on the approver's phone, or with the link they were sent).
+  if (phoneJoins(await accountOfOrg(rt, c.order.orgId))) {
+    throw new DockError(403, "approval_on_signer_phone", "Tap “Send to my phone” again on the other screen and scan the new code.", "data_access", { join: true });
+  }
   throw new DockError(404, "approval_not_found", `No approval ${approvalId} for you. Open it on the approver's phone, or with the link AimoPilot sent them.`, "data_access");
 }
 
