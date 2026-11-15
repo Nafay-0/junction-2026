@@ -13,7 +13,7 @@ rule for everything public: accuracy figures yes, speed or latency figures no.
       git-ignored), or add the judges, or say on the form that the live site is the demo.
 - [ ] **The film.** Upload it, check it plays logged out, paste the link below and into the landing page's film slot.
 - [ ] **Deck** exported to PDF (outline in `pitch-3min.md`).
-- [ ] **The full two-sentence request.** Confirm the fix is deployed before the table (`table-demo.md`).
+- [x] **The full two-sentence request.** Fixed and deployed: run on the hosted site on 15 Nov by two reviewers with two phones, both sign-offs went through (`table-demo.md`).
 - [ ] Recount the commit numbers for the AI statement on the morning you submit (commands at the end).
 
 ## Name
@@ -53,7 +53,7 @@ The kitchen's buying agent, typed or hands-free by voice (spoken words go throug
 On 189 test requests over the same 17,546 products, the right product came first for BM25 in 31 % of requests, keyword search 40 %, a standard hybrid 58 %, semantic k-NN 72 %, AimoPilot 97 %: vector and keyword recall inside the kitchen's hard rules, a decision model as judge, and code checking the judge.
 
 ### For the wholesaler
-An operations portal: every agent at the door with a scorecard, any request replayed step by step, each safeguard and how often it fired, suspending an agent, and a Time machine that re-runs the real gate on an order with the rules as they stood then and as they are now. Looking needs no passcode.
+An operations portal: every agent at the door with a scorecard, any request replayed step by step, each safeguard and how often it fired, suspending an agent, and a Time machine that re-runs the real gate on an order with the rules as they stood then and as they are now. Staff confirm each placed order for delivery, or say why not, and the kitchen is told. Looking needs no passcode.
 
 ### Open by design
 MCP (Streamable HTTP) and REST with OpenAPI 3.1, an RFC 9727 API catalogue, an RFC 7517 key set. Buyers built on seven agent frameworks (Pydantic AI, OpenAI Agents SDK, Google ADK, Claude Agent SDK, Vercel AI SDK, LangGraph, Semantic Kernel over OpenAPI) reached a person's sign-off with only the address and a signed mandate.
@@ -68,7 +68,7 @@ Runtime (the app), PostgreSQL (orders, ledger, memory, telemetry, the Time machi
 Demo on synthetic data with the partner's test API; no order reaches a real order system. Mail reaches real inboxes only once a sending domain is verified. The crash-test licence can be enforced by the gate but is not applied on the hosted site. Consumer assistants connect through a secret address; OAuth is designed, not built. Full list: docs/pitch/valio-judges.md.
 ```
 
-(4,626 characters as written. Check the count in the form before submitting.)
+(4,713 characters as written. Check the count in the form before submitting.)
 
 ## What is innovative (if the form or a juror asks; also the opening of the table demo)
 
