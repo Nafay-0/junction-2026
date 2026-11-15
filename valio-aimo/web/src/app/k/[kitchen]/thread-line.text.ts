@@ -56,6 +56,7 @@ export const THREAD_LINE_TEXT = defineText({
       signOffMany: (n: number, newest: string) => `${n} orders are waiting for your OK; the newest is **${newest}**.`,
       allWaiting: (n: number) => `See all ${n} waiting for an OK`,
       cutoff: (product: string, time: string) => `The order time for ${product} closes at {{${time}}}.`,
+      cutoffs: (products: string[], time: string) => `Order by {{${time}}} today for ${products.map((p) => `the ${p}`).reduce((a, p, i, all) => (i === 0 ? p : i === all.length - 1 ? `${a} and ${p}` : `${a}, ${p}`), "")}.`,
       drift: (d: { what: string; usual: string; amountPct: number | null; pricePct: number | null; day?: string }) =>
         [
           d.amountPct !== null ? `Your last ${d.what} orders are **${Math.abs(d.amountPct)} %** ${d.amountPct > 0 ? "above" : "below"} the usual **${d.usual}**${d.pricePct !== null && Math.abs(d.pricePct) >= 10 ? `, and the price is ${d.pricePct > 0 ? "up" : "down"} **${Math.abs(d.pricePct)} %**` : ""}.` : `The price of your usual ${d.what} is ${(d.pricePct ?? 0) > 0 ? "up" : "down"} **${Math.abs(d.pricePct ?? 0)} %**.`,
@@ -156,6 +157,7 @@ export const THREAD_LINE_TEXT = defineText({
       signOffMany: (n: number, newest: string) => `${n} tilausta odottaa hyväksyntääsi; uusin on **${newest}**.`,
       allWaiting: (n: number) => `Kaikki ${n} hyväksyntää odottavaa`,
       cutoff: (product: string, time: string) => `Tuotteen ${product} tilausaika päättyy {{${time}}}.`,
+      cutoffs: (products: string[], time: string) => `Tilaa ${products.reduce((a, p, i, all) => (i === 0 ? p : i === all.length - 1 ? `${a} ja ${p}` : `${a}, ${p}`), "")} tänään {{${time}}} mennessä.`,
       drift: (d: { what: string; usual: string; amountPct: number | null; pricePct: number | null; day?: string }) =>
         [
           d.amountPct !== null ? `Viimeisimmät tilauksesi (${d.what}) ovat **${Math.abs(d.amountPct)} %** ${d.amountPct > 0 ? "suurempia" : "pienempiä"} kuin tavallinen **${d.usual}**${d.pricePct !== null && Math.abs(d.pricePct) >= 10 ? `, ja hinta on ${d.pricePct > 0 ? "noussut" : "laskenut"} **${Math.abs(d.pricePct)} %**` : ""}.` : `Tavallisen tuotteen (${d.what}) hinta on ${(d.pricePct ?? 0) > 0 ? "noussut" : "laskenut"} **${Math.abs(d.pricePct ?? 0)} %**.`,
@@ -255,6 +257,7 @@ export const THREAD_LINE_TEXT = defineText({
       signOffMany: (n: number, newest: string) => `${n} beställningar väntar på ditt godkännande; den senaste är **${newest}**.`,
       allWaiting: (n: number) => `Se alla ${n} som väntar på godkännande`,
       cutoff: (product: string, time: string) => `Beställningstiden för ${product} går ut {{${time}}}.`,
+      cutoffs: (products: string[], time: string) => `Beställ ${products.reduce((a, p, i, all) => (i === 0 ? p : i === all.length - 1 ? `${a} och ${p}` : `${a}, ${p}`), "")} senast {{${time}}} i dag.`,
       drift: (d: { what: string; usual: string; amountPct: number | null; pricePct: number | null; day?: string }) =>
         [
           d.amountPct !== null ? `Dina senaste beställningar av ${d.what} ligger **${Math.abs(d.amountPct)} %** ${d.amountPct > 0 ? "över" : "under"} det vanliga **${d.usual}**${d.pricePct !== null && Math.abs(d.pricePct) >= 10 ? `, och priset har ${d.pricePct > 0 ? "stigit" : "sjunkit"} **${Math.abs(d.pricePct)} %**` : ""}.` : `Priset på din vanliga ${d.what} har ${(d.pricePct ?? 0) > 0 ? "stigit" : "sjunkit"} **${Math.abs(d.pricePct ?? 0)} %**.`,

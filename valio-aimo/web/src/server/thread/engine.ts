@@ -1280,9 +1280,9 @@ function sayOptionsInWords(run: TurnRun): void {
   const here = run.store.agentTurn(run.thread, run.turnId);
   const card = here?.cards.find((c) => c.type === "options" && !c.chosen && !c.adjusted);
   if (card?.type !== "options" || !here) return;
-  const said = optionsSaid(card.options, run.lang ?? "en");
-  if (!said) return;
   const line = here.line ?? "";
+  const said = optionsSaid(card.options, run.lang ?? "en", { standInSaid: /\b(in place of|instead|i'd send|tilalle|tilalla|i stället)\b/i.test(line) });
+  if (!said) return;
   const parts = line.split(/(?<=[.!?])\s+/).filter(Boolean);
   const lang = run.lang ?? "en";
   const usable = card.options.filter((o) => o.gate?.outcome !== "reject").slice(0, 3);

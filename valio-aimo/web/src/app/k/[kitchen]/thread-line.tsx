@@ -741,7 +741,13 @@ function todaySentence(card: TodayCard, tx: Tx, f: ReturnType<typeof useFormat>)
       if (waiting.length > 1 && i !== waiting[0]) continue;
       parts.push(waiting.length > 1 ? tx.today.signOffMany(waiting.length, money(i.totalCents)) : tx.today.signOff(money(i.totalCents), ""));
     }
-    else if (i.kind === "cutoff") parts.push(tx.today.cutoff(i.name, clock(i.orderBy)));
+    else if (i.kind === "cutoff") {
+      // Several closing at the same time: one sentence, each product by its short name.
+      const time = clock(i.orderBy);
+      const same = card.items.slice(0, 3).filter((x): x is Extract<TodayCard["items"][number], { kind: "cutoff" }> => x.kind === "cutoff" && clock(x.orderBy) === time);
+      if (i !== same[0]) continue;
+      parts.push(tx.today.cutoffs(same.map((x) => x.short ?? x.name), time));
+    }
     else if (i.kind === "drift") {
       // What changed, with its figures, and the one question a yes answers (the next one at the usual amount): only
       // for the first drift, and only when nothing waits for a person's OK.

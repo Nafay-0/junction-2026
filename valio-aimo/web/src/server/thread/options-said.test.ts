@@ -45,3 +45,13 @@ describe("options named so the buyer can tell them apart", () => {
     expect(orderAsk("Valio Arki Eila semi", "en")).toBe("Shall I order the Valio Arki Eila semi, or another one?");
   });
 });
+
+describe("a stand-in first", () => {
+  it("is said as the stand-in for the usual, unless the reply says so already", () => {
+    const sub = (o: OptionView) => ({ ...o, lines: o.lines.map((l) => ({ ...l, substituteFor: "usual-1" })) }) as OptionView;
+    const two = [sub(opt("Valio Hyvä suomalainen Arki® Eila® semi skimmed milk drink 1 l lactose free", 101_000, ["cheapest"])), opt("Valio semi skimmed milk 1 l lactose free UHT", 156_000, [])];
+    expect(optionsSaid(two, "en")).toMatch(/^In place of your usual, the Valio Arki Eila is first at \*\*1 010,00 €\*\*/);
+    expect(optionsSaid(two, "en", { standInSaid: true })).toMatch(/^The Valio Arki Eila is first/);
+    expect(optionsSaid(two, "fi")).toMatch(/^Tavallisen tilalle Valio Arki Eila kevyt on ensimmäinen/);
+  });
+});
