@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Check, ChevronDown, Mic, ScanFace, Sparkles } from "lucide-react";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useFormat, useText } from "../../_i18n/provider";
@@ -167,7 +168,7 @@ function VisitorNote() {
     <li className="relative" data-visitor-note>
       <p className="text-[0.86rem] text-ink-soft">
         {tx.otherVisitor.before}
-        <a href="/k" className="text-petrol underline decoration-petrol/40 underline-offset-4">{tx.otherVisitor.link}</a>
+        <Link href="/k" className="text-petrol underline decoration-petrol/40 underline-offset-4">{tx.otherVisitor.link}</Link>
         {tx.otherVisitor.after}
       </p>
     </li>
