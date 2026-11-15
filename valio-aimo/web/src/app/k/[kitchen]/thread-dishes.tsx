@@ -107,6 +107,15 @@ export function Dishes({
       </section>
     );
   }
+  // A reason shared by several lines ("give the number of covers …") is said once, at its first line, not per line.
+  const firstWith = new Map<string, string>();
+  for (const d of card.dishes)
+    for (const i of d.items)
+      if (i.note) {
+        const k = `${i.note.code}:${noteOf(i.note)}`;
+        if (!firstWith.has(k)) firstWith.set(k, i.lineId);
+      }
+  const saysNote = (i: DishesCard["dishes"][number]["items"][number]) => !!i.note && firstWith.get(`${i.note.code}:${noteOf(i.note)}`) === i.lineId;
   return (
     <section aria-label={tx.label} className="mt-3 max-w-[40ch] space-y-2.5">
       {card.dishes.map((d) => {
@@ -138,7 +147,7 @@ export function Dishes({
                         {amountOf(i.need.amount, i.need.unit, lang)}
                       </span>
                     )}
-                    {i.note && (
+                    {i.note && saysNote(i) && (
                       <span
                         className={`italic ${i.note.code === "changed" ? "text-petrol" : i.note.code === "late" || i.note.code === "left_out" ? "text-notice" : ""}`}
                       >

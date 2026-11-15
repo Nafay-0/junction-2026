@@ -389,6 +389,11 @@ describe("a second request after a sign-off", () => {
     const token = /[?&]token=([^&]+)/.exec(m.link)![1];
     await rt.dock.decideApproval(m.approvalId, { decision: "approve", proof: { kind: "link_token", token: decodeURIComponent(token) } });
     await new Promise((r) => setTimeout(r, 300));
+    // The OK is said once beneath the words said before it: the store's sentence, not the agent's again.
+    const store = await threadStore();
+    const after = store.agentTurn(store.peek("laakso")!, placed.events.find((e) => e.type === "status")?.turnId ?? "")?.line ?? "";
+    expect(after.match(/OK'd it/g) ?? []).toHaveLength(1);
+    expect(after).not.toMatch(/Signed and placed/);
     // The next request: the provider would refuse a history with an unanswered tool call.
     let sent = "";
     setInterpretModelForTests(reader(20));

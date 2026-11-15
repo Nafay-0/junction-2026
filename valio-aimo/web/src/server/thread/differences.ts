@@ -20,6 +20,8 @@ export type Reason =
   | { code: "rule"; text: string; source?: string }
   /** A forbidden allergen of the kitchen's (its mandate's allergen list) found in the only product there is. */
   | { code: "allergen"; allergens: string[] }
+  /** The only product there is has no allergen data from its maker, and the kitchen forbids these allergens. */
+  | { code: "allergen_unknown"; allergens: string[] }
   | { code: "not_sold" }
   | { code: "cannot_arrive"; day?: string; text?: string }
   | { code: "not_priced" }
@@ -118,6 +120,11 @@ export function sayDifferences(diffs: Difference[], c: Context): { said: string;
     const a = list([...new Set(allergic.flatMap((d) => (d.reason.code === "allergen" ? d.reason.allergens : [])))].map((x) => attrL(x, lang).toLowerCase()), lang);
     parts.push(fi ? `${cap(names(allergic))}: löytämässäni tuotteessa on ${a}, jonka sääntönne (kielletyt allergeenit) sulkevat pois.` : sv ? `${cap(names(allergic))}: produkten jag hittade innehåller ${a}, som era regler (förbjudna allergener) utesluter.` : `${cap(names(allergic))}: the product I found contains ${a}, which your rules (the kitchen's forbidden allergens) rule out.`);
   }
+  const unknownAllergens = by("allergen_unknown");
+  if (unknownAllergens.length) {
+    const a = list([...new Set(unknownAllergens.flatMap((d) => (d.reason.code === "allergen_unknown" ? d.reason.allergens : [])))].map((x) => attrL(x, lang).toLowerCase()), lang);
+    parts.push(fi ? `${cap(names(unknownAllergens))}: löytämäni tuotteen valmistaja ei kerro allergeeneja, joten mikään ei osoita, ettei siinä ole ${a}, jotka sääntönne kieltävät.` : sv ? `${cap(names(unknownAllergens))}: tillverkaren av produkten jag hittade anger inga allergener, så inget visar att den är fri från ${a}, som era regler utesluter.` : `${cap(names(unknownAllergens))}: the maker of the product I found gives no allergen data, so nothing shows it is free of ${a}, which your rules rule out.`);
+  }
   const notSold = by("not_sold");
   if (notSold.length) parts.push(fi ? `Tukulla ei ole myynnissä: ${names(notSold)}.` : sv ? `Grossisten säljer inte ${names(notSold)}.` : `The wholesaler doesn't sell ${names(notSold)}.`);
   const late = by("cannot_arrive");
@@ -131,7 +138,8 @@ export function sayDifferences(diffs: Difference[], c: Context): { said: string;
   const unknown = by("unknown");
   if (unknown.length) parts.push(fi ? `En saanut selville, miksi ${names(unknown)} jää pois.` : sv ? `Jag kunde inte ta reda på varför ${names(unknown)} blir kvar.` : `I couldn't find out why ${names(unknown)} ${unknown.length > 1 ? "are" : "is"} left off.`);
   for (const d of diffs) {
-    if (d.kind === "swapped") parts.push(fi ? `${cap(low(d.name))}: tilalla ${d.to}.` : sv ? `${cap(low(d.name))}: ${d.to} i stället.` : `${cap(low(d.name))}: ${d.to} in its place.`);
+    // A sentence, never a label: "In place of the lactose-free milk I'd send the Valio Arki Eila semi."
+    if (d.kind === "swapped") parts.push(fi ? `Tilalle tulisi ${d.to} (${low(d.name)}).` : sv ? `I stället för ${low(d.name)} skulle jag skicka ${d.to}.` : `In place of the ${low(d.name)} I'd send the ${d.to}.`);
     if (d.kind === "reduced") parts.push(fi ? `${cap(low(d.name))}: vain ${amt(d.to)} pyytämästäsi ${amt(d.from)}.` : sv ? `${cap(low(d.name))}: bara ${amt(d.to)} av de ${amt(d.from)} du bad om.` : `${cap(low(d.name))}: only ${amt(d.to)} of the ${amt(d.from)} you asked for.`);
     // "come in packs of 8,1 kg: 2 packs is 16,2 kg rather than 16 kg": the amount in the buyer's unit and in packs.
     if (d.kind === "rounded_up" && d.pack && d.pack.count > 0) parts.push(fi ? `${cap(low(d.name))} tulee ${amt({ amount: d.pack.size, unit: d.pack.unit })}:n pakkauksissa: ${d.pack.count} pakkausta on ${amt(d.to)} eikä ${amt(d.from)}.` : sv ? `${cap(low(d.name))} kommer i förpackningar om ${amt({ amount: d.pack.size, unit: d.pack.unit })}: ${d.pack.count} förpackningar är ${amt(d.to)} i stället för ${amt(d.from)}.` : `${cap(low(d.name))} come${/s$/i.test(d.name) ? "" : "s"} in packs of ${amt({ amount: d.pack.size, unit: d.pack.unit })}: ${d.pack.count} pack${d.pack.count === 1 ? " is" : "s are"} ${amt(d.to)} rather than ${amt(d.from)}.`);
@@ -167,4 +175,16 @@ export function optionDifferences(a: AskedItem, o: OfferedItem): Difference[] {
     [{ key: a.key, name: a.name, ...(a.amount ? { need: a.amount } : {}), ...(late ? { day: a.day } : {}) }],
     [{ key: a.key, ...(o.delivered ? { amount: o.delivered } : {}), ...(late ? { day: o.deliveryDate } : {}), ...(o.substituteFor && o.title ? { instead: o.title } : {}), ...(o.pack ? { pack: o.pack } : {}) }],
   );
+}
+
+/**
+ * The gate's allergen objection on a product, as a reason: the allergens it contains (declared, or by its nature), or
+ * none declared by its maker for the ones the kitchen forbids. Never an allergen the objection does not name.
+ */
+export function allergenReason(text: string, forbidden: string[]): Reason {
+  const found = /contains forbidden allergen\(s\)(?: by its nature)?: ([a-z_ ,]+)/i.exec(text)?.[1];
+  if (found) return { code: "allergen", allergens: found.split(/,\s*/).map((x) => x.trim()).filter(Boolean) };
+  const free = /nothing shows (?:it|\S+) is free of ([^.]+)\./i.exec(text)?.[1];
+  if (free) return { code: "allergen_unknown", allergens: free.split(/,\s*|\s+and\s+/).map((x) => x.trim()).filter(Boolean) };
+  return forbidden.length ? { code: "allergen_unknown", allergens: forbidden } : { code: "unknown" };
 }

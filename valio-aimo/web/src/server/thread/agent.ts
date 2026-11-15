@@ -1,3 +1,4 @@
+import { dayIn } from "./dish";
 import { randomBytes } from "node:crypto";
 import { isStepCount, ToolLoopAgent, tool, type LanguageModel, type ModelMessage, type ToolSet } from "ai";
 import type { LanguageModelV4 } from "@ai-sdk/provider";
@@ -238,13 +239,52 @@ const ASKS_CUTOFF = /\b(cut-?offs?|order by|deadline|order time|latest (time|i c
 /**
  * "When is the cut-off for milk?": the order-by times of the kitchen's recurring products (the home's own live check,
  * at most three products, cached ten minutes), only when the words ask about one, so the answer is a time and a day.
+ * "When is the cut-off for Friday delivery?": the same question for that day, of the product on the table (the newest
+ * options) or else the kitchen's recurring products, in one live check for that day; never the question back.
  */
 async function standingTimes(run: TurnRun, words: string): Promise<string> {
   if (!ASKS_CUTOFF.test(words)) return "";
+  const day = cutoffDay(words);
+  if (day) {
+    const rows = await cutoffsFor(run, day).catch(() => []);
+    if (rows.length) return `ORDER TIMES FOR DELIVERY ON ${day} (the wholesaler's own, live, just checked for the day the buyer asked about): ${rows.join("; ")}. Say the product, the time and the day as stated; never that you lack it, never the question back.`;
+  }
   const { standingCutoffs } = await import("@/server/kitchen-portal");
   const cut = await standingCutoffs(run.k).catch(() => undefined);
   const rows = (cut?.items ?? []).flatMap((c) => (c.result?.offer?.orderBy ? [`${c.name} (a product the kitchen orders every week): order by ${c.result.offer.orderBy} for delivery ${c.result.offer.deliveryDate}`] : []));
+  if (rows.length) run.facts.push({ cutoffs: cut!.items });
   return rows.length ? `ORDER TIMES OF THE KITCHEN'S RECURRING PRODUCTS (the wholesaler's own, live): ${rows.join("; ")}.` : "";
+}
+
+/** The delivery day a cut-off question names ("for Friday delivery", "huomiseksi"), or none. */
+export function cutoffDay(words: string): string | undefined {
+  const iso = /\b(\d{4}-\d{2}-\d{2})\b/.exec(words)?.[1];
+  return iso ?? dayIn(words);
+}
+
+/** The products a cut-off question is about: the ones on the table (newest options, first two), else the kitchen's recurring ones. */
+async function cutoffsFor(run: TurnRun, day: string): Promise<string[]> {
+  const cards = run.store.cards(run.thread).map((x) => x.card);
+  const opts = cards.filter((c) => c.type === "options").at(-1);
+  let items: { productId: string; name: string }[] = opts?.type === "options" ? opts.options.slice(0, 2).flatMap((o) => o.lines.map((l) => ({ productId: l.productId, name: l.name }))) : [];
+  const { standingCutoffs, liveCheck } = await import("@/server/kitchen-portal");
+  if (!items.length) items = ((await standingCutoffs(run.k).catch(() => undefined))?.items ?? []).map((i) => ({ productId: i.productId, name: i.name }));
+  items = items.filter((x, i, a) => a.findIndex((y) => y.productId === x.productId) === i).slice(0, 3);
+  if (!items.length) return [];
+  const st = step(run, "lookup", "Checking the order times for that day");
+  const live = await liveCheck(run.k, items.map((i) => i.productId), day);
+  st.done(`${live.results.filter((r) => r.offer).length} of ${items.length}`);
+  // What the reply may say: these times are facts of this turn, checked like any card's.
+  run.facts.push({ cutoffs: items.map((i) => ({ name: i.name, ...live.results.find((x) => x.productId === i.productId) })) });
+  return items.flatMap((i) => {
+    const r = live.results.find((x) => x.productId === i.productId);
+    // The wholesaler states one order time per product, for its earliest delivery: ordering by then makes the day
+    // asked too; a later cut-off for that day is not stated (said as such, never as "I don't have it").
+    const o = r?.offer as { orderBy?: string; orderByFor?: string; deliveryDate: string } | undefined;
+    if (o?.orderBy) return [`${i.name}: the wholesaler states one order time, ${o.orderBy}, for delivery ${o.orderByFor ?? o.deliveryDate}; ordering by then makes ${day} too (a later cut-off for ${day} is not stated)`];
+    if (o) return [`${i.name}: can be delivered ${o.deliveryDate >= day ? o.deliveryDate : day}; the wholesaler states no order time for it`];
+    return r?.message ? [`${i.name}: ${r.message}`] : [];
+  });
 }
 
 /** The context the model gets each turn, after the cached instructions: today, the kitchen, and what is open. */

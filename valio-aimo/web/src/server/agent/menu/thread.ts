@@ -91,6 +91,8 @@ const dishL = (d: { name: string; nameFi?: string | null; nameSv?: string | null
 const list = (xs: string[], lang: Lang) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} ${lang === "fi" ? "ja" : lang === "sv" ? "och" : "and"} ${xs.at(-1)}`);
 const at = (orderBy: string | undefined, lang: Lang) => (orderBy ? `${dayL(localNow(new Date(orderBy)).date, lang)} ${lang === "fi" ? "klo " : lang === "sv" ? "kl. " : "at "}${clock(orderBy)}` : "");
 const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+/** A recipe's name as said in a sentence: no parenthesis ("White fish (pollock or saithe), skinless" is "White fish"). */
+export const spoken = (s: string) => s.replace(/\s*\([^)]*\)?/g, "").replace(/\s*\)/g, "").split(/,\s/)[0].trim() || s;
 /** Sentence case, and no double stop after a date that ends in one ("16.11.."). */
 const upper = (s: string) => (s.charAt(0).toUpperCase() + s.slice(1)).replace(/\.\.(?=\s|$)/g, ".").replace(/\.\?/g, "?");
 
@@ -106,16 +108,16 @@ async function seasonalSay(r: SeasonalResult, rt: Awaited<ReturnType<typeof kit>
   const t = MENU_SAY_TEXT[lang];
   const buying = r.lines.filter((l) => l.product);
   const names = await namesIn(rt, [...buying.map((l) => l.product!.productId), ...(r.anchor?.products.slice(0, 3).map((p) => p.productId) ?? [])], lang);
-  const said = r.lines.filter((l) => l.onHand && l.onHand.source === "said" && !l.toBuy).map((l) => lower(l.ingredient));
-  const est = r.lines.filter((l) => l.onHand && l.onHand.source === "bought" && !l.toBuy).map((l) => `${l.need} ${lower(l.ingredient)}`);
+  const said = r.lines.filter((l) => l.onHand && l.onHand.source === "said" && !l.toBuy).map((l) => lower(spoken(l.ingredient)));
+  const est = r.lines.filter((l) => l.onHand && l.onHand.source === "bought" && !l.toBuy).map((l) => `${l.need} ${lower(spoken(l.ingredient))}`);
   const covers = r.covers ? (lang === "fi" ? `${r.covers} annosta` : lang === "sv" ? `${r.covers} portioner` : `${r.covers} covers`) : "";
   const day = r.deliverBy ? dayL(r.deliverBy, lang) : "";
   const parts = [
     r.anchor ? t.season(r.anchor.label[lang], list(r.anchor.products.slice(0, 3).map((p) => names.get(p.productId) ?? p.name), lang)) : t.noSeason,
-    t.dishes(r.dishes.length, covers, day, list(r.dishes.map((d) => dishL(d, lang)), lang)),
+    t.dishes(r.dishes.length, covers, day, list(r.dishes.map((d) => spoken(dishL(d, lang))), lang)),
     said.length ? t.onHand(list(said, lang)) : "",
     est.length ? t.estimate(list(est, lang)) : "",
-    r.complete ? t.buy(buying.length, money(r.totalCents)) : t.partialTotal(r.covered, r.ingredients, money(r.totalCents), list(r.missing.slice(0, 4).map((m) => lower(m.ingredient)), lang)),
+    r.complete ? t.buy(buying.length, money(r.totalCents)) : t.partialTotal(r.covered, r.ingredients, money(r.totalCents), list(r.missing.slice(0, 4).map((m) => lower(spoken(m.ingredient))), lang)),
     r.gate?.outcome === "needs_human_approval" && r.gate.approver ? t.signOff(r.gate.approver.name) : "",
   ].filter(Boolean);
   const steps = [
@@ -431,8 +433,8 @@ export async function changeMenu(slug: KitchenRef, planId: string, words: string
   const refused = checks.refusedDish ? ` ${t.refused(checks.refusedDish.name, "", t.allergen[checks.refusedDish.allergen] ?? checks.refusedDish.allergen, checks.refusedDish.rule.text)}` : "";
   // What still cannot be made to pass, named with its product and reason: never "one of the products".
   const failing = checks.missing.filter((m) => m.code === "rule" || m.code === "outside_groups" || m.code === "not_sold" || m.code === "cannot_arrive");
-  const still = failing.length ? ` ${t.stillMissing(checks.covered, checks.ingredients, list(failing.slice(0, 4).map((m) => `${lower(m.ingredient)} (${m.words})`), lang))}` : "";
-  const total = checks.complete ? t.newTotal(money(after.view.totals.totalCents), money(before.view.totals.totalCents)) : t.partialTotal(checks.covered, checks.ingredients, money(after.view.totals.totalCents), list(checks.missing.slice(0, 4).map((m) => lower(m.ingredient)), lang));
+  const still = failing.length ? ` ${t.stillMissing(checks.covered, checks.ingredients, list(failing.slice(0, 4).map((m) => `${lower(spoken(m.ingredient))} (${m.words})`), lang))}` : "";
+  const total = checks.complete ? t.newTotal(money(after.view.totals.totalCents), money(before.view.totals.totalCents)) : t.partialTotal(checks.covered, checks.ingredients, money(after.view.totals.totalCents), list(checks.missing.slice(0, 4).map((m) => lower(spoken(m.ingredient))), lang));
   const say = upper(`${what.join(" ")} ${lines} ${total}${refused}${still}`.replace(/\s+/g, " ").trim());
   return { planId, edits, changed, beforeCents: before.view.totals.totalCents, totalCents: after.view.totals.totalCents, say, checks };
 }
@@ -550,7 +552,7 @@ export async function incompleteChoices(slug: KitchenRef, planId: string, lang: 
     if (full.length && ideas) choices.push({ kind: "other_dish", dishes: full.map((x) => ({ name: x.name, ideasId: ideas.ideasId, dishId: x.dishId })), words: t.choiceOther(list(full.map((x) => x.name), lang)) });
   }
   const dishName = record.draft.dishes.map((d) => dishL(d, lang)).join(", ");
-  const say = upper(t.incomplete(dishName, tt.covered, tt.ingredients, list(missing.slice(0, 5).map((m) => `${lower(m.ingredient)}${m.group ? ` (${m.group.split(":")[0]})` : ""}`), lang), tt.definingMissing));
+  const say = upper(t.incomplete(dishName, tt.covered, tt.ingredients, list(missing.slice(0, 5).map((m) => `${lower(spoken(m.ingredient))}${m.group ? ` (${m.group.split(":")[0]})` : ""}`), lang), tt.definingMissing));
   const ask = choices.length ? upper(t.choicesAsk(choices.map((c) => c.words).join(lang === "fi" ? ", vai " : lang === "sv" ? ", eller " : ", or "))) : "";
   return { planId, complete: tt.complete, covered: tt.covered, of: tt.ingredients, definingMissing: tt.definingMissing, missing, kitchenGroups: groups, missingGroups, choices, say, ask };
 }
@@ -578,7 +580,8 @@ export async function menuIdeas(slug: KitchenRef, words: string, by: string, lan
   const { codeOfSlug } = await import("./service");
   const groups = kitchenGroups(kitchen.mandate.allowedCategories, codeOfSlug);
   // The kitchen's product groups go into the request, so the ideas start from what it can buy; plain code checks after.
-  const text = `${words}\n\nSuggest ${n} different dishes that fit this, each a separate dish (not a menu of courses), for a professional kitchen. This kitchen can buy only from these product groups: ${groups.join("; ")}. Suggest first dishes made entirely from those groups${have.length ? `, using what it already has: ${have.join(", ")}` : ""}. In assumptions, give one short reason per dish, in the same order, starting with the dish name.`;
+  // "Plan a dish for 40" asks for one dish to cook: the buyer picks it from these, so the count is said first and plainly.
+  const text = `${words}\n\nSuggest exactly ${n} different dishes that fit this, each a separate dish (not a menu of courses), for a professional kitchen; the words may say "a dish": the buyer will pick one of your ${n}. This kitchen can buy only from these product groups: ${groups.join("; ")}. Suggest first dishes made entirely from those groups${have.length ? `, using what it already has: ${have.join(", ")}` : ""}. In assumptions, give one short reason per dish, in the same order, starting with the dish name.`;
   const r = await service.ideaCheck(kitchen, text.slice(0, 3900));
   const ideasId = `ideas_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   IDEAS.set(ideasId, { slug: slugOf(slug), draft: r.draft, words, have });
@@ -590,7 +593,7 @@ export async function menuIdeas(slug: KitchenRef, words: string, by: string, lan
       const usesOnHand = have.filter((h) => d.items.some((i) => fold(i.ingredient).includes(fold(h).slice(0, 4))));
       const missing = d.missing.map((m) => ({ ingredient: m.ingredient, code: m.code ?? "not_sold", words: m.words, ...(m.group ? { group: m.group } : {}) }));
       const name = dishL(d, lang);
-      const say = d.buyable ? name : t.ideaNeeds(name, list([...new Set(missing.map((m) => (m.group ? m.group.split(":")[0] : lower(m.ingredient))))], lang));
+      const say = d.buyable ? name : t.ideaNeeds(name, list([...new Set(missing.map((m) => (m.group ? m.group.split(":")[0] : lower(spoken(m.ingredient)))))], lang));
       return { dishId: d.dishId, name: d.name, nameFi: d.nameFi, nameSv: d.nameSv, course: d.course, reason: reasonOf(d.name), buyable: d.buyable, usesOnHand, missing, say };
     })
     .sort((a, b) => Number(b.buyable) - Number(a.buyable) || b.usesOnHand.length - a.usesOnHand.length);

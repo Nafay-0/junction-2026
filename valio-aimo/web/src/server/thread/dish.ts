@@ -1,5 +1,6 @@
 import { addDaysIso, isoWeekday, localNow } from "@/core/kitchen";
 import { byLine, record, step, type TurnRun } from "./pipeline";
+import type { ThreadAction, Turn } from "./types";
 
 /**
  * Planning a dish, the way a chef asks for one (the user's shape): an open request gets ONE skippable question (what
@@ -59,9 +60,9 @@ export function dishRequestOf(words: string): "open" | "preferences" | undefined
 /** The one question for an open request: both things at once, and skippable. */
 function question(lang: Lang): string {
   return {
-    en: "What are you in the mood for: a cuisine, a diet, a budget per person? And tell me anything you already have in the kitchen. Or say 'surprise me'.",
-    fi: "Mitä teille maistuisi: keittiö, ruokavalio, budjetti per henkilö? Kerro myös, mitä keittiössä jo on. Tai sano 'yllätä'.",
-    sv: "Vad är ni sugna på: ett kök, en kost, en budget per person? Och berätta vad ni redan har i köket. Eller säg 'överraska mig'.",
+    en: "What are you in the mood for: a cuisine, a diet, a budget per person? And tell me anything you already have in the kitchen. Or I can surprise you.",
+    fi: "Mitä teille maistuisi: keittiö, ruokavalio, budjetti per henkilö? Kerro myös, mitä keittiössä jo on. Tai voin yllättää.",
+    sv: "Vad är ni sugna på: ett kök, en kost, en budget per person? Och berätta vad ni redan har i köket. Eller så överraskar jag er.",
   }[lang];
 }
 
@@ -74,9 +75,21 @@ function picked(ideas: Ideas, words: string, lang: Lang): Ideas["ideas"][number]
   const w = fold(words);
   const named = ideas.ideas.find((d) => [d.name, d.nameFi ?? "", d.nameSv ?? ""].some((n) => fold(n).split(/[^a-z0-9äöå]+/).filter((x) => x.length >= 4).some((x) => w.includes(x))));
   if (named) return named;
-  const i = ORDINALS.findIndex((re) => re.test(words));
+  const i = ordinalIn(words);
   void lang;
-  return i >= 0 ? ideas.ideas[i] : undefined;
+  return i !== undefined ? ideas.ideas[i] : undefined;
+}
+
+/**
+ * "The first one", "the second", "toinen", "den tredje": which of a list. "The second one" is the second, never the
+ * first because it contains "one": the later ordinals are read first, "first"/"one" last.
+ */
+export function ordinalIn(words: string): number | undefined {
+  for (const i of [1, 2, 3]) if (ORDINALS[i].test(words)) return i;
+  // A bare "one" or "1" picks the first only in a short answer ("that one", "number 1"), not in "one more question".
+  if (/\b(first|1st|ensimmäi\w*|eka\w*|första)\b/i.test(words)) return 0;
+  if (ORDINALS[0].test(words) && words.trim().split(/\s+/).length <= 3) return 0;
+  return undefined;
 }
 
 /**
@@ -94,8 +107,9 @@ export async function dishTurn(run: TurnRun, words: string, lang: Lang): Promise
     return ideasFor(run, `${asked.words}. ${/surprise|yllätä|överraska/i.test(words) ? "" : words}`, lang, asked, words);
   }
   // 2. A pick among the ideas just offered (or "something lighter": new ideas).
-  if (st.ideas && last?.role === "agent" && /Which one shall I plan\?|Minkä niistä suunnittelen\?|Vilken ska jag planera\?/.test(lastLine)) {
-    const p = picked(st.ideas, words, lang);
+  if (st.ideas && last?.role === "agent" && /Which one shall I plan\?|Minkä niistä suunnittelen\?|Vilken ska jag planera\?|Shall I plan it, or look for other ideas\?|Suunnittelenko sen, vai etsinkö muita ideoita\?|Ska jag planera den, eller leta efter andra idéer\?/.test(lastLine)) {
+    const { yesOrNo } = await import("@/server/channels/speech");
+    const p = picked(st.ideas, words, lang) ?? (st.ideas.ideas.length === 1 && yesOrNo(words) === "yes" ? st.ideas.ideas[0] : undefined);
     if (p) return pick(run, st.ideas, p, lang);
     if (/\b(something|another|other|different|lighter|cheaper|jotain|muu|toinen|kevyemp\w*|halvemp\w*|något|annat|lättare|billigare)\b/i.test(words)) return ideasFor(run, `${st.ideas.words}. ${words}`, lang, st.ideas, "");
     return undefined;
@@ -129,6 +143,9 @@ async function ideasFor(run: TurnRun, words: string, lang: Lang, frame: { covers
     const why = d.reason ? shortReason(d.reason) : "";
     return `${i + 1}. ${nameL(d, lang)}${why ? `: ${why.charAt(0).toLowerCase()}${why.slice(1)}` : ""} (${can}).`;
   });
+  // Fewer than asked: said plainly, never a list of one that looks like three were meant.
+  if (!lines.length) return { en: "I found no dish that fits what you asked and that your rules let me buy. Tell me a little more, or something else you'd like?", fi: "En löytänyt ruokaa, joka sopii toiveeseesi ja jonka sääntönne sallivat. Kerro vähän lisää, tai mitä muuta haluaisit?", sv: "Jag hittade ingen rätt som passar och som era regler låter mig köpa. Berätta lite mer, eller vad du vill ha i stället?" }[lang];
+  if (lines.length === 1) return `${{ en: "Only one dish came out that fits:", fi: "Vain yksi ruoka sopii:", sv: "Bara en rätt passar:" }[lang]} ${lines[0].replace(/^1\.\s*/, "")}\n${{ en: "Shall I plan it, or look for other ideas?", fi: "Suunnittelenko sen, vai etsinkö muita ideoita?", sv: "Ska jag planera den, eller leta efter andra idéer?" }[lang]}`;
   return `${lines.join("\n")}\n${{ en: "Which one shall I plan?", fi: "Minkä niistä suunnittelen?", sv: "Vilken ska jag planera?" }[lang]}`;
 }
 
@@ -184,4 +201,22 @@ export function shortReason(t: string): string {
   if (x.split(/\s+/).length <= 6) return x;
   const clause = x.split(/,\s|\s(?:and|with|for|ja|och)\s/)[0];
   return clause.split(/\s+/).length <= 6 ? clause : "";
+}
+
+/** Which of the menus offered the words pick: an ordinal ("the second one"), or a word of one menu's name or dishes. */
+export function menuPickIn(menus: string[][], words: string): number | undefined {
+  const i = ordinalIn(words);
+  if (i !== undefined) return i < menus.length ? i : undefined;
+  const w = fold(words);
+  const hits = menus.map((names, k) => (names.some((n) => fold(n).split(/[^a-z0-9äöå]+/).filter((x) => x.length >= 5).some((x) => w.includes(x))) ? k : -1)).filter((k) => k >= 0);
+  return hits.length === 1 ? hits[0] : undefined;
+}
+
+/** The menus the newest reply offered, picked by the words: the choice, by plain code, whatever older cards the thread holds. */
+export function menuPickAfter(turns: Turn[], turnId: string, words: string): Extract<ThreadAction, { type: "menu_choose" }> | undefined {
+  const last = [...turns].reverse().find((x) => x.role === "agent" && x.turnId !== turnId && x.replyTo !== "");
+  const menu = last?.role === "agent" ? last.cards.find((c) => c.type === "menu" && c.stage === "choose" && !c.sheetId) : undefined;
+  if (menu?.type !== "menu" || !menu.proposals.length) return undefined;
+  const i = menuPickIn(menu.proposals.map((p) => [p.title, ...p.dishes]), words);
+  return i !== undefined && menu.proposals[i] ? { type: "menu_choose", planId: menu.planId, proposalId: menu.proposals[i].proposalId } : undefined;
 }

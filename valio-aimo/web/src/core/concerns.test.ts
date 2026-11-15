@@ -104,6 +104,16 @@ describe("quantity against the kitchen's own pattern", () => {
     expect(c.corrections[0].patch).toEqual({ quantity: { amount: 3.2, unit: "kg" } });
   });
 
+  it("offers each reading of a count of bottles once: '40 pcs of 1 L' is the same choice as '40 L in total'", () => {
+    const n = need({ quantity: { amount: 40, unit: "pcs" } });
+    const wine = { ...n, item: { ...n.item, text: "red wine" } };
+    const bottle = (id: string, l: number) => ({ ...milkProducts[0], id, name: `Red wine ${l} l`, names: { en: `Red wine ${l} l` }, unit: "L" as const, packSize: l, salesUnit: "PLO", baseUnit: "PLO", packContent: { perSalesUnit: { L: l }, baseUnitsPerSalesUnit: 1, certain: true, certainMeasures: ["L"], issues: [], label: `${l} l` } });
+    const [c] = checkQuantity(wine, ctx(kitchen([]), { family: "wine", candidates: [bottle("w1", 0.22), bottle("w2", 1), bottle("w3", 1.5)] as never }));
+    if (c?.code !== "unit_unclear") return; // the reading of this catalogue is not a pack question
+    const ids = c.corrections.map((x) => x.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
   it("treats pieces of milk as packs", () => {
     expect(checkQuantity(need({ quantity: { amount: 10, unit: "pcs" } }), ctx())).toEqual([]); // 10 boxes = 100 L, as usual
     expect(checkQuantity(need({ quantity: { amount: 100, unit: "pcs" } }), ctx())[0].code).toBe("unit_confusion");

@@ -5,7 +5,7 @@ Two separate projects by the same team, built at Junction 2026. They share this 
 | Folder | Project | Challenge |
 |---|---|---|
 | [`valio-aimo/`](valio-aimo/README.md) | **AimoPilot**: the open loading dock for AI buyers. A kitchen's purchasing agent orders from a wholesaler inside the rules its people set; plain code checks every order, and anything beyond the rules needs a person's sign-off on their phone. Live at <https://aimopilot.zeroanomaly.tech>. | Valio Aimo, "Trusted Trade Agents" |
-| [`exa/`](exa/README.md) | **Beryl**: an internet butler for the web, the desktop and the phone. It shares no code with AimoPilot. | Exa, "The Internet Butler" |
+| [`exa/`](exa/README.md) | **Beryl**: an internet butler for the web, the desktop and the phone. It shares no code with AimoPilot. Live at <https://beryl.zeroanomaly.tech>. | Exa, "The Internet Butler" |
 
 Also here:
 

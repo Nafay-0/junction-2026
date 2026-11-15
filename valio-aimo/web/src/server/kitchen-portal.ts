@@ -337,17 +337,18 @@ export type LiveResult = { productId: string; offer?: LiveOffer; problems: LiveP
 export type LiveReply = { results: LiveResult[]; liveCallsSoFar: number; upstreamRequests: number | null; checkedAt: string };
 
 /** Live price, availability and cut-off for a handful of products, through Dock's metered availability call. */
-export async function liveCheck(k: Kitchen, productIds: string[]): Promise<LiveReply> {
+export async function liveCheck(k: Kitchen, productIds: string[], deliveryDate?: string): Promise<LiveReply> {
   const ids = [...new Set(productIds)].slice(0, PORTAL_MAX_LIVE);
   const rt = await getRuntime();
   const before = rt.dock.stats().upstream?.httpRequests ?? null;
   let requestId = await browseRequest(k);
   type Reply = { offers?: LiveOffer[]; unavailable?: { productId: string; problems: LiveProblem[]; message: string }[]; liveCallsSoFar?: number; error?: { code: string; message: string } };
-  let r = await agentCall<Reply>(k, "POST", "/api/v1/availability", { requestId, productIds: ids });
+  const day = deliveryDate ? { deliveryDate } : {};
+  let r = await agentCall<Reply>(k, "POST", "/api/v1/availability", { requestId, productIds: ids, ...day });
   if (r.status === 404) {
     g.__dockPortalBrowse?.clear(); // the server's store was reset: open a new browse request
     requestId = await browseRequest(k);
-    r = await agentCall<Reply>(k, "POST", "/api/v1/availability", { requestId, productIds: ids });
+    r = await agentCall<Reply>(k, "POST", "/api/v1/availability", { requestId, productIds: ids, ...day });
   }
   if (!r.json.offers) throw Object.assign(new Error(r.json.error?.message ?? "The live check failed."), { status: r.status, code: r.json.error?.code });
   const offers = r.json.offers;
