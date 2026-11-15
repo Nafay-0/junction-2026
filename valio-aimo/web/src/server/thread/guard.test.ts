@@ -97,6 +97,7 @@ describe("an amount said in words", () => {
     expect(spelledAmount("nej, tvåhundra liter")).toBe(200);
     expect(spelledAmount("the first one")).toBeUndefined();
     expect(spelledAmount("two packs")).toBeUndefined();
+    for (const sure of ["I'm a hundred percent sure", "yes, one hundred per cent", "sata prosenttia varma", "hundra procent säker"]) expect(spelledAmount(sure), sure).toBeUndefined();
   });
   it("then answers the check by its figure when the figure is offered", () => {
     expect(guardAnswerOf(tenfold, "no, one hundred (100 L)")?.action).toMatchObject({ choice: "use_100_L" });

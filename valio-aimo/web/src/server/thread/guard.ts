@@ -205,14 +205,15 @@ const SV_NUM: Record<string, number> = { en: 1, ett: 1, två: 2, tre: 3, fyra: 4
 /**
  * An amount said in words ("two hundred", "five hundred and fifty", "kaksisataa", "tvåhundra", "a thousand"): the
  * number, or undefined. Only amounts of a hundred or more, the size a corrected order has; never "the first one".
+ * "A hundred percent sure" is not an amount.
  */
 export function spelledAmount(words: string): number | undefined {
   const w = words.toLowerCase();
-  const fi = /(?<![\p{L}])(yksi|kaksi|kolme|neljä|viisi|kuusi|seitsemän|kahdeksan|yhdeksän)?(sata|sataa|tuhat|tuhatta)(?![\p{L}])/u.exec(w);
+  const fi = /(?<![\p{L}])(yksi|kaksi|kolme|neljä|viisi|kuusi|seitsemän|kahdeksan|yhdeksän)?(sata|sataa|tuhat|tuhatta)(?![\p{L}])(?!\s*prosent)/u.exec(w);
   if (fi) return (fi[1] ? FI_NUM[fi[1]] : 1) * (/^tuha/.test(fi[2]) ? 1000 : 100);
-  const sv = /(?<![\p{L}])(en|ett|två|tre|fyra|fem|sex|sju|åtta|nio)?(hundra|tusen)(?![\p{L}])/u.exec(w);
+  const sv = /(?<![\p{L}])(en|ett|två|tre|fyra|fem|sex|sju|åtta|nio)?(hundra|tusen)(?![\p{L}])(?!\s*procent)/u.exec(w);
   if (sv) return (sv[1] ? SV_NUM[sv[1]] : 1) * (sv[2] === "tusen" ? 1000 : 100);
-  const en = /\b(a|one|two|three|four|five|six|seven|eight|nine|ten|twelve|fifteen|twenty)\s+(hundred|thousand)(?:\s+(?:and\s+)?(one|two|three|four|five|six|seven|eight|nine|ten|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety))?\b/.exec(w);
+  const en = /\b(a|one|two|three|four|five|six|seven|eight|nine|ten|twelve|fifteen|twenty)\s+(hundred|thousand)(?:\s+(?:and\s+)?(one|two|three|four|five|six|seven|eight|nine|ten|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety))?\b(?!\s*(?:per\s?cent|%))/.exec(w);
   if (en) return (en[1] === "a" ? 1 : EN_NUM[en[1]]) * (en[2] === "thousand" ? 1000 : 100) + (en[3] ? EN_NUM[en[3]] : 0);
   return undefined;
 }
