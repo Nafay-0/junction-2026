@@ -6,14 +6,10 @@ name: Demo suite
 # partner, no Aiven, no secrets), so this needs no repository secrets and never touches the public deployment.
 # Same commands locally: `cd valio-aimo/web && pnpm test:full` (see valio-aimo/web/e2e/README.md).
 
+# Run by hand (Actions, "Run workflow") until it has finished green once. It used to start on every push to main
+# and every three hours, takes up to half an hour, and was cancelled by the next push 61 times out of 65; the four
+# runs that finished (14 Nov) failed on a unit test and a build race that were fixed on main later that day.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "valio-aimo/**"
-      - ".github/workflows/demo-suite.yml"
-  schedule:
-    - cron: "17 */3 * * *" # every three hours through the weekend: catches drift in dependencies and time-dependent bugs
   workflow_dispatch:
 
 concurrency:

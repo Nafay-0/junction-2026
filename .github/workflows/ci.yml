@@ -1,9 +1,11 @@
 name: CI
 
 # Only when AimoPilot's own folder (or this workflow) changes: the repository also holds the Exa project in exa/.
+# Pushes to main and pull requests only. Work branches (claude/**) used to run it too: a branch cut before a fix on
+# main failed for that old reason and mailed the owner each time, which hid the failures that mattered.
 on:
   push:
-    branches: [main, "claude/**"]
+    branches: [main]
     paths:
       - "valio-aimo/**"
       - ".github/workflows/ci.yml"
