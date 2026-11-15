@@ -168,7 +168,7 @@ export const EDL: Record<string, () => ChapterEdit> = {
       clip("c07-01-try", { at: start("c07"), label: "The open door · /try", url: `${K}/try` }, "/try: one address and a signed mandate"),
       clip("c07-02-docs", { at: cue("c07-1", "There are", -0.3), label: "The open door · /docs", url: `${K}/docs` }, "/docs: the MCP tools and the OpenAPI document"),
       clip("c07-03-aiven-agent", { at: partAt("c07-2", -0.3), label: "Platform · send in an Aiven agent", url: `${K}/ops/platform`, from: 0, until: 5.5 }, "Platform: “Send in an Aiven agent”"),
-      clip("c07-04-aiven-run", { at: cue("c07-2", "It connects", -0.3), label: "Platform · the Aiven agent's run, through MCP", url: `${K}/ops/platform`, from: 0, rate: 1.0 }, "The run's steps through the MCP door, ending at the sign-off"),
+      clip("c07-04-aiven-run", { at: cue("c07-2", "It connects", -0.3), label: "Platform · the Aiven agent's run, through MCP", url: `${K}/ops/platform`, from: 4.0, sync: [[15.5, cue("c07-2", "stops at", 0.3)]] }, "The run's steps through the MCP door, ending at the sign-off"),
     ],
     callouts: [{ at: cue("c07-2", "No tool"), text: "No tool lets an agent approve", pos: "tr", dur: 90 }],
   }),

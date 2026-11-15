@@ -17,6 +17,8 @@ const eye = (t) => t
   .replace(/thirteen scenarios/gi, "13 scenarios").replace(/nineteen MCP/gi, "19 MCP")
   .replace(/five hundred euro/gi, "500 euro").replace(/forty-five/gi, "45")
   .replace(/more than seventeen hundred/gi, "more than 1,700")
+  .replace(/four hundred and twenty/gi, "420").replace(/four thousand two hundred/gi, "4,200").replace(/about four hundred/gi, "about 400")
+  .replace(/a thousand litres/gi, "1,000 litres")
   .replace(/aimopilot dot zero anomaly dot tech/gi, "aimopilot.zeroanomaly.tech");
 const cues = [];
 for (const c of chapters) for (const p of c.parts) {
