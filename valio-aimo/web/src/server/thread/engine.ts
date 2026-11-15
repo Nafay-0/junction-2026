@@ -2006,10 +2006,17 @@ export function afterSignOff(order: PublicOrder, lang: "en" | "fi" | "sv"): stri
   const date = order.lines[0]?.deliveryDate ?? "";
   const wd = new Date(`${date}T12:00:00Z`).getUTCDay();
   const dm = `${Number(date.slice(8, 10))}.${Number(date.slice(5, 7))}.`;
-  const day = englishDays(`${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][wd]} ${dm}`);
+  const weekday = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][wd];
   const svDay = `${["söndag", "måndag", "tisdag", "onsdag", "torsdag", "fredag", "lördag"][wd]} ${Number(date.slice(8, 10))} ${["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"][Number(date.slice(5, 7)) - 1]}`;
   const say = (en: string, fi: string, sv: string) => ({ en, fi, sv })[lang];
-  if (order.status === "committed") return say(`${who} OK'd it: it arrives ${day}`, `${who} hyväksyi tilauksen; se tulee ${dm}`, `${who} godkände beställningen: den kommer ${svDay}.`);
+  // A placed order is not delivered yet: it is with the wholesaler's team to confirm (server/fulfilment), and the
+  // conversation is told when they do. Said here too, so the phone's OK never reads as "it is on its way".
+  if (order.status === "committed")
+    return say(
+      englishDays(`${who} OK'd it. It's placed at the fixed price for ${weekday} ${dm} and is now with the wholesaler's team to confirm for delivery; I'll tell you here when they confirm.`),
+      `${who} hyväksyi tilauksen. Se on kirjattu kiinteään hintaan toimitettavaksi ${dm}, ja tukkurin tiimi vahvistaa sen nyt toimitukseen; kerron täällä, kun he vahvistavat.`,
+      `${who} godkände beställningen. Den är registrerad till det fasta priset för ${svDay} och ligger nu hos grossistens team för bekräftelse; jag säger till här när de bekräftar.`,
+    );
   if (order.status === "declined") return say(`${who} declined it, so nothing is ordered.`, `${who} hylkäsi tilauksen, joten mitään ei tilattu.`, `${who} avböjde beställningen, så inget är beställt.`);
   if (order.status === "expired") return say("The price ran out before the OK, so nothing is ordered.", "Hinta umpeutui ennen hyväksyntää, joten mitään ei tilattu.", "Priset gick ut före godkännandet, så inget är beställt.");
   if (order.status === "withdrawn") return say("It was taken back, so nothing is ordered.", "Tilaus peruttiin, joten mitään ei tilattu.", "Beställningen togs tillbaka, så inget är beställt.");
