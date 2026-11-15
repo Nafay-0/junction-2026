@@ -67,3 +67,12 @@ describe("'the first one' after the menus just offered", () => {
     expect(menuPickAfter(older as never, "a3", "The first one.")).toBeUndefined();
   });
 });
+
+describe("the ideas' reasons", () => {
+  it("never give the same reason twice: the later idea keeps its name only", async () => {
+    const { ideaReasons } = await import("./dish");
+    expect(ideaReasons(["Creamy salmon and dill pasta: frozen salmon.", "Curry: dry chickpeas.", "Finnish meatballs: frozen salmon."])).toEqual(["frozen salmon", "dry chickpeas", ""]);
+    expect(ideaReasons(["Soup: uses frozen salmon.", "Pasta: frozen salmon."])).toEqual(["uses frozen salmon", ""]);
+    expect(ideaReasons(["", "Stew: root vegetables."])).toEqual(["", "root vegetables"]);
+  });
+});

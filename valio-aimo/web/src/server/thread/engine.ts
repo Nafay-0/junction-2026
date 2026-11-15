@@ -514,7 +514,15 @@ async function work(run: TurnRun, body: SubmitTurn, first: ReturnType<typeof ste
       const { guardAnswerOf, guardWords } = await import("./guard");
       // "Which order?": the check's own words again, which name the order (what, how much, when, for which day).
       if (/\b(which (order|one)|what order|mikä tilaus|mikä niistä|vilken (order|beställning))\b/i.test(body.text)) run.sayNow = whichOrder(run, open, body.lang ?? "en") ?? guardWords(open, body.lang ?? "en");
-      const a = run.sayNow ? undefined : guardAnswerOf(open, body.text);
+      // "No, make it two hundred": an amount said in words is said in digits too, with the check's unit, so it reads as
+      // the corrected amount of the request on the table (never as an answer to some other question).
+      const { spelledAmount } = await import("./guard");
+      const spelled = /\d/.test(body.text) ? undefined : spelledAmount(body.text);
+      if (spelled) {
+        const asked = (open.concerns[0]?.evidence as { asked?: { unit?: string } } | undefined)?.asked?.unit ?? /^[a-z_]+:[\d.]+:(\w+)/.exec(open.concerns[0]?.key ?? "")?.[1] ?? "";
+        body = { ...body, text: `${body.text} (${spelled}${asked ? ` ${asked}` : ""})` };
+      }
+      const a = run.sayNow || !body.text ? undefined : guardAnswerOf(open, body.text);
       if (a) {
         if (a.reason) record(run, "buyer_reason", `The buyer kept the amount as asked, with a reason: "${a.reason}".`, { reason: a.reason, key: open.concerns[0]?.key }, open.requestId);
         body = { ...body, action: a.action, label: body.text };

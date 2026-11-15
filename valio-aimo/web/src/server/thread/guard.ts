@@ -197,3 +197,22 @@ function weekdayNamed(words: string, iso: string): boolean {
   if (m[0].length <= 2) return new RegExp(`\\b${m[0]}\\s+\\d{1,2}\\.`, "i").test(words);
   return true;
 }
+
+const EN_NUM: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, fifteen: 15, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
+const FI_NUM: Record<string, number> = { yksi: 1, kaksi: 2, kolme: 3, neljä: 4, viisi: 5, kuusi: 6, seitsemän: 7, kahdeksan: 8, yhdeksän: 9, kymmenen: 10 };
+const SV_NUM: Record<string, number> = { en: 1, ett: 1, två: 2, tre: 3, fyra: 4, fem: 5, sex: 6, sju: 7, åtta: 8, nio: 9, tio: 10 };
+
+/**
+ * An amount said in words ("two hundred", "five hundred and fifty", "kaksisataa", "tvåhundra", "a thousand"): the
+ * number, or undefined. Only amounts of a hundred or more, the size a corrected order has; never "the first one".
+ */
+export function spelledAmount(words: string): number | undefined {
+  const w = words.toLowerCase();
+  const fi = /(?<![\p{L}])(yksi|kaksi|kolme|neljä|viisi|kuusi|seitsemän|kahdeksan|yhdeksän)?(sata|sataa|tuhat|tuhatta)(?![\p{L}])/u.exec(w);
+  if (fi) return (fi[1] ? FI_NUM[fi[1]] : 1) * (/^tuha/.test(fi[2]) ? 1000 : 100);
+  const sv = /(?<![\p{L}])(en|ett|två|tre|fyra|fem|sex|sju|åtta|nio)?(hundra|tusen)(?![\p{L}])/u.exec(w);
+  if (sv) return (sv[1] ? SV_NUM[sv[1]] : 1) * (sv[2] === "tusen" ? 1000 : 100);
+  const en = /\b(a|one|two|three|four|five|six|seven|eight|nine|ten|twelve|fifteen|twenty)\s+(hundred|thousand)(?:\s+(?:and\s+)?(one|two|three|four|five|six|seven|eight|nine|ten|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety))?\b/.exec(w);
+  if (en) return (en[1] === "a" ? 1 : EN_NUM[en[1]]) * (en[2] === "thousand" ? 1000 : 100) + (en[3] ? EN_NUM[en[3]] : 0);
+  return undefined;
+}
